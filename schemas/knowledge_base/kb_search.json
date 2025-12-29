@@ -1,0 +1,14 @@
+{
+    "name": "search_entries",
+    "description": "Search the knowledge base for entries matching a text query.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The text to search for in titles and content."
+            }
+        },
+        "required": ["query"]
+    }
+}

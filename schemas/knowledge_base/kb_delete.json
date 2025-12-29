@@ -1,0 +1,14 @@
+{
+  "name": "delete_entry",
+  "description": "Delete a knowledge base entry by its ID.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "entry_id": {
+        "type": "string",
+        "description": "The unique ID of the entry to delete."
+      }
+    },
+    "required": ["entry_id"]
+  }
+}

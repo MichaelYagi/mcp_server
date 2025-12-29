@@ -1,0 +1,14 @@
+{
+  "name": "search_by_tag",
+  "description": "Search for entries that contain a specific tag.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "tag": {
+        "type": "string",
+        "description": "Tag to search for."
+      }
+    },
+    "required": ["tag"]
+  }
+}

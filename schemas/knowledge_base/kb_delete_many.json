@@ -1,0 +1,15 @@
+{
+  "name": "delete_entries",
+  "description": "Delete multiple knowledge base entries by their IDs.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "entry_ids": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of entry IDs to delete."
+      }
+    },
+    "required": ["entry_ids"]
+  }
+}

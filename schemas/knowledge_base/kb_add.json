@@ -1,0 +1,16 @@
+{
+    "name": "add_entry",
+    "description": "Add a knowledge base entry",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "title": { "type": "string" },
+            "content": { "type": "string" },
+            "tags": {
+                "type": "array",
+                "items": { "type": "string" }
+            }
+        },
+        "required": ["title", "content"]
+    }
+}

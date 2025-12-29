@@ -1,0 +1,19 @@
+{
+  "name": "search_semantic",
+  "description": "Semantic search using embeddings to find similar entries.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "The semantic search query."
+      },
+      "top_k": {
+        "type": "number",
+        "description": "Maximum number of results to return.",
+        "default": 5
+      }
+    },
+    "required": ["query"]
+  }
+}

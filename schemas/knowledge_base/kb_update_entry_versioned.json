@@ -1,0 +1,27 @@
+{
+  "name": "update_entry_versioned",
+  "description": "Update an entry and save a version snapshot before modifying it.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "entry_id": {
+        "type": "string",
+        "description": "The ID of the entry to update."
+      },
+      "title": {
+        "type": "string",
+        "description": "New title (optional)."
+      },
+      "content": {
+        "type": "string",
+        "description": "New content (optional)."
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "New list of tags (optional)."
+      }
+    },
+    "required": ["entry_id"]
+  }
+}

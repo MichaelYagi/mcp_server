@@ -1,0 +1,14 @@
+{
+    "name": "get_entry",
+    "description": "Retrieve a specific knowledge base entry by its ID.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "entry_id": {
+                "type": "string",
+                "description": "The unique ID of the knowledge base entry."
+            }
+        },
+        "required": ["entry_id"]
+    }
+}
