@@ -1,0 +1,11 @@
+{
+  "name": "kill_process",
+  "description": "Terminates a running process using its Process ID (PID).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "pid": { "type": "integer", "description": "The PID of the process to stop." }
+    },
+    "required": ["pid"]
+  }
+}

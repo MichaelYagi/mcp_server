@@ -1,0 +1,10 @@
+{
+  "name": "list_processes",
+  "description": "Lists the top memory-consuming processes currently running on the system.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "top_n": { "type": "integer", "default": 10 }
+    }
+  }
+}

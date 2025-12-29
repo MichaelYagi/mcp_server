@@ -17,6 +17,11 @@ from tools.knowledge_base.kb_list import kb_list
 from tools.knowledge_base.kb_search_tags import kb_search_tags
 from tools.knowledge_base.kb_search_semantic import kb_search_semantic
 from tools.knowledge_base.kb_update_versioned import kb_update_versioned
+# ─────────────────────────────────────────────
+# System Tools
+# ─────────────────────────────────────────────
+from tools.system.system_info import get_system_stats
+from tools.system.processes import list_processes, kill_process
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -81,6 +86,24 @@ def update_entry_versioned(entry_id: str,
                            tags: List[str] | None = None) -> str:
     result = kb_update_versioned(entry_id, title, content, tags)
     return json.dumps(result, indent=2)
+
+@mcp.tool()
+def get_system_info() -> str:
+    """Provides current system health and resource usage.
+
+    Returns a JSON string of OS, CPU, RAM, and Disk stats.
+    """
+    return get_system_stats()
+
+@mcp.tool()
+def list_system_processes(top_n: int = 10) -> str:
+    """Provides a list of active system processes."""
+    return list_processes(top_n)
+
+@mcp.tool()
+def terminate_process(pid: int) -> str:
+    """Kills a specific process by PID."""
+    return kill_process(pid)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

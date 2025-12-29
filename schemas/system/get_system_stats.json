@@ -1,0 +1,9 @@
+{
+  "name": "get_system_stats",
+  "description": "Get real-time CPU, RAM, and Disk usage from the host machine.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}
