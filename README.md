@@ -85,6 +85,9 @@ pip install mcp
 pip install mcp-use
 pip install openai
 pip install psutil
+pip install langchain 
+pip install langchain-community 
+pip install langchain-groq
 ```
 
 ### Configuration for client.py
