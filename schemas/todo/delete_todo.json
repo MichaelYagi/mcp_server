@@ -1,0 +1,11 @@
+{
+  "name": "delete_todo",
+  "description": "Delete a todo",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "todo_id": { "type": "string" }
+    },
+    "required": ["todo_id"]
+  }
+}

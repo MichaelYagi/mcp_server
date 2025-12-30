@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 
 # ─────────────────────────────────────────────
@@ -20,6 +20,19 @@ from tools.knowledge_base.kb_update_versioned import kb_update_versioned
 # ─────────────────────────────────────────────
 from tools.system.system_info import get_system_stats
 from tools.system.processes import list_processes, kill_process
+# ─────────────────────────────────────────────
+# Todo Tools
+# ─────────────────────────────────────────────
+from tools.todo.add_todo import add_todo
+from tools.todo.list_todos import list_todos
+from tools.todo.update_todo import update_todo
+from tools.todo.delete_todo import delete_todo
+from tools.todo.search_todos import search_todos
+# ─────────────────────────────────────────────
+# Code Review Tools
+# ─────────────────────────────────────────────
+from tools.code_review.scan_directory import scan_directory
+from tools.code_review.summarize_codebase import summarize_codebase
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -102,6 +115,73 @@ def list_system_processes(top_n: int = 10) -> str:
 def terminate_process(pid: int) -> str:
     """Kills a specific process by PID."""
     return kill_process(pid)
+
+# ─────────────────────────────────────────────
+# Todo MCP Tools
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+def add_todo_item(
+    title: str,
+    description: Optional[str] = None,
+    due_by: Optional[str] = None
+) -> str:
+    result = add_todo(title, description, due_by)
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def list_todo_items() -> str:
+    result = list_todos()
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def search_todo_items(
+    text: Optional[str] = None,
+    status: Optional[str] = None,
+    due_before: Optional[str] = None,
+    due_after: Optional[str] = None,
+    order_by: str = "due_by",
+    ascending: bool = True
+) -> str:
+    result = search_todos(
+        text=text,
+        status=status,
+        due_before=due_before,
+        due_after=due_after,
+        order_by=order_by,
+        ascending=ascending
+    )
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def update_todo_item(
+    todo_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None,
+    due_by: Optional[str] = None
+) -> str:
+    result = update_todo(todo_id, title, description, status, due_by)
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def delete_todo_item(todo_id: str) -> str:
+    result = delete_todo(todo_id)
+    return json.dumps(result, indent=2)
+
+# ─────────────────────────────────────────────
+# Code Review MCP Tools
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+def scan_code_directory(path: str) -> str:
+    result = scan_directory(path)
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def summarize_code() -> str:
+    result = summarize_codebase()
+    return json.dumps(result, indent=2)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

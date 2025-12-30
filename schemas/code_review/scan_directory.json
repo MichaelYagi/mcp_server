@@ -1,0 +1,11 @@
+{
+  "name": "scan_directory",
+  "description": "Scan a directory and collect code metadata",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "path": { "type": "string" }
+    },
+    "required": ["path"]
+  }
+}

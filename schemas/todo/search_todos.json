@@ -1,0 +1,15 @@
+{
+  "name": "search_todos",
+  "description": "Search and filter todos",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" },
+      "status": { "type": "string" },
+      "due_before": { "type": "string" },
+      "due_after": { "type": "string" },
+      "order_by": { "type": "string" },
+      "ascending": { "type": "boolean" }
+    }
+  }
+}

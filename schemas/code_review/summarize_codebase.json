@@ -1,0 +1,8 @@
+{
+  "name": "summarize_codebase",
+  "description": "Summarize scanned codebase architecture",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  }
+}

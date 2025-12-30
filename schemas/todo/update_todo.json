@@ -1,0 +1,15 @@
+{
+  "name": "update_todo",
+  "description": "Update a todo",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "todo_id": { "type": "string" },
+      "title": { "type": "string" },
+      "description": { "type": "string" },
+      "status": { "type": "string" },
+      "due_by": { "type": "string" }
+    },
+    "required": ["todo_id"]
+  }
+}

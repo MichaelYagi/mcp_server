@@ -1,0 +1,13 @@
+{
+  "name": "add_todo",
+  "description": "Add a todo item",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "title": { "type": "string" },
+      "description": { "type": "string" },
+      "due_by": { "type": "string" }
+    },
+    "required": ["title"]
+  }
+}
