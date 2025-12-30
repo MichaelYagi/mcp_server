@@ -81,13 +81,9 @@ Python 3.10 or newer
 
 Install dependencies:
 ```
-pip install mcp
 pip install mcp-use
+pip install langchain-openai
 pip install openai
-pip install psutil
-pip install langchain 
-pip install langchain-community 
-pip install langchain-groq
 ```
 
 ### Configuration for client.py
