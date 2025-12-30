@@ -74,6 +74,37 @@ The search engine is built to be lightweight and dependency-free. It processes q
 
 ## ⚡ Setup & Integration
 
+Requirements:
+```
+Python 3.10 or newer
+```
+
+Install dependencies:
+```
+pip install mcp
+pip install mcp-use
+pip install openai
+pip install psutil
+```
+
+### Configuration for client.py
+
+```macOS / Linux
+export OPENAI_API_KEY="gsk_XXXXXXXX"
+export OPENAI_BASE_URL="https://api.groq.com/openai/v1"
+export OPENAI_MODEL="llama-3.1-8b-instant"
+
+Windows (PowerShell)
+setx OPENAI_API_KEY "gsk_XXXXXXXX"
+setx OPENAI_BASE_URL "https://api.groq.com/openai/v1"
+setx OPENAI_MODEL "llama-3.1-8b-instant"
+```
+
+Run it:
+```
+python client.py
+```
+
 ### Configuration for Claude Desktop
 
 Update your configuration at `%APPDATA%\Claude\claude_desktop_config.json` for Windows. Ensure you use **absolute paths** and the specific environment flags for Windows stability.
@@ -88,6 +119,13 @@ Update your configuration at `%APPDATA%\Claude\claude_desktop_config.json` for W
     } 
 }
 ```
+
+Run it:
+```
+python server.py
+```
+
+Then open Claude Desktop
 
 ---
 
