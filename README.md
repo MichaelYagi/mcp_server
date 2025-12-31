@@ -93,12 +93,12 @@ Get OpenAI API key from https://console.groq.com/ (free)
 ```macOS / Linux
 export OPENAI_API_KEY="gsk_XXXXXXXX"
 export OPENAI_BASE_URL="https://api.groq.com/openai/v1"
-export OPENAI_MODEL="llama-3.1-8b-instant"
+export OPENAI_MODEL="gpt-4o-mini"
 
 Windows (PowerShell)
 setx OPENAI_API_KEY "gsk_XXXXXXXX"
 setx OPENAI_BASE_URL "https://api.groq.com/openai/v1"
-setx OPENAI_MODEL "llama-3.1-8b-instant"
+setx OPENAI_MODEL "gpt-4o-mini"
 ```
 
 Run it:
