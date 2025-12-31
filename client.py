@@ -10,7 +10,7 @@ async def main():
     # 1️⃣ LangChain Chat Model (OpenAI)
     llm = ChatOpenAI(
         api_key=os.environ["OPENAI_API_KEY"],
-        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        model=os.environ.get("OPENAI_MODEL", "llama-3.1-8b-instant"),
         temperature=0
     )
 
