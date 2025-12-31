@@ -28,6 +28,7 @@ from tools.todo.list_todos import list_todos
 from tools.todo.update_todo import update_todo
 from tools.todo.delete_todo import delete_todo
 from tools.todo.search_todos import search_todos
+from tools.todo.delete_all_todos import delete_all_todos
 # ─────────────────────────────────────────────
 # Code Review Tools
 # ─────────────────────────────────────────────
@@ -168,6 +169,19 @@ def update_todo_item(
 @mcp.tool()
 def delete_todo_item(todo_id: str) -> str:
     result = delete_todo(todo_id)
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def delete_all_todo_items() -> str:
+    """
+    Deletes all todo items.
+    Returns a JSON string with count and deleted IDs.
+    """
+    deleted_ids = delete_all_todos()
+    result = {
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids
+    }
     return json.dumps(result, indent=2)
 
 # ─────────────────────────────────────────────

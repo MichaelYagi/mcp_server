@@ -1,0 +1,9 @@
+{
+  "name": "delete_all_todos",
+  "description": "Deletes all todo items in the system and returns a summary.",
+  "input_schema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}
