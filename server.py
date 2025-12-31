@@ -33,6 +33,7 @@ from tools.todo.search_todos import search_todos
 # ─────────────────────────────────────────────
 from tools.code_review.scan_directory import scan_directory
 from tools.code_review.summarize_codebase import summarize_codebase
+from tools.code_review.fix_bug import fix_bug
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -140,7 +141,7 @@ def search_todo_items(
     status: Optional[str] = None,
     due_before: Optional[str] = None,
     due_after: Optional[str] = None,
-    order_by: str = "due_by",
+    order_by: Optional[str] = None,
     ascending: bool = True
 ) -> str:
     result = search_todos(
@@ -148,7 +149,7 @@ def search_todo_items(
         status=status,
         due_before=due_before,
         due_after=due_after,
-        order_by=order_by,
+        order_by=order_by or "due_by",
         ascending=ascending
     )
     return json.dumps(result, indent=2)
@@ -181,6 +182,24 @@ def scan_code_directory(path: str) -> str:
 @mcp.tool()
 def summarize_code() -> str:
     result = summarize_codebase()
+    return json.dumps(result, indent=2)
+
+@mcp.tool()
+def debug_fix(
+    error_message: str,
+    stack_trace: Optional[str] = None,
+    code_snippet: Optional[str] = None,
+    environment: Optional[str] = None
+) -> str:
+    """
+    Analyze a bug and suggest fixes.
+    """
+    result = fix_bug(
+        error_message=error_message,
+        stack_trace=stack_trace,
+        code_snippet=code_snippet,
+        environment=environment
+    )
     return json.dumps(result, indent=2)
 
 if __name__ == "__main__":

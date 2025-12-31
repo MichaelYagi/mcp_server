@@ -1,0 +1,33 @@
+{
+  "name": "debug_fix",
+  "description": "Analyze a bug and suggest fixes.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "error_message": {
+        "type": "string",
+        "description": "The error message or exception text"
+      },
+      "stack_trace": {
+        "type": "string",
+        "description": "Optional stack trace output",
+        "nullable": true
+      },
+      "code_snippet": {
+        "type": "string",
+        "description": "Optional code related to the error",
+        "nullable": true
+      },
+      "environment": {
+        "type": "string",
+        "description": "Optional environment or runtime info",
+        "nullable": true
+      }
+    },
+    "required": ["error_message"]
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing debugging analysis and suggestions"
+  }
+}
