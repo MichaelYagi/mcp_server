@@ -16,15 +16,15 @@ def add_todo(title, description=None, due_by=None):
         "description": description or "",
         "status": "open",
         "due_by": due_by,
-        "created_at": created_at_utc
+        "created_at_utc": created_at_utc
     }
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(DATA_DIR / f"{todo_id}.json", "w") as f:
-        json.dump(todo, f, indent=2)
 
     # Add local time for client display
     created_at_local = datetime.fromisoformat(created_at_utc).astimezone().isoformat()
     todo["created_at_local"] = created_at_local
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(DATA_DIR / f"{todo_id}.json", "w") as f:
+        json.dump(todo, f, indent=2)
 
     return todo
