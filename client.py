@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 
 from langchain_openai import ChatOpenAI
 from mcp_use.client.client import MCPClient
@@ -15,6 +16,17 @@ async def main():
     )
 
     PROJECT_ROOT = Path(__file__).resolve().parent
+    LOG_DIR = Path(str(PROJECT_ROOT / "logs"))
+    LOG_DIR.mkdir(exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_DIR / "mcp-client.log", encoding="utf-8"),
+            logging.StreamHandler()
+        ],
+    )
 
     # 2️⃣ MCP Server config
     client = MCPClient.from_dict({

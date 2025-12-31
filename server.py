@@ -35,6 +35,12 @@ from tools.todo.delete_all_todos import delete_all_todos
 from tools.code_review.scan_directory import scan_directory
 from tools.code_review.summarize_codebase import summarize_codebase
 from tools.code_review.fix_bug import fix_bug
+# ─────────────────────────────────────────────
+# Location Tools
+# ─────────────────────────────────────────────
+from tools.location.get_location import get_location as get_location_fn
+from tools.location.get_time import get_time as get_time_fn
+from tools.location.get_weather import get_weather as get_weather_fn
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -215,6 +221,21 @@ def debug_fix(
         environment=environment
     )
     return json.dumps(result, indent=2)
+
+# ─────────────────────────────────────────────
+# Location Tools
+# ─────────────────────────────────────────────
+@mcp.tool()
+def get_location_tool(city: str | None = None, country: str | None = None) -> str:
+    return json.dumps(get_location_fn(city, country), indent=2)
+
+@mcp.tool()
+def get_time_tool(city: str | None = None, country: str | None = None) -> str:
+    return json.dumps(get_time_fn(city, country), indent=2)
+
+@mcp.tool()
+def get_weather_tool(city: str | None = None, country: str | None = None) -> str:
+    return json.dumps(get_weather_fn(city, country), indent=2)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

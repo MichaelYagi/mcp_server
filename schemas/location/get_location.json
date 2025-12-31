@@ -1,0 +1,18 @@
+{
+  "name": "get_location",
+  "description": "Resolve a location using auto‑detected defaults or an optional city and country.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "City name (e.g., Tokyo, Toronto, London). Optional."
+      },
+      "country": {
+        "type": "string",
+        "description": "Country name (e.g., Japan, Canada, UK). Optional."
+      }
+    },
+    "required": []
+  }
+}
