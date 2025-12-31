@@ -1,16 +1,14 @@
 {
   "name": "get_time",
-  "description": "Get the local time for a resolved location using auto‑detected defaults or an optional city and country.",
+  "description": "Get the local time for a resolved location.",
   "input_schema": {
     "type": "object",
     "properties": {
-      "city": {
+      "city": { "type": "string" },
+      "country": { "type": "string" },
+      "timezone": {
         "type": "string",
-        "description": "City name to get time for. Optional."
-      },
-      "country": {
-        "type": "string",
-        "description": "Country name for the city. Optional."
+        "description": "Optional explicit timezone (e.g., Asia/Tokyo)"
       }
     },
     "required": []

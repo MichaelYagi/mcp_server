@@ -1,26 +1,28 @@
 import json
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Optional
 from tools.location.resolve_location import resolve_location
+from tools.location.resolve_timezone import resolve_timezone
+from tools.location.get_time_data import DEFAULT_TZ
 
-CITY_TIMEZONES = {
-    ("Surrey", "Canada"): "America/Vancouver",
-    ("Vancouver", "Canada"): "America/Vancouver",
-    ("Toronto", "Canada"): "America/Toronto",
-    ("New York", "USA"): "America/New_York",
-    ("London", "UK"): "Europe/London",
-    ("Tokyo", "Japan"): "Asia/Tokyo",
-}
-
-DEFAULT_TZ = "America/Vancouver"
-
-def get_time(city: Optional[str] = None, country: Optional[str] = None) -> str:
+def get_time(
+    city: Optional[str] = None,
+    country: Optional[str] = None,
+    timezone: Optional[str] = None
+) -> str:
     loc = resolve_location(city, country)
-    key = (loc["city"], loc["country"])
 
-    tz_name = CITY_TIMEZONES.get(key, DEFAULT_TZ)
-    now = datetime.now(ZoneInfo(tz_name))
+    # Determine timezone
+    tz_name = timezone or resolve_timezone(loc["city"], loc["country"])
+
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo(DEFAULT_TZ)
+        tz_name = DEFAULT_TZ
+
+    now = datetime.now(tz)
 
     result = {
         "city": loc["city"],
