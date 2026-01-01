@@ -6,8 +6,10 @@ from langchain_openai import ChatOpenAI
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
+from dotenv import load_dotenv
 
 async def main():
+    load_dotenv()
     # 1️⃣ LangChain Chat Model (OpenAI)
     llm = ChatOpenAI(
         api_key=os.environ["OPENAI_API_KEY"],
@@ -37,7 +39,7 @@ async def main():
                 "cwd": str(PROJECT_ROOT),
                 "env": {
                     "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
-                    "OPENAI_MODEL": os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+                    "OPENAI_MODEL": os.environ.get("OPENAI_MODEL", "llama-3.1-8b-instant")
                 }
             }
         }

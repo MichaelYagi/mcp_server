@@ -90,16 +90,14 @@ pip install tzdata
 ### Configuration for client.py
 
 Get OpenAI API key from https://console.groq.com/ (free)
+Get a Weather API key from https://www.weatherapi.com/ (free/rated)
 
-```macOS / Linux
-export OPENAI_API_KEY="gsk_XXXXXXXX"
-export OPENAI_BASE_URL="https://api.groq.com/openai/v1"
-export OPENAI_MODEL="llama-3.1-8b-instant"
-
-Windows (PowerShell)
-setx OPENAI_API_KEY "gsk_XXXXXXXX"
-setx OPENAI_BASE_URL "https://api.groq.com/openai/v1"
-setx OPENAI_MODEL "llama-3.1-8b-instant"
+Create an ```.env``` file in the root of the project with the following details.
+```
+WEATHER_API_KEY="<weather_api_key>"
+OPENAI_API_KEY="<gsk_OpenAI_api_key>"
+OPENAI_BASE_URL="https://api.groq.com/openai/v1"
+OPENAI_MODEL="llama-3.1-8b-instant"
 ```
 
 Run it:
