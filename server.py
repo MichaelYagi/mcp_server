@@ -3,9 +3,11 @@ from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 # Verify critical environment variables
 if not os.environ.get("GROQ_API_KEY"):
