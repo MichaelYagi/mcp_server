@@ -80,18 +80,19 @@ The search engine is built to be lightweight and dependency-free. It processes q
 * Groq API Key: Get it at [console.groq.com](https://console.groq.com/) (Free)
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
 
-2. Install dependencies
-```
-pip install -r requirements.txt
-```
+2. Environment Configuration
 
-3. Environment Configuration
 Create an ```.env``` file in the root of the project with the following details.
 ```
 WEATHER_API_KEY="<weather_api_key>"
 OPENAI_API_KEY="<gsk_OpenAI_api_key>"
 OPENAI_BASE_URL="https://api.groq.com/openai/v1"
 OPENAI_MODEL="llama-3.1-8b-instant"
+```
+
+3. Install dependencies
+```
+pip install -r requirements.txt
 ```
 
 4. Running the Project
@@ -101,7 +102,9 @@ python client.py
 
 Option B: Connecting to Claude Desktop (External Client)
 
-Install Claude Desktop and update the configuration at `%APPDATA%\Roaming\Claude\claude_desktop_config.json` for Windows. Ensure you use **absolute paths** and the specific environment flags for Windows stability.
+Install Claude Desktop and update the configuration. Windows example: Ensure you use **absolute paths** and the specific environment flags for Windows stability.
+
+Edit `%APPDATA%\Roaming\Claude\claude_desktop_config.json` and edit the ```base_path```
 
 ```json
 { 
@@ -119,7 +122,7 @@ Run it:
 python server.py
 ```
 
-Then open Claude Desktop
+Then open Claude Desktop to start using the MCP server.
 
 ---
 
