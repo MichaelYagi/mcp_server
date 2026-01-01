@@ -1,6 +1,6 @@
-# MCP Server
+# MCP Server & Client
 
-A modular, extensible **Model Context Protocol (MCP)** server architecture. This project provides a structured framework for exposing diverse Python-based tools to AI agents through a unified JSON-RPC interface.
+A modular, extensible **Model Context Protocol (MCP)** architecture. This project provides a structured framework for both hosting diverse Python-based tools (Server) and interacting with them via an AI Agent (Client), exposing diverse Python-based tools to AI agents through a unified JSON-RPC interface.
 
 The server is designed to be a "plug-and-play" system. You can introduce new capabilities—such as system automation, data management, or specialized calculators—by simply adding new modules to the directory structure.
 
@@ -8,6 +8,7 @@ The server is designed to be a "plug-and-play" system. You can introduce new cap
 
 ## 🚀 Key Features
 
+* **Bidirectional Architecture**: Includes both a Server to expose local tools and a Client to act as the "brain" using LLMs.
 * **Multi-Domain Support**: Organize tools into logical categories (e.g., `knowledge`, `system`, `math`) to keep the codebase clean and scalable.
 * **Schema-Driven Validation**: Every tool is backed by a JSON schema, ensuring that AI agents provide correctly formatted inputs every time.
 * **Versioned Storage**: Built-in support for file-backed data persistence with automatic snapshotting for "undo" or "recovery" workflows.
@@ -20,8 +21,8 @@ The server is designed to be a "plug-and-play" system. You can introduce new cap
 
 The server separates tool logic from the protocol interface, allowing for rapid development of new features.
 
-
-
+* **Client (client.py)**: The AI agent. It connects to the server, maintains conversation context, and invokes tools based on user intent.
+* **Server (server.py)**: The hub. It registers local tools and provides the JSON-RPC interface for the client to discover them.
 * **Tools Directory**: Contains the functional Python logic for each domain.
 * **Schemas Directory**: Defines the "contract" between the AI and your code.
 * **Data Directory**: A flat-file persistence layer that stores active entries and historical versions.
@@ -33,19 +34,18 @@ The server separates tool logic from the protocol interface, allowing for rapid 
 ```text
 mcp-server/
 │
-├── server.py                 # Core hub; registers and exposes tools to the protocol
+├── server.py                 # Core hub; registers and exposes tools
+├── client.py                 # MCP Client; the AI Agent (powered by Groq/LLM)
+├── .env                      # API keys and environment configuration
+│
 ├── tools/
-│   └── knowledge/            # Example Domain: Structured data & search
-│       ├── kb_add.py
-│       ├── kb_search_semantic.py
-│       └── kb_update_versioned.py
+│   ├── knowledge/            # Domain: Structured data & search
+│   │   └── kb_add.py
+│   └── weather/              # Domain: External API integration
+│       └── get_weather.py
 │
-├── schemas/
-│   └── knowledge/            # JSON schemas for the knowledge tools
-│
-└── data/                     # Local persistence layer
-    ├── entries/              # Active JSON objects
-    └── snapshots/            # Historical snapshots for versioning
+├── schemas/                  # JSON schemas defining tool inputs
+└── data/                     # Local persistence (entries & snapshots)
 ```
 
 ## 🛠 Included Tool Suite (Knowledge Domain)
@@ -74,22 +74,18 @@ The search engine is built to be lightweight and dependency-free. It processes q
 
 ## ⚡ Setup & Integration
 
-Requirements:
-```
-Python 3.10 or newer
-```
+1. Prerequisites
 
-Install dependencies:
+* Python 3.10+
+* Groq API Key: Get it at [console.groq.com](https://console.groq.com/) (Free)
+* Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
+
+2. Install dependencies
 ```
 pip install -r requirements.txt
 ```
 
-### Configuration for client.py
-
-Get OpenAI API key from https://console.groq.com/ (free)
-
-Get a Weather API key from https://www.weatherapi.com/ (free/rated)
-
+3. Environment Configuration
 Create an ```.env``` file in the root of the project with the following details.
 ```
 WEATHER_API_KEY="<weather_api_key>"
@@ -98,14 +94,14 @@ OPENAI_BASE_URL="https://api.groq.com/openai/v1"
 OPENAI_MODEL="llama-3.1-8b-instant"
 ```
 
-Run it:
+4. Running the Project
 ```
 python client.py
 ```
 
-### Configuration for Claude Desktop
+Option B: Connecting to Claude Desktop (External Client)
 
-Update your configuration at `%APPDATA%\Roaming\Claude\claude_desktop_config.json` for Windows. Ensure you use **absolute paths** and the specific environment flags for Windows stability.
+Install Claude Desktop and update the configuration at `%APPDATA%\Roaming\Claude\claude_desktop_config.json` for Windows. Ensure you use **absolute paths** and the specific environment flags for Windows stability.
 
 ```json
 { 
