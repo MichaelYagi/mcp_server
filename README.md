@@ -23,9 +23,8 @@ The server separates tool logic from the protocol interface, allowing for rapid 
 
 * **Client (client.py)**: The AI agent. It connects to the server, maintains conversation context, and invokes tools based on user intent.
 * **Server (server.py)**: The hub. It registers local tools and provides the JSON-RPC interface for the client to discover them.
-* **Tools Directory**: Contains the functional Python logic for each domain.
+* **Tools Directory**: Contains the functional Python logic for each domain. Also contains local persistence via flat files that contain entries & snapshots
 * **Schemas Directory**: Defines the "contract" between the AI and your code.
-* **Data Directory**: A flat-file persistence layer that stores active entries and historical versions.
 
 ---
 
@@ -39,13 +38,20 @@ mcp-server/
 ├── .env                      # API keys and environment configuration
 │
 ├── tools/
-│   ├── knowledge/            # Domain: Structured data & search
+│   ├── knowledge_base/       # Domain: Structured data & search
 │   │   └── kb_add.py
-│   └── weather/              # Domain: External API integration
+│   │   └── ...
+│   └── location/             # Domain: External API integration
 │       └── get_weather.py
+│       └── ...
 │
-├── schemas/                  # JSON schemas defining tool inputs
-└── data/                     # Local persistence (entries & snapshots)
+└── schemas/                  # JSON schemas defining tool inputs
+│   ├── knowledge_base/       
+│   │   └── kb_add.json
+│   │   └── ...
+│   └── location/             
+│       └── get_weather.json
+│       └── ...
 ```
 
 ## Included Tool Suite (Knowledge Domain)
