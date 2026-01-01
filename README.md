@@ -83,7 +83,7 @@ The search engine is built to be lightweight and dependency-free. It processes q
 ### 1. Prerequisites
 
 * Python 3.10+
-* Google AI Studio API Key: Get it at [aistudio.google.com](https://aistudio.google.com/) (Free)
+* Groq API Key: Get it at [console.groq.com](https://console.groq.com/) (Free)
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
 
 ### 2. Environment Configuration
@@ -91,8 +91,8 @@ The search engine is built to be lightweight and dependency-free. It processes q
 Create an ```.env``` file in the root of the project with the following details.
 ```
 WEATHER_API_KEY="<weather_api_key>"
-GEMINI_API_KEY=<google_api_key>
-GEMINI_MODEL=models/gemini-2.5-flash
+GROQ_API_KEY="<gsk_groq_api_key>"
+GROQ_MODEL="llama-3.1-8b-instant"
 ```
 
 ### 3. Install dependencies
