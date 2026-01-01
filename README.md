@@ -6,7 +6,7 @@ The server is designed to be a "plug-and-play" system. You can introduce new cap
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **Bidirectional Architecture**: Includes both a Server to expose local tools and a Client to act as the "brain" using LLMs.
 * **Multi-Domain Support**: Organize tools into logical categories (e.g., `knowledge`, `system`, `math`) to keep the codebase clean and scalable.
@@ -17,7 +17,7 @@ The server is designed to be a "plug-and-play" system. You can introduce new cap
 
 ---
 
-## 🏗 Modular Architecture
+## Modular Architecture
 
 The server separates tool logic from the protocol interface, allowing for rapid development of new features.
 
@@ -29,7 +29,7 @@ The server separates tool logic from the protocol interface, allowing for rapid 
 
 ---
 
-## 📂 Directory Structure
+## Directory Structure
 
 ```text
 mcp-server/
@@ -48,7 +48,7 @@ mcp-server/
 └── data/                     # Local persistence (entries & snapshots)
 ```
 
-## 🛠 Included Tool Suite (Knowledge Domain)
+## Included Tool Suite (Knowledge Domain)
 
 As a starting point, the server includes a set of tools for information management:
 
@@ -62,7 +62,7 @@ As a starting point, the server includes a set of tools for information manageme
 
 ---
 
-## 🧠 Semantic Search Logic
+## Semantic Search Logic
 
 The search engine is built to be lightweight and dependency-free. It processes queries using:
 
@@ -72,15 +72,15 @@ The search engine is built to be lightweight and dependency-free. It processes q
 
 ---
 
-## ⚡ Setup & Integration
+## Setup & Integration
 
-1. Prerequisites
+### 1. Prerequisites
 
 * Python 3.10+
 * Groq API Key: Get it at [console.groq.com](https://console.groq.com/) (Free)
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
 
-2. Environment Configuration
+### 2. Environment Configuration
 
 Create an ```.env``` file in the root of the project with the following details.
 ```
@@ -90,17 +90,17 @@ OPENAI_BASE_URL="https://api.groq.com/openai/v1"
 OPENAI_MODEL="llama-3.1-8b-instant"
 ```
 
-3. Install dependencies
+### 3. Install dependencies
 ```
 pip install -r requirements.txt
 ```
 
-4. Running the Project
+### 4. Running the Project
 ```
 python client.py
 ```
 
-Option B: Connecting to Claude Desktop (External Client)
+### Option B: Connecting to Claude Desktop (External Client)
 
 Install Claude Desktop and update the configuration. Windows example: Ensure you use **absolute paths** and the specific environment flags for Windows stability.
 
@@ -126,7 +126,7 @@ Then open Claude Desktop to start using the MCP server.
 
 ---
 
-## 🧩 Extending the Server
+## Extending the Server
 
 Adding a new capability is a three-step process:
 
