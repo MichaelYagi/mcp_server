@@ -4,6 +4,7 @@ import platform
 import logging
 
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
@@ -14,14 +15,14 @@ PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 # Verify critical environment variables
-if not os.environ.get("GROQ_API_KEY"):
-    print("Warning: GROQ_API_KEY not found in environment")
+if not os.environ.get("GEMINI_API_KEY"):
+    print("Warning: GEMINI_API_KEY not found in environment")
 
 async def main():
     load_dotenv()
-    llm = ChatOpenAI(
-        api_key=os.environ["GROQ_API_KEY"],
-        model=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant"),
+    llm = ChatGoogleGenerativeAI(
+        api_key=os.environ["GEMINI_API_KEY"],
+        model=os.environ["GEMINI_MODEL"],
         temperature=0
     )
 
@@ -46,8 +47,8 @@ async def main():
                 "args": [str(PROJECT_ROOT / "server.py")],
                 "cwd": str(PROJECT_ROOT),
                 "env": {
-                    "GROQ_API_KEY": os.environ["GROQ_API_KEY"],
-                    "GROQ_MODEL": os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+                    "GEMINI_API_KEY": os.environ["GEMINI_API_KEY"],
+                    "GEMINI_MODEL": os.environ["GEMINI_MODEL"]
                 }
             }
         }
