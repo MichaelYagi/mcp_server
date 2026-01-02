@@ -97,6 +97,8 @@ GROQ_MODEL="llama-3.1-8b-instant"
 
 ### 3. Install dependencies
 ```
+python3 -m venv .venv
+source .venv/bin/activate 
 pip install -r requirements.txt
 ```
 
