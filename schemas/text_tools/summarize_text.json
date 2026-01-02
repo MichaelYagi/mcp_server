@@ -1,0 +1,30 @@
+{
+  "name": "summarize_text",
+  "description": "Prepare text for summarization by splitting and structuring it.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Raw text to summarize.",
+        "nullable": true
+      },
+      "file_path": {
+        "type": "string",
+        "description": "Path to a file containing text to summarize.",
+        "nullable": true
+      },
+      "style": {
+        "type": "string",
+        "description": "Summary style: short, medium, or long.",
+        "enum": ["short", "medium", "long"],
+        "default": "medium"
+      }
+    },
+    "required": []
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing structured chunks for the LLM to summarize."
+  }
+}

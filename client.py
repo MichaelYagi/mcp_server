@@ -3,11 +3,12 @@ import os
 import logging
 import requests
 
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
 from dotenv import load_dotenv
+from langchain_core.language_models import BaseLanguageModel
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
@@ -26,11 +27,6 @@ def get_public_ip():
 
 async def main():
     load_dotenv()
-    llm = ChatOpenAI(
-        api_key=os.environ["GROQ_API_KEY"],
-        model=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant"),
-        temperature=0
-    )
 
     PROJECT_ROOT = Path(__file__).resolve().parent
     LOG_DIR = Path(str(PROJECT_ROOT / "logs"))
@@ -63,12 +59,17 @@ async def main():
 
     # 3️⃣ MCP Agent
     SYSTEM_PROMPT = Path(str(PROJECT_ROOT / "prompts/tool_usage_guide.md")).read_text()
+
+    llm = ChatGroq(model="llama-3.1-8b-instant", api_key=os.getenv("GROQ_API_KEY"))
+
     agent = MCPAgent(
         llm=llm,
         client=client,
         max_steps=10,
         system_prompt=SYSTEM_PROMPT
     )
+
+    agent.debug = True
 
     await agent.initialize()
 
@@ -86,7 +87,8 @@ async def main():
             if not query:
                 continue
 
-            result = await agent.run(query)
+            # result = await agent.run(query)
+            result = await agent.run(SYSTEM_PROMPT + "\n\nUser request:\n" + query)
             print("\n" + result + "\n")
 
         except KeyboardInterrupt:

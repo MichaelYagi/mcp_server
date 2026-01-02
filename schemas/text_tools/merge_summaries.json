@@ -1,0 +1,25 @@
+{
+  "name": "merge_summaries",
+  "description": "Merge multiple chunk summaries into a unified summary.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "summaries": {
+        "type": "array",
+        "description": "List of individual chunk summaries.",
+        "items": { "type": "string" }
+      },
+      "style": {
+        "type": "string",
+        "description": "Desired style of the merged summary.",
+        "enum": ["short", "medium", "long"],
+        "default": "medium"
+      }
+    },
+    "required": ["summaries"]
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing the merged summary."
+  }
+}

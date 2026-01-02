@@ -1,0 +1,23 @@
+{
+  "name": "split_text",
+  "description": "Split text into chunks of a specified maximum size.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The full text to split into chunks."
+      },
+      "max_chunk_size": {
+        "type": "integer",
+        "description": "Maximum characters per chunk.",
+        "default": 2000
+      }
+    },
+    "required": ["text"]
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing an array of text chunks."
+  }
+}

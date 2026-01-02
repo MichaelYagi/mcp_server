@@ -56,6 +56,14 @@ from tools.code_review.search_code import search_code
 from tools.location.get_location import get_location as get_location_fn
 from tools.location.get_time import get_time as get_time_fn
 from tools.location.get_weather import get_weather as get_weather_fn
+# ─────────────────────────────────────────────
+# Text Tools
+# ─────────────────────────────────────────────
+from tools.text_tools.split_text import split_text
+from tools.text_tools.summarize_chunk import summarize_chunk
+from tools.text_tools.merge_summaries import merge_summaries
+from tools.text_tools.summarize_text import summarize_text
+from tools.text_tools.summarize_direct import summarize_direct
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -475,6 +483,35 @@ def get_weather_tool(city: str | None = None, state: str | None = None, country:
 
     # This calls your get_weather.py which now cleans the query string
     return get_weather_fn(city, state, country)
+
+# ─────────────────────────────────────────────
+# Text Tools
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+def split_text_tool(text: str, max_chunk_size: int = 2000) -> str:
+    return json.dumps(split_text(text, max_chunk_size))
+
+@mcp.tool()
+def summarize_chunk_tool(chunk: str, style: str = "short") -> str:
+    return json.dumps(summarize_chunk(chunk, style))
+
+@mcp.tool()
+def merge_summaries_tool(summaries: List[str], style: str = "medium") -> str:
+    return json.dumps(merge_summaries(summaries, style))
+
+@mcp.tool()
+def summarize_text_tool(text: str | None = None,
+                        file_path: str | None = None,
+                        style: str = "medium") -> str:
+    return json.dumps(summarize_text(text, file_path, style))
+
+@mcp.tool()
+def summarize_direct_tool(text: str, style: str = "medium") -> str:
+    """
+    Prepare text for direct summarization in a single LLM call.
+    """
+    return json.dumps(summarize_direct(text, style))
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

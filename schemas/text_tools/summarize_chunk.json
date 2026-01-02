@@ -1,0 +1,24 @@
+{
+  "name": "summarize_chunk",
+  "description": "Prepare a chunk for summarization. The LLM will generate the summary.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "chunk": {
+        "type": "string",
+        "description": "The text chunk to summarize."
+      },
+      "style": {
+        "type": "string",
+        "description": "Summary style: short, medium, or long.",
+        "enum": ["short", "medium", "long"],
+        "default": "short"
+      }
+    },
+    "required": ["chunk"]
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing the chunk and style for the LLM to summarize."
+  }
+}
