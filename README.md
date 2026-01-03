@@ -84,6 +84,12 @@ The search engine is built to be lightweight and dependency-free. It processes q
 * Python 3.10+
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
 
+### 2. Create a ```.env``` file in the root directory
+```
+WEATHER_API_KEY=<Weather API Key>
+OLLAMA_MODEL=qwen2.5:7b
+```
+
 ### 2. Install dependencies
 ``` 
 curl -fsSL https://ollama.com/install.sh | sh
@@ -104,13 +110,8 @@ Explore more models at https://ollama.com/library.
 
 You may download & use other models through ```ollama pull <model>```. 
 
-Ensure you edit the ```client.py``` file and replace
-```
-llm = ChatOllama(
-    model="<whatever model you pulled above>",
-    temperature=0
-)
-```
+Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model name>```
+
 Ensure you download models with **advertised tool support**.
 ### 4. Running the Project
 ```

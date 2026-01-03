@@ -52,9 +52,10 @@ async def main():
 
     # 3️⃣ MCP Agent
     SYSTEM_PROMPT = Path(str(PROJECT_ROOT / "prompts/tool_usage_guide.md")).read_text()
+    model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
     llm = ChatOllama(
-        model="qwen2.5:7b",
+        model=model_name,
         temperature=0
     )
 
