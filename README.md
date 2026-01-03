@@ -62,6 +62,15 @@ mcp-server/
 
 * Python 3.10+
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
+* System Requirements for ```qwen2.5:7b```
+
+| Component | Minimum | Recommended |
+|----------|----------|-------------|
+| **GPU** | 4–5 GB VRAM (Q4_K_M) | 16 GB VRAM (FP16) |
+| **CPU** | 6‑core consumer CPU | 8–12 cores |
+| **RAM** | 16 GB | 32 GB |
+| **Disk** | 10 GB | 20+ GB |
+
 
 ### 2. Create a ```.env``` file in the root directory
 ```
