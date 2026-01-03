@@ -40,43 +40,22 @@ mcp-server/
 │   ├── knowledge_base/       # Domain: Structured data & search
 │   │   └── kb_add.py
 │   │   └── ...
-│   └── location/             # Domain: External API integration
-│       └── get_weather.py
+│   ├── location/             # Domain: External API integration
+│   │   └── get_weather.py
+│   │   └── ...
+│   └── more_tools/
 │       └── ...
 │
 └── schemas/                  # JSON schemas defining tool inputs
 │   ├── knowledge_base/       
 │   │   └── kb_add.json
 │   │   └── ...
-│   └── location/             
-│       └── get_weather.json
+│   ├── location/             
+│   │   └── get_weather.json
+│   │   └── ...
+│   └── more_schemas/
 │       └── ...
 ```
-
-## Included Tool Suite (Knowledge Domain)
-
-As a starting point, the server includes a set of tools for information management:
-
-| Tool | Function |
-| :--- | :--- |
-| **add_entry** | Stores structured text data with metadata and custom tags. |
-| **search_entries** | Keyword-based text search over stored files. |
-| **search_semantic** | Concepts-based search using TF-IDF and Cosine Similarity. |
-| **update_versioned** | Updates a file while saving a timestamped backup in `snapshots/`. |
-| **list_all** | Returns an inventory of all current data objects. |
-
----
-
-## Semantic Search Logic
-
-The search engine is built to be lightweight and dependency-free. It processes queries using:
-
-* **Tokenization**: Parsing text into a searchable index.
-* **TF-IDF Weighting**: Identifying the most unique and relevant terms across all documents.
-* **Cosine Similarity**: Comparing the mathematical vector of the query against the document vectors.
-
----
-
 ## Setup & Integration
 
 ### 1. Prerequisites
