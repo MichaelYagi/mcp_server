@@ -468,6 +468,12 @@ def get_time_tool(city: str | None = None, state: str | None = None, country: st
 def get_weather_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
     Get current weather conditions for any location.
+    When parsing locations:
+    • City = city name (e.g., Surrey)
+    • State = province or prefecture or state (e.g., BC, Ontario, Kanagawa, California)
+    • Country = full country name (e.g., Canada, Japan, United States)
+
+    Never put a province or state into the country field.
     """
     # If the LLM didn't provide a city, but we have a CLIENT_IP, let's use it.
     if not city and CLIENT_IP:

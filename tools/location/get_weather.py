@@ -9,6 +9,12 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
     """
     Fetches real weather data using WeatherAPI.com.
     Falls back to a clear error message if the API key is missing or the request fails.
+    When parsing locations:
+    • City = city name (e.g., Surrey)
+    • State = province or prefecture or state (e.g., BC, Ontario, Kanagawa, California)
+    • Country = full country name (e.g., Canada, Japan, United States)
+
+    Never put a province or state into the country field.
     """
     loc = resolve_location(city, state, country)
 
@@ -26,7 +32,7 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
     # WeatherAPI expects "City,State,Country"
     query_parts = [loc['city'], loc['state'], loc['country']]
     query = ",".join([p for p in query_parts if p])
-    url = f"https://api.weatherapi.com/v1/current.json?key={api_key}&q={query}&aqi=no"
+    url = f"https://api.weatherapi.com/v1/forecast.json?key={api_key}&q={query}&aqi=no&days=1"
 
     try:
         response = requests.get(url, timeout=5)
@@ -43,6 +49,7 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
             }, indent=2)
 
         current = data["current"]
+        forecast = data["forecast"]
 
         result = {
             "city": loc["city"],
@@ -50,8 +57,15 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
             "country": loc["country"],
             "weather": {
                 "condition": current["condition"]["text"],
+                "temperature_f": current["temp_f"],
                 "temperature_c": current["temp_c"],
-                "humidity": current["humidity"]
+                "feelslike_f": current["feelslike_f"],
+                "feelslike_c": current["feelslike_c"],
+                "humidity": current["humidity"],
+                "maxtemp_f": forecast["forecastday"][0]["day"]["maxtemp_f"],
+                "maxtemp_c": forecast["forecastday"][0]["day"]["maxtemp_c"],
+                "mintemp_f": forecast["forecastday"][0]["day"]["mintemp_f"],
+                "mintemp_c": forecast["forecastday"][0]["day"]["mintemp_c"]
             }
         }
 

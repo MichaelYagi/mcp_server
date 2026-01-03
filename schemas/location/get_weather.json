@@ -1,18 +1,22 @@
 {
-  "name": "get_weather",
-  "description": "Get weather information for a resolved location using auto‑detected defaults or an optional city and country.",
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "city": {
-        "type": "string",
-        "description": "City name to get weather for. Optional."
-      },
-      "country": {
-        "type": "string",
-        "description": "Country name for the city. Optional."
-      }
-    },
-    "required": []
-  }
+    "name": "get_weather",
+    "description": "Get weather information for a resolved location using auto‑detected defaults or an optional city and country.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "City name to get weather for. Optional."
+            },
+            "state": {
+                "type": "string",
+                "description": "State or prefecture or province (e.g., BC, Ontario, Kanagawa, California)."
+            },
+            "country": {
+                "type": "string",
+                "description": "Full country name (e.g., Canada, Japan, United States). Do NOT put provinces or states here."
+            }
+        },
+        "required": []
+    }
 }
