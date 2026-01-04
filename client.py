@@ -5,15 +5,14 @@ import requests
 from typing import TypedDict, Annotated, Sequence
 import operator
 
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage, BaseMessage, HumanMessage, AIMessage
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+from langchain_ollama import ChatOllama
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode
 from prompts.prompts import INTENT_DETECTOR_PROMPT, SUMMARIZE_TOOL_RESULT_PROMPT, DIRECT_ANSWER_PROMPT, AGENT_PROMPT
 
 # Load environment variables
@@ -267,36 +266,9 @@ async def main():
             logger.info("🏁 Starting agent execution")
             result = await agent.ainvoke(initial_state, config=config)
 
-            messages = result["messages"]
-            final_message = messages[-1]
-
-            def content_to_text(content) -> str:
-                # ToolMessage / AIMessage content can be:
-                # - a plain string
-                # - a list of content blocks (e.g., TextContent)
-                if isinstance(content, str):
-                    return content
-                if isinstance(content, list):
-                    parts = []
-                    for part in content:
-                        # For TextContent(type='text', text='...'):
-                        text = getattr(part, "text", None)
-                        if text:
-                            parts.append(text)
-                        else:
-                            # fallback to string repr if no .text
-                            parts.append(str(part))
-                    return "\n".join(parts)
-                # Fallback
-                return str(content)
-
-            from langchain_core.messages import ToolMessage
-
             # Prefer a proper AI answer if available
             messages = result["messages"]
             final_message = messages[-1]
-
-            from langchain_core.messages import ToolMessage
 
             def extract_tool_text(msg: ToolMessage) -> str:
                 content = msg.content
