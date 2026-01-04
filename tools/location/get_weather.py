@@ -48,13 +48,19 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
                 "country": loc["country"]
             }, indent=2)
 
+        location = data["location"]
         current = data["current"]
         forecast = data["forecast"]
 
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🌤️  get_weather called with: city={city}, state={state}, country={country}")
+        logger.info(f"🌤️  {url}")
+
         result = {
-            "city": loc["city"],
-            "state": loc["state"],
-            "country": loc["country"],
+            "city": location["name"],
+            "state": location["region"],
+            "country": location["country"],
             "weather": {
                 "condition": current["condition"]["text"],
                 "temperature_f": current["temp_f"],

@@ -487,6 +487,7 @@ def get_weather_tool(city: str | None = None, state: str | None = None, country:
 
     # This calls your get_weather.py which now cleans the query string
     result = get_weather_fn(city, state, country)
+    logger.info(f"🌤️  Result: {result}")
     logger.info(f"🌤️  Returning weather result")
     return result
 
