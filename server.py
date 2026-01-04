@@ -2,9 +2,7 @@ import json
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 from pathlib import Path
-import os
 from dotenv import load_dotenv
-
 from tools.location.geolocate_util import geolocate_ip, CLIENT_IP
 
 # Load environment variables from .env file
@@ -325,6 +323,74 @@ def delete_all_todo_items() -> str:
 # ─────────────────────────────────────────────
 # Code Review MCP Tools
 # ─────────────────────────────────────────────
+@mcp.tool()
+def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
+    """
+    Read a code file from disk and return a structured summary.
+
+    • Reads the file at the given path.
+    • Limits file size to prevent runaway reads.
+    • Returns JSON containing:
+        - path
+        - size
+        - summary
+        - error (if any)
+
+    Use this tool when the user wants to summarize or review a specific code file.
+    """
+    from pathlib import Path
+    import json
+
+    p = Path(path)
+
+    if not p.exists():
+        return json.dumps({"error": f"File not found: {path}"})
+
+    if not p.is_file():
+        return json.dumps({"error": f"Not a file: {path}"})
+
+    try:
+        data = p.read_bytes()
+
+        if len(data) > max_bytes:
+            return json.dumps({
+                "error": "File too large",
+                "path": path,
+                "size": len(data),
+                "max_bytes": max_bytes
+            })
+
+        text = data.decode("utf-8", errors="replace")
+
+        # --- Summarization logic (simple, LLM-friendly) ---
+        import re
+
+        lines = text.splitlines()
+        num_lines = len(lines)
+
+        # Extract imports, classes, functions
+        imports = [l.strip() for l in lines if l.strip().startswith("import") or l.strip().startswith("from")]
+        classes = re.findall(r"class\s+([A-Za-z0-9_]+)", text)
+        functions = re.findall(r"def\s+([A-Za-z0-9_]+)", text)
+
+        summary = {
+            "path": path,
+            "size": len(data),
+            "num_lines": num_lines,
+            "imports": imports,
+            "classes": classes,
+            "functions": functions,
+            "preview": "\n".join(lines[:20])  # first 20 lines
+        }
+
+        return json.dumps(summary, indent=2)
+
+    except Exception as e:
+        return json.dumps({
+            "error": f"Failed to read or summarize file: {str(e)}",
+            "path": path
+        })
+
 @mcp.tool()
 def search_code_in_directory(
         query: str,

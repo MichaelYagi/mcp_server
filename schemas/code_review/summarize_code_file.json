@@ -1,0 +1,68 @@
+{
+  "name": "summarize_code_file",
+  "description": "Read a code file from disk and return a structured summary.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Absolute or relative path to the code file"
+      },
+      "max_bytes": {
+        "type": "integer",
+        "description": "Maximum number of bytes to read",
+        "default": 200000,
+        "minimum": 1
+      }
+    },
+    "required": ["path"]
+  },
+  "output_schema": {
+    "type": "object",
+    "description": "Structured summary of the code file or an error",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "The file path that was summarized"
+      },
+      "size": {
+        "type": "integer",
+        "description": "File size in bytes"
+      },
+      "num_lines": {
+        "type": "integer",
+        "description": "Number of lines in the file"
+      },
+      "imports": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of import statements found in the file"
+      },
+      "classes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Class names found in the file"
+      },
+      "functions": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Function names found in the file"
+      },
+      "preview": {
+        "type": "string",
+        "description": "First 20 lines of the file"
+      },
+      "error": {
+        "type": "string",
+        "nullable": true,
+        "description": "Error message if the file could not be processed"
+      },
+      "max_bytes": {
+        "type": "integer",
+        "nullable": true,
+        "description": "Maximum allowed bytes when a file is too large"
+      }
+    },
+    "required": ["path"]
+  }
+}
