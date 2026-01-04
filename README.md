@@ -75,7 +75,7 @@ mcp-server/
 ### 2. Create a ```.env``` file in the root directory
 ```
 WEATHER_API_KEY=<Weather API Key>
-OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_MODEL=qwen2.5:3b
 ```
 
 ### 2. Install dependencies
@@ -90,7 +90,7 @@ pip install -r requirements.txt
 
 Run in a separate terminal ```ollama serve```
 
-Download the model ```ollama pull qwen2.5:7b``` (4.7GB)
+Download the model ```ollama pull qwen2.5:3b``` (4.7GB)
 
 **Note:** 
 
