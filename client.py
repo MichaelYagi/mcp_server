@@ -5,7 +5,7 @@ import requests
 from typing import TypedDict, Annotated, Sequence
 import operator
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
@@ -27,6 +27,14 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
 
+async def summarize_tool_result(llm, system_prompt, tool_text):
+    """Ask the LLM (with tools disabled) to summarize the tool result naturally."""
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=f"Explain this result in natural language:\n\n{tool_text}")
+    ]
+    response = await llm.ainvoke(messages)
+    return response.content
 
 # ============================================================================
 # Stop Condition Function
@@ -45,7 +53,7 @@ def should_continue(state: AgentState) -> str:
                 "ignore tools",
                 "do not call any tools",
                 "do not call tools",
-                "no tools"
+                "no tools",
             ]):
                 logger.info("🚫 User requested no tools — bypassing tool execution")
                 return "end"
@@ -53,6 +61,27 @@ def should_continue(state: AgentState) -> str:
 
     last = messages[-1]
 
+    # If the last message is a tool result, STOP.
+    # ToolNode returns ToolMessage instances for tool outputs.
+    if isinstance(last, ToolMessage):
+        logger.info("🛑 Last message is a ToolMessage — stopping to avoid loop")
+        return "end"
+
+    # Loop guard: if the model has produced tool_calls too many times, stop.
+    tool_call_turns = sum(
+        1
+        for m in messages
+        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None)
+    )
+    MAX_TOOL_CALL_TURNS = 5
+    if tool_call_turns > MAX_TOOL_CALL_TURNS:
+        logger.warning(
+            f"⚠️ Max tool-calling turns reached ({MAX_TOOL_CALL_TURNS}). "
+            "Stopping to avoid infinite loop."
+        )
+        return "end"
+
+    # Normal tool-call continuation logic
     if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
         logger.info(f"🔄 Continuing - found {len(last.tool_calls)} tool call(s)")
         return "continue"
@@ -72,9 +101,15 @@ def create_langgraph_agent(llm_for_query, tools_for_query):
         messages = state["messages"]
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
 
-        response = await llm_for_query.ainvoke(messages)
+        last = messages[-1]
 
-        # Append model response to message list
+        # If the last message is a tool result, DO NOT call the LLM again.
+        # Just propagate the current messages; should_continue will end.
+        if isinstance(last, ToolMessage):
+            logger.info("🛑 ToolMessage detected in call_model — not calling LLM again")
+            return {"messages": messages}
+
+        response = await llm_for_query.ainvoke(messages)
         return {"messages": list(messages) + [response]}
 
     workflow = StateGraph(AgentState)
@@ -89,8 +124,8 @@ def create_langgraph_agent(llm_for_query, tools_for_query):
         should_continue,
         {
             "continue": "tools",
-            "end": END
-        }
+            "end": END,
+        },
     )
 
     workflow.add_edge("tools", "agent")
@@ -107,7 +142,7 @@ def create_langgraph_agent(llm_for_query, tools_for_query):
 def get_public_ip():
     try:
         return requests.get("https://api.ipify.org").text
-    except:
+    except Exception:
         return None
 
 
@@ -140,7 +175,7 @@ async def main():
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
             logging.FileHandler(LOG_DIR / "mcp-client.log", encoding="utf-8"),
-            logging.StreamHandler()
+            logging.StreamHandler(),
         ],
     )
 
@@ -157,7 +192,7 @@ async def main():
                 "command": get_venv_python(PROJECT_ROOT),
                 "args": [str(PROJECT_ROOT / "server.py")],
                 "cwd": str(PROJECT_ROOT),
-                "env": {"CLIENT_IP": get_public_ip()}
+                "env": {"CLIENT_IP": get_public_ip()},
             }
         }
     })
@@ -184,7 +219,7 @@ async def main():
         llm=llm,
         client=client,
         max_steps=10,
-        system_prompt=SYSTEM_PROMPT
+        system_prompt=SYSTEM_PROMPT,
     )
     mcp_agent.debug = True
     await mcp_agent.initialize()
@@ -206,7 +241,7 @@ async def main():
 
             logger.info(f"💬 Received query: '{query}'")
 
-            # --- Decide whether tools are disabled ---
+            # Decide whether tools are disabled for this query
             tools_disabled = any(
                 phrase in query.lower()
                 for phrase in [
@@ -214,7 +249,7 @@ async def main():
                     "ignore tools",
                     "do not call any tools",
                     "do not call tools",
-                    "no tools"
+                    "no tools",
                 ]
             )
 
@@ -225,11 +260,13 @@ async def main():
             else:
                 llm_for_query = llm.bind_tools(tools)
                 tools_for_query = tools
-            # -----------------------------------------
 
             agent = create_langgraph_agent(llm_for_query, tools_for_query)
 
-            initial_messages = [ SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=query) ]
+            initial_messages = [
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=query),
+            ]
 
             initial_state = {"messages": initial_messages}
 
@@ -238,12 +275,65 @@ async def main():
             logger.info("🏁 Starting agent execution")
             result = await agent.ainvoke(initial_state, config=config)
 
-            final_message = result["messages"][-1]
+            messages = result["messages"]
+            final_message = messages[-1]
 
-            if isinstance(final_message, AIMessage):
+            def content_to_text(content) -> str:
+                # ToolMessage / AIMessage content can be:
+                # - a plain string
+                # - a list of content blocks (e.g., TextContent)
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    parts = []
+                    for part in content:
+                        # For TextContent(type='text', text='...'):
+                        text = getattr(part, "text", None)
+                        if text:
+                            parts.append(text)
+                        else:
+                            # fallback to string repr if no .text
+                            parts.append(str(part))
+                    return "\n".join(parts)
+                # Fallback
+                return str(content)
+
+            from langchain_core.messages import ToolMessage
+
+            # Prefer a proper AI answer if available
+            messages = result["messages"]
+            final_message = messages[-1]
+
+            from langchain_core.messages import ToolMessage
+
+            def extract_tool_text(msg: ToolMessage) -> str:
+                content = msg.content
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    parts = []
+                    for part in content:
+                        text = getattr(part, "text", None)
+                        if text:
+                            parts.append(text)
+                        else:
+                            parts.append(str(part))
+                    return "\n".join(parts)
+                return str(content)
+
+            # If the final message is a normal AI answer, use it
+            if isinstance(final_message, AIMessage) and not getattr(final_message, "tool_calls", None):
                 answer = final_message.content
+
             else:
-                answer = str(final_message)
+                # Otherwise extract the last tool result
+                tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+                if tool_msgs:
+                    raw_tool_text = extract_tool_text(tool_msgs[-1])
+                    # Summarize using LLM with tools disabled
+                    answer = await summarize_tool_result(llm, SYSTEM_PROMPT, raw_tool_text)
+                else:
+                    answer = str(final_message)
 
             print("\n" + answer + "\n")
             logger.info("✅ Query completed successfully")
