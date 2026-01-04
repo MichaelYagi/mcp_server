@@ -1,3 +1,38 @@
+# Map timezone → location (city, state/province/prefecture, country)
+TZ_TO_LOCATION = {
+    "America/Vancouver": {
+        "city": "Surrey",
+        "state": "British Columbia",
+        "country": "Canada"
+    },
+    "America/Toronto": {
+        "city": "Toronto",
+        "state": "Ontario",
+        "country": "Canada"
+    },
+    "America/New_York": {
+        "city": "New York",
+        "state": "New York",
+        "country": "USA"
+    },
+    "Europe/London": {
+        "city": "London",
+        "state": "England",
+        "country": "UK"
+    },
+    "Asia/Tokyo": {
+        "city": "Tokyo",
+        "state": "Tokyo Prefecture",
+        "country": "Japan"
+    },
+}
+
+DEFAULT_FALLBACK = {
+    "city": "Surrey",
+    "state": "British Columbia",
+    "country": "Canada"
+}
+
 CITY_TIMEZONES = {
     # Canada
     ("Surrey", "Canada"): "America/Vancouver",

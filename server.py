@@ -4,9 +4,8 @@ from mcp.server.fastmcp import FastMCP
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import requests
 
-CLIENT_IP = os.environ.get("CLIENT_IP")
+from tools.location.geolocate_util import geolocate_ip, CLIENT_IP
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
@@ -401,16 +400,6 @@ def debug_fix(error_message: str,
 # ─────────────────────────────────────────────
 # Location Tools
 # ─────────────────────────────────────────────
-def geolocate_ip(ip: str):
-    if not ip:
-        return None
-
-    try:
-        resp = requests.get(f"https://ipapi.co/{ip}/json/")
-        return resp.json()
-    except:
-        return None
-
 @mcp.tool()
 def get_location_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
@@ -434,7 +423,7 @@ def get_location_tool(city: str | None = None, state: str | None = None, country
         if loc:
             city = loc.get("city")
             state = loc.get("region")
-            country = loc.get("country_name")
+            country = loc.get("country")
 
     return json.dumps(get_location_fn(city, state, country), indent=2)
 
@@ -460,14 +449,18 @@ def get_time_tool(city: str | None = None, state: str | None = None, country: st
         if loc:
             city = loc.get("city")
             state = loc.get("region")
-            country = loc.get("country_name")
+            country = loc.get("country")
 
     return json.dumps(get_time_fn(city, state, country), indent=2)
+
 
 @mcp.tool()
 def get_weather_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
     Get current weather conditions for any location.
+
+    If a user does not provide a city, it will use the users IP address.
+
     When parsing locations:
     • City = city name (e.g., Surrey)
     • State = province or prefecture or state (e.g., BC, Ontario, Kanagawa, California)
@@ -475,16 +468,27 @@ def get_weather_tool(city: str | None = None, state: str | None = None, country:
 
     Never put a province or state into the country field.
     """
+    # DEBUG logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🌤️  get_weather_tool called with: city={city}, state={state}, country={country}")
+    logger.info(f"🌤️  CLIENT_IP = {CLIENT_IP}")
+
     # If the LLM didn't provide a city, but we have a CLIENT_IP, let's use it.
     if not city and CLIENT_IP:
+        logger.info(f"🌤️  No city provided, using IP geolocation...")
         loc = geolocate_ip(CLIENT_IP)
+        logger.info(f"🌤️  Geolocation result: {loc}")
         if loc:
             city = loc.get("city")
             state = loc.get("region")
-            country = loc.get("country_name")
+            country = loc.get("country")
+            logger.info(f"🌤️  Resolved to: city={city}, state={state}, country={country}")
 
     # This calls your get_weather.py which now cleans the query string
-    return get_weather_fn(city, state, country)
+    result = get_weather_fn(city, state, country)
+    logger.info(f"🌤️  Returning weather result")
+    return result
 
 # ─────────────────────────────────────────────
 # Text Tools
