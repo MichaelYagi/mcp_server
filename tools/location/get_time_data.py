@@ -273,4 +273,148 @@ COUNTRY_TIMEZONES = {
     "New Zealand": "Pacific/Auckland",
 }
 
+# Map of state/province/prefecture abbreviations and names to countries
+STATE_TO_COUNTRY = {
+    # ==================== CANADA ====================
+    # Canadian provinces (abbreviations)
+    "BC": "Canada", "AB": "Canada", "SK": "Canada", "MB": "Canada",
+    "ON": "Canada", "QC": "Canada", "NB": "Canada", "NS": "Canada",
+    "PE": "Canada", "NL": "Canada", "YT": "Canada", "NT": "Canada", "NU": "Canada",
+
+    # Canadian provinces (full names)
+    "British Columbia": "Canada", "Alberta": "Canada", "Saskatchewan": "Canada",
+    "Manitoba": "Canada", "Ontario": "Canada", "Quebec": "Canada",
+    "New Brunswick": "Canada", "Nova Scotia": "Canada", "Prince Edward Island": "Canada",
+    "Newfoundland and Labrador": "Canada", "Yukon": "Canada",
+    "Northwest Territories": "Canada", "Nunavut": "Canada",
+
+    # ==================== USA ====================
+    # US states (abbreviations)
+    "AL": "USA", "AK": "USA", "AZ": "USA", "AR": "USA", "CA": "USA",
+    "CO": "USA", "CT": "USA", "DE": "USA", "FL": "USA", "GA": "USA",
+    "HI": "USA", "ID": "USA", "IL": "USA", "IN": "USA", "IA": "USA",
+    "KS": "USA", "KY": "USA", "LA": "USA", "ME": "USA", "MD": "USA",
+    "MA": "USA", "MI": "USA", "MN": "USA", "MS": "USA", "MO": "USA",
+    "MT": "USA", "NE": "USA", "NV": "USA", "NH": "USA", "NJ": "USA",
+    "NM": "USA", "NY": "USA", "NC": "USA", "ND": "USA", "OH": "USA",
+    "OK": "USA", "OR": "USA", "PA": "USA", "RI": "USA", "SC": "USA",
+    "SD": "USA", "TN": "USA", "TX": "USA", "UT": "USA", "VT": "USA",
+    "VA": "USA", "WA": "USA", "WV": "USA", "WI": "USA", "WY": "USA", "DC": "USA",
+
+    # US states (full names - all 50)
+    "Alabama": "USA", "Alaska": "USA", "Arizona": "USA", "Arkansas": "USA",
+    "California": "USA", "Colorado": "USA", "Connecticut": "USA", "Delaware": "USA",
+    "Florida": "USA", "Georgia": "USA", "Hawaii": "USA", "Idaho": "USA",
+    "Illinois": "USA", "Indiana": "USA", "Iowa": "USA", "Kansas": "USA",
+    "Kentucky": "USA", "Louisiana": "USA", "Maine": "USA", "Maryland": "USA",
+    "Massachusetts": "USA", "Michigan": "USA", "Minnesota": "USA", "Mississippi": "USA",
+    "Missouri": "USA", "Montana": "USA", "Nebraska": "USA", "Nevada": "USA",
+    "New Hampshire": "USA", "New Jersey": "USA", "New Mexico": "USA", "New York": "USA",
+    "North Carolina": "USA", "North Dakota": "USA", "Ohio": "USA", "Oklahoma": "USA",
+    "Oregon": "USA", "Pennsylvania": "USA", "Rhode Island": "USA", "South Carolina": "USA",
+    "South Dakota": "USA", "Tennessee": "USA", "Texas": "USA", "Utah": "USA",
+    "Vermont": "USA", "Virginia": "USA", "Washington": "USA", "West Virginia": "USA",
+    "Wisconsin": "USA", "Wyoming": "USA", "District of Columbia": "USA",
+
+    # ==================== AUSTRALIA ====================
+    "NSW": "Australia", "VIC": "Australia", "QLD": "Australia", "WA": "Australia",
+    "SA": "Australia", "TAS": "Australia", "NT": "Australia", "ACT": "Australia",
+    "New South Wales": "Australia", "Victoria": "Australia", "Queensland": "Australia",
+    "Western Australia": "Australia", "South Australia": "Australia", "Tasmania": "Australia",
+    "Northern Territory": "Australia", "Australian Capital Territory": "Australia",
+
+    # ==================== JAPAN ====================
+    # Major prefectures
+    "Tokyo": "Japan", "Osaka": "Japan", "Kanagawa": "Japan", "Aichi": "Japan",
+    "Hokkaido": "Japan", "Fukuoka": "Japan", "Saitama": "Japan", "Chiba": "Japan",
+    "Hyogo": "Japan", "Kyoto": "Japan", "Shizuoka": "Japan", "Hiroshima": "Japan",
+    "Ibaraki": "Japan", "Miyagi": "Japan", "Niigata": "Japan", "Nagano": "Japan",
+    "Gifu": "Japan", "Tochigi": "Japan", "Gunma": "Japan", "Okayama": "Japan",
+    "Mie": "Japan", "Kumamoto": "Japan", "Kagoshima": "Japan", "Okinawa": "Japan",
+    "Shiga": "Japan", "Nara": "Japan", "Yamaguchi": "Japan", "Ehime": "Japan",
+
+    # ==================== CHINA ====================
+    # Major provinces and municipalities
+    "Beijing": "China", "Shanghai": "China", "Guangdong": "China", "Zhejiang": "China",
+    "Jiangsu": "China", "Sichuan": "China", "Henan": "China", "Hubei": "China",
+    "Hunan": "China", "Shandong": "China", "Anhui": "China", "Hebei": "China",
+    "Liaoning": "China", "Shaanxi": "China", "Jiangxi": "China", "Fujian": "China",
+    "Yunnan": "China", "Shanxi": "China", "Heilongjiang": "China", "Guangxi": "China",
+    "Tianjin": "China", "Chongqing": "China", "Xinjiang": "China", "Inner Mongolia": "China",
+
+    # ==================== INDIA ====================
+    # Major states
+    "Maharashtra": "India", "Karnataka": "India", "Tamil Nadu": "India",
+    "West Bengal": "India", "Uttar Pradesh": "India", "Gujarat": "India",
+    "Rajasthan": "India", "Kerala": "India", "Andhra Pradesh": "India",
+    "Telangana": "India", "Bihar": "India", "Madhya Pradesh": "India",
+    "Delhi": "India", "Haryana": "India", "Punjab": "India", "Assam": "India",
+    "Odisha": "India", "Jharkhand": "India", "Chhattisgarh": "India",
+
+    # ==================== UK ====================
+    "England": "UK", "Scotland": "UK", "Wales": "UK", "Northern Ireland": "UK",
+
+    # ==================== GERMANY ====================
+    # Major states (Länder)
+    "Bavaria": "Germany", "Baden-Württemberg": "Germany", "North Rhine-Westphalia": "Germany",
+    "Hesse": "Germany", "Saxony": "Germany", "Lower Saxony": "Germany",
+    "Rhineland-Palatinate": "Germany", "Berlin": "Germany", "Hamburg": "Germany",
+    "Schleswig-Holstein": "Germany", "Brandenburg": "Germany", "Saxony-Anhalt": "Germany",
+    "Thuringia": "Germany", "Mecklenburg-Vorpommern": "Germany", "Bremen": "Germany",
+    "Saarland": "Germany",
+
+    # ==================== FRANCE ====================
+    # Major regions
+    "Île-de-France": "France", "Provence-Alpes-Côte d'Azur": "France",
+    "Auvergne-Rhône-Alpes": "France", "Nouvelle-Aquitaine": "France",
+    "Occitanie": "France", "Hauts-de-France": "France", "Brittany": "France",
+    "Normandy": "France", "Grand Est": "France", "Pays de la Loire": "France",
+    "Bourgogne-Franche-Comté": "France", "Centre-Val de Loire": "France",
+
+    # ==================== ITALY ====================
+    # Major regions
+    "Lombardy": "Italy", "Lazio": "Italy", "Campania": "Italy", "Sicily": "Italy",
+    "Veneto": "Italy", "Piedmont": "Italy", "Emilia-Romagna": "Italy",
+    "Tuscany": "Italy", "Apulia": "Italy", "Calabria": "Italy",
+
+    # ==================== SPAIN ====================
+    # Autonomous communities
+    "Andalusia": "Spain", "Catalonia": "Spain", "Madrid": "Spain",
+    "Valencia": "Spain", "Galicia": "Spain", "Basque Country": "Spain",
+    "Castile and León": "Spain", "Canary Islands": "Spain", "Aragon": "Spain",
+
+    # ==================== BRAZIL ====================
+    # Major states
+    "São Paulo": "Brazil", "Rio de Janeiro": "Brazil", "Minas Gerais": "Brazil",
+    "Bahia": "Brazil", "Rio Grande do Sul": "Brazil", "Paraná": "Brazil",
+    "Pernambuco": "Brazil", "Ceará": "Brazil", "Santa Catarina": "Brazil",
+
+    # ==================== MEXICO ====================
+    # Major states
+    "Mexico City": "Mexico", "Jalisco": "Mexico", "Nuevo León": "Mexico",
+    "Veracruz": "Mexico", "Puebla": "Mexico", "Guanajuato": "Mexico",
+    "Chiapas": "Mexico", "Estado de México": "Mexico",
+
+    # ==================== SOUTH KOREA ====================
+    "Seoul": "South Korea", "Busan": "South Korea", "Incheon": "South Korea",
+    "Daegu": "South Korea", "Daejeon": "South Korea", "Gwangju": "South Korea",
+    "Gyeonggi": "South Korea", "Gangwon": "South Korea", "Jeju": "South Korea",
+
+    # ==================== SOUTH AFRICA ====================
+    "Gauteng": "South Africa", "Western Cape": "South Africa", "KwaZulu-Natal": "South Africa",
+    "Eastern Cape": "South Africa", "Limpopo": "South Africa", "Mpumalanga": "South Africa",
+
+    # ==================== MIDDLE EAST ====================
+    "Dubai": "UAE", "Abu Dhabi": "UAE", "Sharjah": "UAE",
+    "Riyadh Province": "Saudi Arabia", "Makkah": "Saudi Arabia", "Eastern Province": "Saudi Arabia",
+    "Jerusalem District": "Israel", "Tel Aviv": "Israel", "Haifa": "Israel",
+
+    # ==================== SOUTHEAST ASIA ====================
+    "Bangkok": "Thailand", "Chiang Mai": "Thailand",
+    "Ho Chi Minh": "Vietnam", "Hanoi": "Vietnam",
+    "Metro Manila": "Philippines", "Cebu": "Philippines",
+    "Jakarta": "Indonesia", "West Java": "Indonesia", "East Java": "Indonesia",
+    "Selangor": "Malaysia", "Johor": "Malaysia", "Penang": "Malaysia",
+}
+
 DEFAULT_TZ = "UTC"   # safe fallback

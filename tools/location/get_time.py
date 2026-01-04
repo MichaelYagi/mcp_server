@@ -6,22 +6,30 @@ from tools.location.resolve_location import resolve_location
 from tools.location.resolve_timezone import resolve_timezone
 from tools.location.get_time_data import DEFAULT_TZ
 
+
 def get_time(
-    city: Optional[str] = None,
-    state: Optional[str] = None,
-    country: Optional[str] = None,
-    timezone: Optional[str] = None
+        city: Optional[str] = None,
+        state: Optional[str] = None,
+        country: Optional[str] = None,
+        timezone: Optional[str] = None
 ) -> str:
     loc = resolve_location(city, state, country)
 
+    # DEBUG: Print what we resolved
+    print(f"DEBUG: Resolved location: {loc}")
+
     # Determine timezone
     tz_name = timezone or resolve_timezone(loc["city"], loc["state"], loc["country"])
+
+    # DEBUG: Print the timezone we found
+    print(f"DEBUG: Resolved timezone: {tz_name}")
 
     try:
         tz = ZoneInfo(tz_name)
     except ZoneInfoNotFoundError:
         tz = ZoneInfo(DEFAULT_TZ)
         tz_name = DEFAULT_TZ
+        print(f"DEBUG: Timezone not found, using default: {DEFAULT_TZ}")
 
     now = datetime.now(tz)
 
