@@ -92,6 +92,11 @@ Run in a separate terminal ```ollama serve```
 
 Download the model ```ollama pull qwen2.5:3b``` (1.9GB)
 
+### 4. Running the Project
+```
+python client.py
+```
+---
 **Note:** 
 
 Explore more models at https://ollama.com/library. 
@@ -101,10 +106,6 @@ You may download & use other models through ```ollama pull <model>```.
 Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model name>```
 
 Ensure you download models with **advertised tool support**.
-### 4. Running the Project
-```
-python client.py
-```
 
 ### Option B: Connecting to Claude Desktop (External Client)
 
