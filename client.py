@@ -72,12 +72,20 @@ async def summarize_tool_result(llm, system_prompt, tool_text):
 # ============================================================================
 
 async def detect_tool_intent(llm, query: str) -> bool:
-    messages = [
-        SystemMessage(content=INTENT_DETECTOR_PROMPT),
-        HumanMessage(content=query),
-    ]
-    resp = await llm.ainvoke(messages)
-    return resp.content.strip().lower() == "tools"
+    q = query.lower()
+    return any(
+        phrase in q
+        for phrase in [
+            "summarize the code",
+            "review the code",
+            "read the file",
+            "open file",
+            "analyze code",
+            ".py",
+            "path",
+            "file",
+        ]
+    )
 
 # ============================================================================
 # LangGraph Stop Condition
