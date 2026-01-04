@@ -64,13 +64,14 @@ mcp-server/
 * Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
 * System Requirements for ```qwen2.5:3b```
 
-| Category        | Requirement                                      |
-|-----------------|--------------------------------------------------|
-| Minimum VRAM    | 6 GB (FP16)                                      |
-| INT8 VRAM       | 4.27–12.17 GB depending on context length        |
-| FP16 VRAM       | 7.44–20.60 GB depending on context length        |
-| System RAM      | 16–32 GB recommended                             |
-| Storage         | ~50 GB recommended                               |
+| Category            | Minimum Requirement                          | Recommended Requirement                          |
+|---------------------|-----------------------------------------------|--------------------------------------------------|
+| **GPU VRAM (FP16)** | 6 GB (full model loads)           | 20.6 GB for full 32k context          |
+| **GPU VRAM (INT8)** | 4.27 GB for 1k context            | 12.17 GB for full 32k context         |
+| **System RAM**      | 16 GB                             | 32 GB                                 |
+| **Storage**         | ~50 GB SSD                        | 50 GB+ SSD (for multiple quantizations) |
+| **GPU Type**        | Any 6 GB+ NVIDIA/AMD GPU          | 24 GB NVIDIA GPU for BF16/FP16        |
+| **Context Length**  | 1k–4k tokens (low VRAM)           | Full 32,768 tokens (high VRAM)        |
 
 ### 2. Create a ```.env``` file in the root directory
 ```
