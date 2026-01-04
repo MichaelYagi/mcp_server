@@ -5,6 +5,7 @@ import requests
 from typing import TypedDict, Annotated, Sequence
 import operator
 
+from langchain_core.messages import SystemMessage
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
@@ -14,7 +15,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-# Load environment variables from .env file
+# Load environment variables
 PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
@@ -24,35 +25,39 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 # ============================================================================
 
 class AgentState(TypedDict):
-    """State that gets passed between nodes in the graph"""
     messages: Annotated[Sequence[BaseMessage], operator.add]
 
 
 # ============================================================================
-# Stop Condition Function - THIS PREVENTS INFINITE LOOPS
+# Stop Condition Function
 # ============================================================================
 
 def should_continue(state: AgentState) -> str:
-    """
-    Determines whether to continue with tool execution or end.
-
-    Returns:
-        "continue" if there are tool calls to execute
-        "end" if the agent has finished and should return the final answer
-    """
+    logger = logging.getLogger("mcp_use")
     messages = state["messages"]
-    last_message = messages[-1]
 
-    # If it's an AI message with tool calls, continue to execute them
-    if isinstance(last_message, AIMessage):
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            logging.getLogger("mcp_use").info(
-                f"🔄 Continuing - found {len(last_message.tool_calls)} tool call(s)"
-            )
-            return "continue"
+    # --- USER OVERRIDE: disable tools ---
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            text = msg.content.lower()
+            if any(phrase in text for phrase in [
+                "ignore all tools",
+                "ignore tools",
+                "do not call any tools",
+                "do not call tools",
+                "no tools"
+            ]):
+                logger.info("🚫 User requested no tools — bypassing tool execution")
+                return "end"
+    # -------------------------------------
 
-    # Otherwise, we're done
-    logging.getLogger("mcp_use").info("✅ Stopping - no more tool calls, returning final answer")
+    last = messages[-1]
+
+    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
+        logger.info(f"🔄 Continuing - found {len(last.tool_calls)} tool call(s)")
+        return "continue"
+
+    logger.info("✅ Stopping - no more tool calls, returning final answer")
     return "end"
 
 
@@ -60,54 +65,38 @@ def should_continue(state: AgentState) -> str:
 # Agent Graph Builder
 # ============================================================================
 
-def create_langgraph_agent(llm_with_tools, tools):
-    """
-    Creates a LangGraph agent with proper stop conditions.
-
-    Args:
-        llm_with_tools: LLM with tools bound to it
-        tools: List of LangChain tools
-
-    Returns:
-        Compiled graph ready to execute
-    """
+def create_langgraph_agent(llm_for_query, tools_for_query):
     logger = logging.getLogger("mcp_use")
 
-    # Define the agent node
     async def call_model(state: AgentState):
-        """Node that calls the LLM"""
         messages = state["messages"]
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
-        response = await llm_with_tools.ainvoke(messages)
-        return {"messages": [response]}
 
-    # Build the graph
+        response = await llm_for_query.ainvoke(messages)
+
+        # Append model response to message list
+        return {"messages": list(messages) + [response]}
+
     workflow = StateGraph(AgentState)
 
-    # Add nodes
     workflow.add_node("agent", call_model)
-    workflow.add_node("tools", ToolNode(tools))
+    workflow.add_node("tools", ToolNode(tools_for_query))
 
-    # Set entry point
     workflow.set_entry_point("agent")
 
-    # Add conditional edges - THIS IS THE CRITICAL PART THAT PREVENTS INFINITE LOOPS
     workflow.add_conditional_edges(
         "agent",
         should_continue,
         {
-            "continue": "tools",  # If there are tool calls, execute them
-            "end": END  # If no tool calls, stop and return answer
+            "continue": "tools",
+            "end": END
         }
     )
 
-    # After tools execute, always go back to agent to process results
     workflow.add_edge("tools", "agent")
 
-    # Compile
     app = workflow.compile()
     logger.info("✅ LangGraph agent compiled successfully")
-
     return app
 
 
@@ -123,19 +112,16 @@ def get_public_ip():
 
 
 def get_venv_python(project_root: Path) -> str:
-    """Return the correct Python executable path by checking known locations."""
     candidates = [
-        project_root / ".venv" / "bin" / "python",  # WSL/Linux/macOS
-        project_root / ".venv-wsl" / "bin" / "python",  # Legacy WSL
-        project_root / ".venv" / "Scripts" / "python.exe",  # Windows
-        project_root / ".venv" / "Scripts" / "python",  # Windows alt
+        project_root / ".venv" / "bin" / "python",
+        project_root / ".venv-wsl" / "bin" / "python",
+        project_root / ".venv" / "Scripts" / "python.exe",
+        project_root / ".venv" / "Scripts" / "python",
     ]
-
     for path in candidates:
         if path.exists():
             return str(path)
-
-    raise FileNotFoundError("No valid Python executable found in expected venv locations.")
+    raise FileNotFoundError("No valid Python executable found.")
 
 
 # ============================================================================
@@ -146,7 +132,7 @@ async def main():
     load_dotenv()
 
     PROJECT_ROOT = Path(__file__).resolve().parent
-    LOG_DIR = Path(str(PROJECT_ROOT / "logs"))
+    LOG_DIR = PROJECT_ROOT / "logs"
     LOG_DIR.mkdir(exist_ok=True)
 
     logging.basicConfig(
@@ -158,76 +144,60 @@ async def main():
         ],
     )
 
-    # Show the actual JSON payloads being sent to/from Ollama
     logging.getLogger("httpx").setLevel(logging.INFO)
     logging.getLogger("langchain").setLevel(logging.DEBUG)
-
-    # If you want to see exactly what the MCP Server is saying to the Client
     logging.getLogger("mcp").setLevel(logging.DEBUG)
 
     logger = logging.getLogger("mcp_use")
 
-    # 2️⃣ MCP Server config
+    # MCP Server config
     client = MCPClient.from_dict({
         "mcpServers": {
             "local": {
                 "command": get_venv_python(PROJECT_ROOT),
                 "args": [str(PROJECT_ROOT / "server.py")],
                 "cwd": str(PROJECT_ROOT),
-                "env": {
-                    "CLIENT_IP": get_public_ip()
-                }
+                "env": {"CLIENT_IP": get_public_ip()}
             }
         }
     })
 
-    # 3️⃣ Load system prompt
+    # Load system prompt
     SYSTEM_PROMPT_PATH = PROJECT_ROOT / "prompts/tool_usage_guide.md"
     if SYSTEM_PROMPT_PATH.exists():
         SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text()
     else:
-        SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
-When you call a tool and receive a result, use that result to answer the user's question.
-Do not call the same tool repeatedly with the same parameters.
-Provide clear, concise answers based on the tool results."""
-        logger.warning(f"⚠️  System prompt file not found, using default")
+        SYSTEM_PROMPT = (
+            "You are a helpful assistant with access to tools.\n"
+            "Use tools when appropriate. Use tool results to answer.\n"
+            "Do not call the same tool repeatedly with the same parameters."
+        )
+        logger.warning("⚠️ System prompt file not found, using default")
 
     model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     logger.info(f"🤖 Using model: {model_name}")
 
-    # 4️⃣ Initialize LLM
-    llm = ChatOllama(
-        model=model_name,
-        temperature=0
-    )
+    llm = ChatOllama(model=model_name, temperature=0)
 
-    # 5️⃣ Create MCPAgent to initialize and get tools
+    # Initialize MCPAgent
     mcp_agent = MCPAgent(
         llm=llm,
         client=client,
-        max_steps=10,  # This won't be used, but needed for initialization
+        max_steps=10,
         system_prompt=SYSTEM_PROMPT
     )
-
     mcp_agent.debug = True
     await mcp_agent.initialize()
 
-    # Get the tools from MCPAgent
     tools = mcp_agent._tools
 
     logger.info(f"🛠 Found {len(tools)} MCP tools:")
     for t in tools:
         logger.info(f"  - {t.name}: {t.description}")
 
-    # 6️⃣ Bind tools to LLM
-    llm_with_tools = llm.bind_tools(tools)
-
-    # 7️⃣ Create LangGraph agent with stop conditions
-    agent = create_langgraph_agent(llm_with_tools, tools)
-
     print("\n✅ MCP Agent ready with LangGraph. Type a prompt (Ctrl+C to exit).\n")
 
-    # 8️⃣ Interactive loop
+    # Interactive loop
     while True:
         try:
             query = input("> ").strip()
@@ -236,25 +206,38 @@ Provide clear, concise answers based on the tool results."""
 
             logger.info(f"💬 Received query: '{query}'")
 
-            # Create initial state with system prompt and user query
-            initial_messages = [
-                HumanMessage(content=SYSTEM_PROMPT + "\n\nUser: " + query)
-            ]
+            # --- Decide whether tools are disabled ---
+            tools_disabled = any(
+                phrase in query.lower()
+                for phrase in [
+                    "ignore all tools",
+                    "ignore tools",
+                    "do not call any tools",
+                    "do not call tools",
+                    "no tools"
+                ]
+            )
 
-            initial_state = {
-                "messages": initial_messages
-            }
+            if tools_disabled:
+                logger.info("🛑 Tools disabled for this query — using plain LLM")
+                llm_for_query = llm
+                tools_for_query = []
+            else:
+                llm_for_query = llm.bind_tools(tools)
+                tools_for_query = tools
+            # -----------------------------------------
 
-            # Configuration with recursion limit
-            config = {
-                "recursion_limit": 50  # Safety net, but should stop naturally now
-            }
+            agent = create_langgraph_agent(llm_for_query, tools_for_query)
 
-            # Run the agent (ASYNC VERSION)
+            initial_messages = [ SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=query) ]
+
+            initial_state = {"messages": initial_messages}
+
+            config = {"recursion_limit": 50}
+
             logger.info("🏁 Starting agent execution")
             result = await agent.ainvoke(initial_state, config=config)
 
-            # Extract the final answer
             final_message = result["messages"][-1]
 
             if isinstance(final_message, AIMessage):

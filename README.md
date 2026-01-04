@@ -108,6 +108,8 @@ Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model
 
 Ensure you download models with **advertised tool support**.
 
+You may avoid using tools and use the model by typing ```ignore all tools``` ```ignore tools``` ```do not call any tools``` ```do not call tools``` ```no tools``` before your query. Example ```Ignore tools. What's the population of Vancouver?```
+
 ### Option B: Connecting to Claude Desktop (External Client)
 
 Install Claude Desktop and update the configuration. Windows example: Ensure you use **absolute paths** and the specific environment flags for Windows stability.
