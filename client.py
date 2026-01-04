@@ -18,7 +18,7 @@ from langgraph.prebuilt import ToolNode
 # Load environment variables
 PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
-
+DIRECT_ANSWER_PROMPT = """ You are a helpful assistant. Do NOT call tools. Do NOT describe tool usage. Answer the user's question directly using your own knowledge. """
 
 # ============================================================================
 # LangGraph State Definition
@@ -35,6 +35,45 @@ async def summarize_tool_result(llm, system_prompt, tool_text):
     ]
     response = await llm.ainvoke(messages)
     return response.content
+
+async def detect_tool_intent(llm, query: str) -> bool:
+    """Return True if tools SHOULD be used, False if the user wants a direct answer."""
+    messages = [
+        SystemMessage(content="""
+        You are a classifier that decides whether the user is asking for REAL DATA 
+        that requires calling a tool, or a general explanation that should be answered directly.
+
+        Respond ONLY with:
+        - "tools"  → if the user is asking for system information, environment details, 
+                     measurements, stats, files, hardware info, network info, or anything 
+                     that cannot be answered from general knowledge.
+        - "no-tools" → if the user is asking for general knowledge, explanations, opinions, 
+                       or anything that does NOT require accessing the system.
+
+        Examples that REQUIRE tools:
+        - "what is my cpu usage"
+        - "how much disk space do I have"
+        - "what is my ip"
+        - "list my running processes"
+        - "what files are in this folder"
+        - "check my memory usage"
+        - "what ports are open"
+
+        Examples that DO NOT require tools:
+        - "what is cpu usage"
+        - "explain how ram works"
+        - "what is the population of vancouver"
+        - "what is docker"
+        - "explain kubernetes"
+
+        Respond ONLY with: tools  OR  no-tools.
+        """)
+        ,
+        HumanMessage(content=query)
+    ]
+    resp = await llm.ainvoke(messages)
+    text = resp.content.strip().lower()
+    return text == "tools"
 
 # ============================================================================
 # Stop Condition Function
@@ -242,29 +281,27 @@ async def main():
             logger.info(f"💬 Received query: '{query}'")
 
             # Decide whether tools are disabled for this query
-            tools_disabled = any(
-                phrase in query.lower()
-                for phrase in [
-                    "ignore all tools",
-                    "ignore tools",
-                    "do not call any tools",
-                    "do not call tools",
-                    "no tools",
-                ]
-            )
+            # 🔍 Intelligent tool intent detection
+            tools_enabled = await detect_tool_intent(llm, query)
 
-            if tools_disabled:
-                logger.info("🛑 Tools disabled for this query — using plain LLM")
-                llm_for_query = llm
-                tools_for_query = []
-            else:
+            if tools_enabled:
+                logger.info("🛠 Tools enabled — model decided tools are appropriate")
                 llm_for_query = llm.bind_tools(tools)
                 tools_for_query = tools
+            else:
+                logger.info("🛑 Tools disabled — model decided to answer directly")
+                llm_for_query = llm
+                tools_for_query = []
 
             agent = create_langgraph_agent(llm_for_query, tools_for_query)
 
+            if tools_enabled:
+                system_prompt = SYSTEM_PROMPT
+            else:
+                system_prompt = DIRECT_ANSWER_PROMPT
+
             initial_messages = [
-                SystemMessage(content=SYSTEM_PROMPT),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=query),
             ]
 
