@@ -106,9 +106,7 @@ You may download & use other models through ```ollama pull <model>```.
 
 Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model name>```
 
-Ensure you download models with **advertised tool support**.
-
-You can bypass using any tools and use the model by typing ```ignore all tools``` ```ignore tools``` ```do not call any tools``` ```do not call tools``` ```no tools``` before your query. Example ```Ignore tools. What's the population of Vancouver?```
+Ensure you download models with **advertised tool support**.
 
 ### Option B: Connecting to Claude Desktop (External Client)
 
