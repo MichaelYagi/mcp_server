@@ -42,6 +42,21 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
 
+def trim_log_file(log_path: Path, max_lines: int = 2000):
+    """Trim the log file so it never exceeds max_lines."""
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if len(lines) > max_lines:
+            # Keep only the last max_lines lines
+            trimmed = lines[-max_lines:]
+            with log_path.open("w", encoding="utf-8") as f:
+                f.writelines(trimmed)
+    except Exception as e:
+        logging.getLogger("mcp_use").warning(f"Log trimming failed: {e}")
+
+
 # ============================================================================
 # Helper: Summarize Tool Output
 # ============================================================================
@@ -227,6 +242,7 @@ async def main():
                 continue
 
             logger.info(f"💬 Received query: '{query}'")
+            trim_log_file(LOG_DIR / "mcp-client.log")
 
             # Tool intent detection
             tools_enabled = await detect_tool_intent(llm, query)
