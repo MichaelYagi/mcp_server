@@ -8,6 +8,10 @@
         "type": "string",
         "description": "City name (e.g., Tokyo, Toronto, London). Optional."
       },
+      "state": {
+        "type": "string",
+        "description": "State, province, prefecture name (e.g., Kanagawa, BC, Washington). Optional."
+      },
       "country": {
         "type": "string",
         "description": "Country name (e.g., Japan, Canada, UK). Optional."
