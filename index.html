@@ -2,27 +2,114 @@
 <html>
 <head>
   <title>MCP Browser Client</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    #input {
+      width: 100%;
+      height: 80px;
+      font-size: 1rem;
+      padding: 0.5rem;
+    }
+
+    #sendBtn {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #sendBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #status {
+      font-style: italic;
+      color: #666;
+      height: 1.2rem;
+    }
+
+    #output {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      background: #fafafa;
+    }
+  </style>
 </head>
 <body>
-  <h1>MCP Browser Client</h1>
 
-  <textarea id="input" rows="4" cols="60"></textarea><br>
-  <button onclick="send()">Send</button>
+<h1>MCP Browser Client</h1>
 
-  <pre id="output"></pre>
+<textarea id="input" placeholder="Type your prompt..."></textarea>
+<button id="sendBtn" onclick="send()">Send</button>
 
-  <script>
-    const ws = new WebSocket("ws://localhost:8765");
+<div id="status"></div>
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      document.getElementById("output").textContent = data.response;
-    };
+<div id="output"></div>
 
-    function send() {
-      const text = document.getElementById("input").value;
-      ws.send(text);
+<script>
+  const ws = new WebSocket("ws://localhost:8765");
+  const input = document.getElementById("input");
+  const output = document.getElementById("output");
+  const sendBtn = document.getElementById("sendBtn");
+  const status = document.getElementById("status");
+
+  let isProcessing = false;
+
+  ws.onopen = () => {
+    status.textContent = "Connected";
+  };
+
+  ws.onclose = () => {
+    status.textContent = "Disconnected";
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    // Show response
+    output.textContent = data.response;
+
+    // Auto-scroll to bottom
+    output.scrollTop = output.scrollHeight;
+
+    // Re-enable UI
+    isProcessing = false;
+    sendBtn.disabled = false;
+    status.textContent = "";
+  };
+
+  function send() {
+    if (isProcessing) return;
+
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Disable UI while processing
+    isProcessing = true;
+    sendBtn.disabled = true;
+    status.textContent = "Processing…";
+
+    ws.send(text);
+  }
+
+  // Submit on Enter (Shift+Enter for newline)
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
     }
-  </script>
+  });
+</script>
+
 </body>
 </html>
