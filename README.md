@@ -112,13 +112,16 @@ When you start the client (`python client.py`), you will be prompted to choose *
   This mode provides a clean, chat-style UI with persistent session history and synchronized backend state.
 
 You will see a prompt:
+
 ```
 Choose interface:
 1) Browser
 2) CLI
 ```
+
 Choose the option that best fits your workflow.  
 Both modes use the same backend agent and tool suite—the only difference is the interface.
+
 ---
 **Note:** 
 
