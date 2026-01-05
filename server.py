@@ -3,6 +3,7 @@ from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Dict, Any
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
@@ -64,8 +65,12 @@ from tools.rag.chunk_text import chunk_text
 from tools.rag.embed_text import embed_text
 from tools.rag.vector_search import vector_search
 from tools.rag.rag_ingest import ingest_text_document
+# ─────────────────────────────────────────────
+# Plex Tools
+# ─────────────────────────────────────────────
+from tools.plex.semantic_media_search import semantic_media_search
 
-mcp = FastMCP("Knowledge Base Server")
+mcp = FastMCP("MCP server")
 
 @mcp.tool()
 def add_entry(title: str, content: str, tags: List[str] | None = None) -> str:
@@ -636,6 +641,20 @@ def rag_ingest_text(doc_id: str, text: str) -> str:
 
     # Return JSON string (matching your delete_entry pattern)
     return json.dumps(result)
+
+# ─────────────────────────────────────────────
+# Plex Tools
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+def semantic_media_search_text(query: str, limit: int = 10) -> Dict[str, Any]:
+    """
+    Semantic search over the Plex media index using pure-Python TF-IDF.
+    Returns the top 'limit' matching media items with similarity scores.
+    """
+    # Full implementation already provided earlier.
+    # This block is the MCP tool interface exactly as the server expects.
+    return semantic_media_search(query=query, limit=limit)
 
 
 if __name__ == "__main__":

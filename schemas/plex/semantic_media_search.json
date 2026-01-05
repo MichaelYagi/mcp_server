@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "title": "Semantic Media Search",
+  "description": "Search Plex media using semantic TF‑IDF similarity.",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Natural language description of what the user wants to watch."
+    },
+    "limit": {
+      "type": "number",
+      "default": 10,
+      "description": "Maximum number of results to return."
+    }
+  },
+  "required": ["query"]
+}
