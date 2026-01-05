@@ -56,9 +56,10 @@ def should_continue(state: AgentState) -> str:
     # If it's an AI message with tool calls, continue to execute them
     if isinstance(last_message, AIMessage):
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            logging.getLogger("mcp_use").info(
-                f"🔄 Continuing - found {len(last_message.tool_calls)} tool call(s)"
-            )
+            tool_calls = last_message.tool_calls
+            logging.getLogger("mcp_use").info(f"🔄 Continuing - found {len(tool_calls)} tool call(s)")
+            for call in tool_calls:
+                logging.getLogger("mcp_use").info(f" ↳ Tool: {call['name']} Args: {call.get('args')}")
             return "continue"
 
     # Otherwise, we're done
