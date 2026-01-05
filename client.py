@@ -377,7 +377,7 @@ async def main():
     agent = create_langgraph_agent(llm_with_tools, tools)
 
     print("\nChoose interface:")
-    print("1) Browser UI")
+    print("1) Browser")
     print("2) CLI")
     choice = input("> ").strip()
 

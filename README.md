@@ -97,6 +97,28 @@ Download the model ```ollama pull qwen2.5:3b``` (1.9GB)
 ```
 python client.py
 ```
+
+### 5. Choosing CLI Mode or Browser Mode
+
+When you start the client (`python client.py`), you will be prompted to choose **how you want to interact with the MCP client**:
+
+- **CLI Mode**  
+  Runs the client directly in your terminal.  
+  You type messages, and the agent responds inline.  
+  This mode prints full logs and is ideal for debugging or development.
+
+- **Browser Mode**  
+  Starts a lightweight WebSocket server and opens a browser-based chat interface.  
+  This mode provides a clean, chat-style UI with persistent session history and synchronized backend state.
+
+You will see a prompt:
+```
+Choose interface:
+1) Browser
+2) CLI
+```
+Choose the option that best fits your workflow.  
+Both modes use the same backend agent and tool suite—the only difference is the interface.
 ---
 **Note:** 
 
@@ -106,7 +128,8 @@ You may download & use other models through ```ollama pull <model>```.
 
 Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model name>```
 
-Ensure you download models with **advertised tool support**.
+Ensure you download models with **advertised tool support**.
+
 
 ### Option B: Connecting to Claude Desktop (External Client)
 
