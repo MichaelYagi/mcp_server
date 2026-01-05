@@ -24,11 +24,6 @@ MAX_MESSAGE_HISTORY = 20
 PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
-SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
-    When you call a tool and receive a result, use that result to answer the user's question.
-    Do not call the same tool repeatedly with the same parameters.
-    Provide clear, concise answers based on the tool results."""
-
 # ============================================================================
 # LangGraph State Definition
 # ============================================================================
@@ -339,10 +334,16 @@ async def main():
 
     # 3️⃣ Load system prompt
     SYSTEM_PROMPT_PATH = PROJECT_ROOT / "prompts/tool_usage_guide.md"
-    logger.warning(f"⚠️  System prompt file not found, using default")
+    system_prompt = """You are a helpful assistant with access to tools.
+    When you call a tool and receive a result, use that result to answer the user's question.
+    Do not call the same tool repeatedly with the same parameters.
+    Provide clear, concise answers based on the tool results."""
 
     if SYSTEM_PROMPT_PATH.exists():
-        SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text()
+        logger.warning(f"4️⃣  System prompt found!")
+        system_prompt = SYSTEM_PROMPT_PATH.read_text()
+    else:
+        logger.warning(f"⚠️  System prompt file not found, using default")
 
     model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     logger.info(f"🤖 Using model: {model_name}")
@@ -358,7 +359,7 @@ async def main():
         llm=llm,
         client=client,
         max_steps=10,  # This won't be used, but needed for initialization
-        system_prompt=SYSTEM_PROMPT
+        system_prompt=system_prompt
     )
 
     mcp_agent.debug = True
@@ -388,11 +389,11 @@ async def main():
         index_path = PROJECT_ROOT / "index.html"
         open_browser_file(index_path)
 
-        await start_websocket_server(agent, SYSTEM_PROMPT)
+        await start_websocket_server(agent, system_prompt)
 
     else:
         print("🖥️ Starting CLI mode...")
-        await cli_loop(agent, SYSTEM_PROMPT, logger)
+        await cli_loop(agent, system_prompt, logger)
 
 if __name__ == "__main__":
     asyncio.run(main())
