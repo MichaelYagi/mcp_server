@@ -10,4 +10,7 @@ ollama
 langchain-ollama
 websockets
 openai
+panda
+lancedb
+sentence-transformers
 tzdata

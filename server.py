@@ -3,7 +3,6 @@ from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 from pathlib import Path
 from dotenv import load_dotenv
-from tools.location.geolocate_util import geolocate_ip, CLIENT_IP
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
@@ -46,6 +45,7 @@ from tools.code_review.search_code import search_code
 # ─────────────────────────────────────────────
 # Location Tools
 # ─────────────────────────────────────────────
+from tools.location.geolocate_util import geolocate_ip, CLIENT_IP
 from tools.location.get_location import get_location as get_location_fn
 from tools.location.get_time import get_time as get_time_fn
 from tools.location.get_weather import get_weather as get_weather_fn
@@ -57,6 +57,13 @@ from tools.text_tools.summarize_chunk import summarize_chunk
 from tools.text_tools.merge_summaries import merge_summaries
 from tools.text_tools.summarize_text import summarize_text
 from tools.text_tools.summarize_direct import summarize_direct
+# ─────────────────────────────────────────────
+# RAG Tools
+# ─────────────────────────────────────────────
+from tools.rag.chunk_text import chunk_text
+from tools.rag.embed_text import embed_text
+from tools.rag.vector_search import vector_search
+from tools.rag.rag_ingest import ingest_text_document
 
 mcp = FastMCP("Knowledge Base Server")
 
@@ -585,6 +592,51 @@ def summarize_direct_tool(text: str, style: str = "medium") -> str:
     Prepare text for direct summarization in a single LLM call.
     """
     return json.dumps(summarize_direct(text, style))
+
+# ─────────────────────────────────────────────
+# RAG Tools
+# ─────────────────────────────────────────────
+@mcp.tool()
+def chunk_text_tool(text: str, max_chunk_size: int = 500):
+    return chunk_text(text, max_chunk_size)
+
+@mcp.tool()
+def embed_text_tool(texts: list[str]):
+    return embed_text(texts)
+
+@mcp.tool()
+def vector_search_tool(query: str, top_k: int = 5):
+    return vector_search(query, top_k)
+
+@mcp.tool()
+def rag_ingest_text(doc_id: str, text: str) -> str:
+    """
+    Safely ingest a text document into the RAG memory.
+
+    This tool chunks, embeds, and stores the text in LanceDB.
+    It enforces strict size limits to prevent accidental ingestion
+    of extremely large content.
+
+    Use this tool when the user wants to add new knowledge to the RAG system.
+    """
+
+    # Basic validation
+    if not isinstance(doc_id, str) or not doc_id.strip():
+        return json.dumps({
+            "error": "doc_id must be a non-empty string"
+        })
+
+    if not isinstance(text, str) or not text.strip():
+        return json.dumps({
+            "error": "text must be a non-empty string"
+        })
+
+    # Perform safe ingestion
+    result = ingest_text_document(doc_id=doc_id, text=text)
+
+    # Return JSON string (matching your delete_entry pattern)
+    return json.dumps(result)
+
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

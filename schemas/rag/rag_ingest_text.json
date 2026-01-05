@@ -1,0 +1,18 @@
+{
+  "name": "rag_ingest_text",
+  "description": "Safely ingest a text document into the RAG memory with size limits.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "doc_id": {
+        "type": "string",
+        "description": "A stable identifier for the document (e.g., filename, note id)."
+      },
+      "text": {
+        "type": "string",
+        "description": "The text content to ingest. Large inputs will be truncated safely."
+      }
+    },
+    "required": ["doc_id", "text"]
+  }
+}

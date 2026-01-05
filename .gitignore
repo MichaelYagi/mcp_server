@@ -17,3 +17,4 @@ knowledge/
 /logs/
 /.venv-wsl/
 /.vscode
+/rag_db/

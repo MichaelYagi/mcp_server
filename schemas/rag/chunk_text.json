@@ -1,0 +1,12 @@
+{
+  "name": "chunk_text",
+  "description": "Split text into semantic chunks for embedding.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" },
+      "max_chunk_size": { "type": "number", "default": 500 }
+    },
+    "required": ["text"]
+  }
+}

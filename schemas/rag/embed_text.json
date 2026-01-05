@@ -1,0 +1,14 @@
+{
+  "name": "embed_text",
+  "description": "Generate embedding vectors for text chunks.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "texts": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "required": ["texts"]
+  }
+}

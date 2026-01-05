@@ -251,7 +251,7 @@ async def cli_loop(agent, system_prompt, logger):
             conversation_state["messages"] = [
                 m for m in conversation_state["messages"]
                 if isinstance(m, (HumanMessage, AIMessage))
-            ][-MAX_HISTORY:]
+            ][-MAX_MESSAGE_HISTORY:]
 
             # Run the agent with full (trimmed) history
             logger.info("🏁 Starting agent execution")
