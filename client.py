@@ -17,6 +17,9 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
+# How many messages to keep (user + assistant only)
+MAX_MESSAGE_HISTORY = 20
+
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
@@ -153,7 +156,7 @@ GLOBAL_CONVERSATION_STATE = {"messages": []}
 
 async def websocket_handler(websocket, agent, system_prompt):
     conversation_state = GLOBAL_CONVERSATION_STATE
-    MAX_HISTORY = 20
+
 
     async for raw in websocket:
 
@@ -194,7 +197,7 @@ async def websocket_handler(websocket, agent, system_prompt):
             conversation_state["messages"] = [
                 m for m in conversation_state["messages"]
                 if isinstance(m, (HumanMessage, AIMessage))
-            ][-MAX_HISTORY:]
+            ][-MAX_MESSAGE_HISTORY:]
 
             # Run agent
             result = await agent.ainvoke(
@@ -230,9 +233,6 @@ async def cli_loop(agent, system_prompt, logger):
 
     # Persistent conversation state
     conversation_state = {"messages": []}
-
-    # How many messages to keep (user + assistant only)
-    MAX_HISTORY = 20
 
     while True:
         try:

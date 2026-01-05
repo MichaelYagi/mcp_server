@@ -1,30 +1,28 @@
 # MCP Server & Client
 
-A modular, extensible **Model Context Protocol (MCP)** architecture. This project provides a structured framework for both hosting diverse Python-based tools (Server) and interacting with them via an AI Agent (Client), exposing diverse Python-based tools to AI agents through a unified JSON-RPC interface.
+A modular **Model Context Protocol (MCP)** architecture for exposing Python-based tools to AI agents through a unified JSON-RPC interface.
 
-The server is designed to be a "plug-and-play" system. You can introduce new capabilities—such as system automation, data management, or specialized calculators—by simply adding new modules to the directory structure.
+The server is plug-and-play—add new capabilities by simply dropping modules into the directory structure.
 
 ---
 
 ## Key Features
 
-* **Bidirectional Architecture**: Includes both a Server to expose local tools and a Client to act as the "brain" using LLMs.
-* **Multi-Domain Support**: Organize tools into logical categories (e.g., `knowledge`, `system`, `math`) to keep the codebase clean and scalable.
-* **Schema-Driven Validation**: Every tool is backed by a JSON schema, ensuring that AI agents provide correctly formatted inputs every time.
-* **Versioned Storage**: Built-in support for file-backed data persistence with automatic snapshotting for "undo" or "recovery" workflows.
-* **Offline Semantic Search**: A pure-Python implementation of TF-IDF search, providing conceptual retrieval without external APIs or vector databases.
-* **Windows Optimized**: Pre-configured to handle encoding and stdio pipe challenges specific to Windows environments.
+* **Bidirectional Architecture**: Server exposes tools, Client acts as the AI brain using LLMs
+* **Multi-Domain Support**: Organize tools into logical categories (`knowledge`, `system`, `math`)
+* **Schema-Driven Validation**: JSON schemas ensure correctly formatted inputs
+* **Versioned Storage**: File-backed persistence with automatic snapshotting
+* **Offline Semantic Search**: Pure-Python TF-IDF implementation
+* **Windows Optimized**: Handles encoding and stdio pipe challenges
 
 ---
 
-## Modular Architecture
+## Architecture
 
-The server separates tool logic from the protocol interface, allowing for rapid development of new features.
-
-* **Client (client.py)**: The AI agent. It connects to the server, maintains conversation context, and invokes tools based on user intent.
-* **Server (server.py)**: The hub. It registers local tools and provides the JSON-RPC interface for the client to discover them.
-* **Tools Directory**: Contains the functional Python logic for each domain. Also contains local persistence via flat files that contain entries & snapshots
-* **Schemas Directory**: Defines the "contract" between the AI and your code.
+* **Client (client.py)**: AI agent that connects to the server and invokes tools
+* **Server (server.py)**: Hub that registers tools and provides JSON-RPC interface
+* **Tools Directory**: Functional Python logic for each domain with local persistence
+* **Schemas Directory**: Input contracts between AI and code
 
 ---
 
@@ -34,84 +32,79 @@ The server separates tool logic from the protocol interface, allowing for rapid 
 mcp-server/
 │
 ├── server.py                 # Core hub; registers and exposes tools
-├── client.py                 # MCP Client; the AI Agent (powered by Qwen)
+├── client.py                 # AI Agent (powered by Qwen)
 │
 ├── tools/
-│   ├── knowledge_base/       # Domain: Structured data & search
+│   ├── knowledge_base/       # Structured data & search
 │   │   └── kb_add.py
-│   │   └── ...
-│   ├── location/             # Domain: External API integration
+│   ├── location/             # External API integration
 │   │   └── get_weather.py
-│   │   └── ...
 │   └── more_tools/
-│       └── ...
 │
-├── schemas/                  # JSON schemas defining tool inputs
+├── schemas/                  # JSON schemas for tool inputs
 │   ├── knowledge_base/       
 │   │   └── kb_add.json
-│   │   └── ...
 │   ├── location/             
 │   │   └── get_weather.json
-│   │   └── ...
 │   └── more_schemas/
-│       └── ...
 ```
-## Setup & Integration
 
-### 1. Prerequisites
+---
+
+## Setup
+
+### Prerequisites
 
 * Python 3.10+
-* Weather API Key: Get it at [weatherapi.com](https://www.weatherapi.com/) (Free)
-* System Requirements for ```qwen2.5:3b```
+* [Weather API Key](https://www.weatherapi.com/) (Free)
+* System requirements for `qwen2.5:3b`:
 
-| Category            | Minimum Requirement                          | Recommended Requirement                          |
-|---------------------|-----------------------------------------------|--------------------------------------------------|
-| **GPU VRAM (FP16)** | 6 GB (full model loads)           | 20.6 GB for full 32k context          |
-| **GPU VRAM (INT8)** | 4.27 GB for 1k context            | 12.17 GB for full 32k context         |
-| **System RAM**      | 16 GB                             | 32 GB                                 |
-| **Storage**         | ~50 GB SSD                        | 50 GB+ SSD (for multiple quantizations) |
-| **GPU Type**        | Any 6 GB+ NVIDIA/AMD GPU          | 24 GB NVIDIA GPU for BF16/FP16        |
-| **Context Length**  | 1k–4k tokens (low VRAM)           | Full 32,768 tokens (high VRAM)        |
+| Category            | Minimum                | Recommended           |
+|---------------------|------------------------|-----------------------|
+| **GPU VRAM (FP16)** | 6 GB                   | 20.6 GB               |
+| **GPU VRAM (INT8)** | 4.27 GB                | 12.17 GB              |
+| **System RAM**      | 16 GB                  | 32 GB                 |
+| **Storage**         | ~50 GB SSD             | 50 GB+ SSD            |
+| **GPU Type**        | 6 GB+ NVIDIA/AMD       | 24 GB NVIDIA          |
+| **Context Length**  | 1k–4k tokens           | Full 32,768 tokens    |
 
-### 2. Create a ```.env``` file in the root directory
+### Installation
+
+**1. Create `.env` file:**
+
 ```
 WEATHER_API_KEY=<Weather API Key>
 OLLAMA_MODEL=qwen2.5:3b
 ```
 
-### 2. Install dependencies
-``` 
+**2. Install dependencies:**
+
+```bash
 curl -fsSL https://ollama.com/install.sh | sh
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Run Ollama server & Download qwen
+**3. Run Ollama and download model:**
 
-Run in a separate terminal ```ollama serve```
-
-Download the model ```ollama pull qwen2.5:3b``` (1.9GB)
-
-### 4. Running the Project
+```bash
+ollama serve  # Run in separate terminal
+ollama pull qwen2.5:3b  # 1.9GB download
 ```
+
+**4. Start the client:**
+
+```bash
 python client.py
 ```
 
-### 5. Choosing CLI Mode or Browser Mode
+### Interface Modes
 
-When you start the client (`python client.py`), you will be prompted to choose **how you want to interact with the MCP client**:
+Choose your interaction mode when starting:
 
-- **CLI Mode**  
-  Runs the client directly in your terminal.  
-  You type messages, and the agent responds inline.  
-  This mode prints full logs and is ideal for debugging or development.
-
-- **Browser Mode**  
-  Starts a lightweight WebSocket server and opens a browser-based chat interface.  
-  This mode provides a clean, chat-style UI with persistent session history and synchronized backend state.
-
-You will see a prompt:
+* **CLI Mode**: Terminal-based with full logs, ideal for debugging
+* **Browser Mode**: WebSocket server with chat UI and persistent history
 
 ```
 Choose interface:
@@ -119,26 +112,29 @@ Choose interface:
 2) CLI
 ```
 
-Choose the option that best fits your workflow.  
-Both modes use the same backend agent and tool suite—the only difference is the interface.
+Both modes use the same backend and tools.
 
----
-**Note:** 
+### Configuration
 
-Explore more models at https://ollama.com/library. 
+**Conversation History:**  
+Adjust in `client.py` (default: 20 messages):
 
-You may download & use other models through ```ollama pull <model>```. 
+```python
+MAX_MESSAGE_HISTORY = 20
+```
 
-Update the ```.env``` file you created with the new model ```OLLAMA_MODEL=<model name>```
+**Alternative Models:**  
+Browse models at [ollama.com/library](https://ollama.com/library). Use models with advertised tool support:
 
-Ensure you download models with **advertised tool support**.
+```bash
+ollama pull <model>
+```
 
+Update `.env`: `OLLAMA_MODEL=<model name>`
 
-### Option B: Connecting to Claude Desktop (External Client)
+### Claude Desktop Integration
 
-Install Claude Desktop and update the configuration. Windows example: Ensure you use **absolute paths** and the specific environment flags for Windows stability.
-
-Edit `%APPDATA%\Roaming\Claude\claude_desktop_config.json` and edit the ```base_path```
+Edit `%APPDATA%\Roaming\Claude\claude_desktop_config.json` with **absolute paths**:
 
 ```json
 { 
@@ -151,22 +147,14 @@ Edit `%APPDATA%\Roaming\Claude\claude_desktop_config.json` and edit the ```base_
 }
 ```
 
-Run it:
-```
-python server.py
-```
-
-Then open Claude Desktop to start using the MCP server.
+Run: `python server.py`
 
 ---
 
 ## Extending the Server
 
-Adding a new capability is a three-step process:
+Three steps to add new tools:
 
-1. **Logic**: Add a Python script to `tools/<new_domain>/`.
-2. **Schema**: Define the input parameters in `schemas/<new_domain>/<tool_name>.json`.
-3. **Register**: Import the function into `server.py` and wrap it with the `@mcp.tool()` decorator.
-
-
-This modular approach ensures the server remains maintainable even as you add dozens of specialized tools.
+1. **Logic**: Add Python script to `tools/<new_domain>/`
+2. **Schema**: Define inputs in `schemas/<new_domain>/<tool_name>.json`
+3. **Register**: Import in `server.py` and wrap with `@mcp.tool()`
