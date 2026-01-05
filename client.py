@@ -340,7 +340,7 @@ async def main():
     Provide clear, concise answers based on the tool results."""
 
     if system_prompt_path.exists():
-        logger.log(f"4️⃣  System prompt found!")
+        logger.info(f"4️⃣  System prompt found!")
         system_prompt = system_prompt_path.read_text()
     else:
         logger.warning(f"⚠️  System prompt file not found, using default")
