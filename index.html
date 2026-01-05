@@ -148,11 +148,18 @@
     };
 
     function formatMessage(text) {
-        // Remove leading "- " from list items
-        text = text.replace(/^\s*-\s+/gm, "");
+        // 1. Preserve blank line before list items
+        // Convert "\n\n- " into "\n\n" (keeps the blank line)
+        text = text.replace(/\n\s*\n\s*-\s+/g, "\n\n");
 
-        // Convert **bold** to <strong>bold</strong>
+        // 2. Convert single-line list items "- X" into "X" without adding blank lines
+        text = text.replace(/\n\s*-\s+/g, "\n");
+
+        // 3. Convert **bold** to <strong>
         text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+        // 4. Convert blank lines to <br><br>
+        text = text.replace(/\n\s*\n/g, "<br><br>");
 
         return text;
     }
