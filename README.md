@@ -75,7 +75,7 @@ mcp-server/
 
 ```
 WEATHER_API_KEY=<Weather API Key>
-OLLAMA_MODEL=llama3.1:8b
+DEFAULT_OLLAMA_MODEL=llama3.1:8b
 ```
 
 **2. Install dependencies:**
@@ -131,7 +131,7 @@ Browse models at [ollama.com/library](https://ollama.com/library). Use models wi
 ollama pull <model>
 ```
 
-Update `.env`: `OLLAMA_MODEL=<model name>`
+Update `.env`: `DEFAULT_OLLAMA_MODEL=<model name>`
 
 ### Claude Desktop Integration
 

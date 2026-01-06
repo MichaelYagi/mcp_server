@@ -108,10 +108,44 @@
             height: 1.2rem;
             margin-top: 1rem;
         }
+
+        #topBar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            gap: 0.5rem;
+        }
+
+        #modelSelect {
+            padding: 0.35rem 0.5rem;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        #modelSelect:focus {
+            outline: none;
+            border-color: #4da3ff;
+            box-shadow: 0 0 0 2px rgba(77,163,255,0.3);
+        }
+
     </style>
 </head>
 <body>
     <h1>MCP Browser Client</h1>
+
+    <div id="topBar">
+    <label for="modelSelect">Model:</label>
+        <select id="modelSelect">
+            <option value="llama3.1:8b">Llama 3.1 8B</option>
+            <option value="llama3.1:70b">Llama 3.1 70B</option>
+            <option value="qwen2.5:7b">Qwen 2.5 7B</option>
+            <option value="mistral:7b">Mistral 7B</option>
+        </select>
+    </div>
 
     <div id="chat"></div>
 
@@ -132,10 +166,19 @@
         const sendBtn = document.getElementById("sendBtn");
         sendBtn.disabled = true;
 
-        let ws = null;
+        const modelSelect = document.getElementById("modelSelect");
+
         let isProcessing = false;
         let chatHistory = loadHistory();
 
+        // -------------------------
+        // WebSocket connection
+        // -------------------------
+        const ws = new WebSocket("ws://localhost:876");
+
+        // -------------------------
+        // Local storage helpers
+        // -------------------------
         function saveHistory(messages) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
         }
@@ -145,97 +188,126 @@
             return raw ? JSON.parse(raw) : [];
         }
 
-        try {
-            ws = new WebSocket("ws://localhost:8765");
-        } catch (err) {
-            status.textContent = "Invalid WebSocket URL";
-            console.error("WebSocket constructor error:", err);
-        }
+        // -------------------------
+        // WebSocket events
+        // -------------------------
+        ws.onerror = (event) => {
+            status.textContent = "WebSocket error";
+        };
 
-        // If constructor failed, ws will be null
-        if (!ws) {
-            // You might want to disable input permanently or show a retry button
-        } else {
-            ws.onopen = () => {
+        ws.onclose = (event) => {
+            status.textContent = "Disconnected";
+            sendBtn.disabled = true;
+        };
+
+        ws.onopen = () => {
+            sendBtn.disabled = false;
+            status.textContent = "Connected";
+
+            // 1. Ask server for chat history
+            ws.send(JSON.stringify({ type: "history_request" }));
+
+            // 2. Ask server for available models + last used model
+            ws.send(JSON.stringify({ type: "list_models" }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // -------------------------
+            // Model switched
+            // -------------------------
+            if (data.type === "model_switched") {
+                status.textContent = "Model: " + data.model;
+                sendBtn.disabled = false;
+                isProcessing = false;
+                return;
+            }
+
+            // -------------------------
+            // History sync
+            // -------------------------
+            if (data.type === "history_sync") {
+                const history = data.history;
+
+                if (history.length === 0) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    chat.innerHTML = "";
+                    chatHistory = [];
+                } else {
+                    chatHistory = history;
+                    saveHistory(chatHistory);
+                    chat.innerHTML = "";
+                    chatHistory.forEach(msg => addMessage(msg.text, msg.role));
+                }
+
+                isProcessing = false;
                 sendBtn.disabled = false;
                 status.textContent = "Connected";
+                return;
+            }
 
-                ws.send(JSON.stringify({ type: "history_request" }));
-            };
+            // -------------------------
+            // Assistant message
+            // -------------------------
+            if (data.type === "assistant_message") {
+                addMessage(data.text, "assistant");
 
-            ws.onerror = (event) => {
-                // This may or may not fire depending on browser and failure mode
-                console.error("WebSocket error:", event);
-            };
+                isProcessing = false;
+                sendBtn.disabled = false;
+                status.textContent = "Connected";
+            }
 
-            ws.onclose = (event) => {
-                let reason = `code ${event.code}`;
-                if (event.code === 1006) {
-                    reason = "Abnormal closure (connection failed, refused, unreachable)";
-                } else if (event.code === 1000) {
-                    reason = "Normal close";
-                } else if (event.code === 1001) {
-                    reason = "Going away";
-                } else if (event.code === 1015) {
-                    reason = "TLS/handshake failure";
+            if (data.type === "models_list") {
+                const select = document.getElementById("modelSelect");
+                select.innerHTML = "";
+
+                data.models.forEach(m => {
+                    const opt = document.createElement("option");
+                    opt.value = m;
+                    opt.textContent = m;
+                    select.appendChild(opt);
+                });
+
+                if (data.last_used && data.models.includes(data.last_used)) {
+                    select.value = data.last_used;
+                    status.textContent = "Model: " + data.last_used;
                 }
 
-                status.textContent = "Disconnected: " + reason;
-                sendBtn.disabled = true;
-            };
+                return;
+            }
+        };
 
-            ws.onmessage = (event) => {
-                let data;
-                try {
-                    data = JSON.parse(event.data);
-                } catch (e) {
-                    console.error("Invalid JSON from server:", event.data);
-                    return;
-                }
+        // -------------------------
+        // Model switching
+        // -------------------------
+        modelSelect.addEventListener("change", (e) => {
+            const model = e.target.value;
 
-                if (data.type === "history_sync") {
-                    const history = data.history;
+            status.textContent = "Switching model…";
+            sendBtn.disabled = true;
+            isProcessing = true;
 
-                    if (!Array.isArray(history) || history.length === 0) {
-                        localStorage.removeItem(STORAGE_KEY);
-                        chat.innerHTML = "";
-                        chatHistory = [];
-                    } else {
-                        chatHistory = history;
-                        saveHistory(chatHistory);
-                        chat.innerHTML = "";
-                        chatHistory.forEach(msg => addMessage(msg.text, msg.role));
-                    }
+            ws.send(JSON.stringify({
+                type: "switch_model",
+                model
+            }));
+        });
 
-                    isProcessing = false;
-                    sendBtn.disabled = false;
-                    status.textContent = "Connected";
-                    return;
-                }
-
-                if (data.type === "assistant_message") {
-                    addMessage(data.text, "assistant");
-
-                    isProcessing = false;
-                    sendBtn.disabled = false;
-                    status.textContent = "Connected";
-                }
-            };
-        }
-
+        // -------------------------
+        // Message formatting
+        // -------------------------
         function formatMessage(text) {
-            // 1. Preserve blank line before list items
             text = text.replace(/\n\s*\n\s*-\s+/g, "\n\n");
-            // 2. Convert single-line list items "- X" into "X"
             text = text.replace(/\n\s*-\s+/g, "\n");
-            // 3. Convert **bold** to <strong>
             text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-            // 4. Convert blank lines to <br><br>
             text = text.replace(/\n\s*\n/g, "<br><br>");
-
             return text;
         }
 
+        // -------------------------
+        // Add message to UI
+        // -------------------------
         function addMessage(text, role) {
             const div = document.createElement("div");
             div.className = `msg ${role}`;
@@ -248,13 +320,16 @@
             chat.scrollTop = chat.scrollHeight;
         }
 
+        // -------------------------
+        // Send message
+        // -------------------------
         function send() {
             if (isProcessing) return;
 
             const text = input.value.trim();
             if (!text) return;
 
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
+            if (ws.readyState !== WebSocket.OPEN) {
                 status.textContent = "Cannot send: WebSocket not connected";
                 return;
             }
@@ -265,11 +340,17 @@
             sendBtn.disabled = true;
             status.textContent = "Processing…";
 
-            ws.send(text);
+            ws.send(JSON.stringify({
+                type: "user",
+                text
+            }));
+
             input.value = "";
         }
 
-        // Submit on Enter (Shift+Enter for newline)
+        // -------------------------
+        // Enter key handling
+        // -------------------------
         input.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -277,7 +358,16 @@
             }
         });
 
+        modelSelect.addEventListener("change", (e) => {
+            ws.send(JSON.stringify({
+                type: "switch_model",
+                model: e.target.value
+            }));
+        });
+
+        // -------------------------
         // Render existing messages
+        // -------------------------
         chatHistory.forEach(msg => {
             const div = document.createElement("div");
             div.className = `msg ${msg.role}`;
@@ -286,8 +376,6 @@
         });
 
         chat.scrollTop = chat.scrollHeight;
-
-
     </script>
 
 </body>

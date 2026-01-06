@@ -5,7 +5,6 @@ import requests
 import operator
 import json
 import websockets
-import webbrowser
 
 from typing import TypedDict, Annotated, Sequence
 from mcp_use.client.client import MCPClient
@@ -65,6 +64,65 @@ def should_continue(state: AgentState) -> str:
 # ============================================================================
 # Agent Graph Builder
 # ============================================================================
+
+MODEL_STATE_FILE = "last_model.txt"
+
+import subprocess
+
+def get_available_models():
+    try:
+        out = subprocess.check_output(["ollama", "list"], text=True)
+        lines = out.strip().split("\n")
+
+        # Skip header line
+        models = []
+        for line in lines[1:]:
+            parts = line.split()
+            if parts:
+                models.append(parts[0])  # first column = model name
+
+        return models
+
+    except Exception as e:
+        print(f"❌ Could not list models: {e}")
+        return []
+
+def load_last_model():
+    if os.path.exists(MODEL_STATE_FILE):
+        return open(MODEL_STATE_FILE).read().strip()
+    return None
+
+def save_last_model(model_name):
+    with open(MODEL_STATE_FILE, "w") as f:
+        f.write(model_name)
+
+async def switch_model(model_name, tools, logger):
+    available = get_available_models()
+
+    if model_name not in available:
+        print(f"❌ Model '{model_name}' is not installed.")
+        print("📦 Available models:")
+        for m in available:
+            print(f" - {m}")
+        print()
+        return None  # signal failure
+
+    logger.info(f"🔄 Switching model to: {model_name}")
+
+    new_llm = ChatOllama(model=model_name, temperature=0)
+    llm_with_tools = new_llm.bind_tools(tools)
+    new_agent = create_langgraph_agent(llm_with_tools, tools)
+
+    save_last_model(model_name)
+
+    logger.info(f"✅ Model switched to {model_name}")
+    return new_agent
+
+def list_commands():
+    print(":commands - List all available commands")
+    print(":model - View the current active model")
+    print(":model <model> - Use the model passed")
+    print(":models - List available models")
 
 def create_langgraph_agent(llm_with_tools, tools):
     """
@@ -150,9 +208,8 @@ def get_venv_python(project_root: Path) -> str:
 
 GLOBAL_CONVERSATION_STATE = {"messages": []}
 
-async def websocket_handler(websocket, agent, system_prompt):
+async def websocket_handler(websocket, agent_ref, tools, system_prompt, logger):
     conversation_state = GLOBAL_CONVERSATION_STATE
-
 
     async for raw in websocket:
 
@@ -165,6 +222,16 @@ async def websocket_handler(websocket, agent, system_prompt):
             data = json.loads(raw)
         except json.JSONDecodeError:
             data = {"type": "user", "text": raw}
+
+        if data.get("type") == "list_models":
+            models = get_available_models()
+            last = load_last_model()
+            await websocket.send(json.dumps({
+                "type": "models_list",
+                "models": models,
+                "last_used": last
+            }))
+            continue
 
         # 3. Browser requests history sync
         if data.get("type") == "history_request":
@@ -180,7 +247,18 @@ async def websocket_handler(websocket, agent, system_prompt):
             }))
             continue
 
-        # 4. Normal user message
+        # 4. Browser requests model switch
+        if data.get("type") == "switch_model":
+            model_name = data.get("model")
+            agent_ref[0] = await switch_model(model_name, tools, logger)
+
+            await websocket.send(json.dumps({
+                "type": "model_switched",
+                "model": model_name
+            }))
+            continue
+
+        # 5. Normal user message
         if data.get("type") == "user" or "text" in data:
             prompt = data.get("text")
 
@@ -195,7 +273,8 @@ async def websocket_handler(websocket, agent, system_prompt):
                 if isinstance(m, (HumanMessage, AIMessage))
             ][-MAX_MESSAGE_HISTORY:]
 
-            # Run agent
+            # Run agent (using current model)
+            agent = agent_ref[0]
             result = await agent.ainvoke(
                 conversation_state,
                 config={"recursion_limit": 50}
@@ -224,11 +303,54 @@ async def start_websocket_server(agent, system_prompt):
         print("🌐 Browser UI available at ws://127.0.0.1:8765")
         await asyncio.Future()  # run forever
 
-async def cli_loop(agent, system_prompt, logger):
+async def cli_loop(agent, system_prompt, logger, tools, model_name):
     print("\n✅ MCP Agent ready with LangGraph. Type a prompt (Ctrl+C to exit).\n")
 
     # Persistent conversation state
     conversation_state = {"messages": []}
+
+    def list_models():
+        import subprocess, json
+
+        try:
+            # Run ollama list (no --json available)
+            out = subprocess.check_output(["ollama", "list"], text=True)
+
+            lines = out.strip().split("\n")
+
+            # Skip header line
+            rows = lines[1:]
+
+            parsed = []
+            for line in rows:
+                line_parts = line.split()
+                if len(line_parts) < 4:
+                    continue
+
+                # NAME may contain no spaces → safe to take line_parts[0]
+                name = line_parts[0]
+                model_id = line_parts[1]
+                size = line_parts[2]
+                modified = " ".join(line_parts[3:])  # e.g. "15 hours ago"
+
+                parsed.append({
+                    "name": name,
+                    "id": model_id,
+                    "size": size,
+                    "modified": modified
+                })
+
+            # Convert to JSON string so json.loads() works
+            json_str = json.dumps(parsed)
+            models = json.loads(json_str)
+
+            print("\n📦 Available models:")
+            for m in models:
+                print(f" - {m['name']}")
+            print()
+
+        except Exception as e:
+            print(f"❌ Could not list models: {e}")
 
     while True:
         try:
@@ -236,37 +358,65 @@ async def cli_loop(agent, system_prompt, logger):
             if not query:
                 continue
 
+            if query == ":commands":
+                list_commands()
+                continue
+
+            # -------------------------
+            # MODEL SWITCH COMMAND
+            # -------------------------
+
+            # 1. Exact match for listing models
+            if query == ":models":
+                list_models()
+                continue
+
+            # 2. Model switching command
+            if query.startswith(":model "):  # note the space!
+                parts = query.split(maxsplit=1)
+                if len(parts) == 1:
+                    print("Usage: :model <model_name>")
+                    continue
+
+                model_name = parts[1]
+                agent = await switch_model(model_name, tools, logger)
+                print(f"🤖 Model switched to {model_name}\n")
+                continue
+
+            # 3. If user typed ":model" with no argument
+            if query == ":model":
+                print(f"Using model: {model_name}\n")
+                continue
+
+            # -------------------------
+            # NORMAL CHAT
+            # -------------------------
             logger.info(f"💬 Received query: '{query}'")
 
-            # Add user message to history
             conversation_state["messages"].append(
                 HumanMessage(content=query)
             )
 
-            # Trim history (keep only last N user/assistant messages)
+            # Trim history
             conversation_state["messages"] = [
                 m for m in conversation_state["messages"]
                 if isinstance(m, (HumanMessage, AIMessage))
             ][-MAX_MESSAGE_HISTORY:]
 
-            # Run the agent with full (trimmed) history
             logger.info("🏁 Starting agent execution")
             result = await agent.ainvoke(
                 conversation_state,
                 config={"recursion_limit": 50}
             )
 
-            # Extract final answer
             final_message = result["messages"][-1]
-
-            # Add assistant message to history
             conversation_state["messages"].append(final_message)
 
-            # Print answer
-            if isinstance(final_message, AIMessage):
-                answer = final_message.content
-            else:
-                answer = str(final_message)
+            answer = (
+                final_message.content
+                if isinstance(final_message, AIMessage)
+                else str(final_message)
+            )
 
             print("\n" + answer + "\n")
             logger.info("✅ Query completed successfully")
@@ -345,7 +495,10 @@ async def main():
     else:
         logger.warning(f"⚠️  System prompt file not found, using default")
 
-    model_name = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+    model_name = os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.1:8b")
+    last = load_last_model()
+    if last is not None and last != model_name:
+        model_name = last
     logger.info(f"🤖 Using model: {model_name}")
 
     # 4️⃣ Initialize LLM
@@ -393,7 +546,9 @@ async def main():
 
     else:
         print("🖥️ Starting CLI mode...")
-        await cli_loop(agent, system_prompt, logger)
+        print("Commands:")
+        list_commands()
+        await cli_loop(agent, system_prompt, logger, tools, model_name)
 
 if __name__ == "__main__":
     asyncio.run(main())
