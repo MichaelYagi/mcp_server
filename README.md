@@ -56,7 +56,9 @@ mcp-server/
 ### Prerequisites
 
 * Python 3.10+
-* System requirements for `llama3.1:8b`
+* llama3.1:8b - Instructions below
+
+**System requirements for llama3.1:8b**
 
 **Minimum (Slow but Works)**
 * RAM: 8GB total system RAM 
@@ -94,7 +96,7 @@ PLEX_TOKEN=<plex_token>
 ```
 
 
-**2. Run Ollama and download model:**
+**2. Run Ollama server and download model:**
 
 ```
 ollama serve
