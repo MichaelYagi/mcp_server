@@ -28,7 +28,7 @@ The server is plug-and-play—add new capabilities by simply dropping modules in
 
 ## Directory Structure
 
-```text
+```
 mcp-server/
 │
 ├── server.py                 # Core hub; registers and exposes tools
@@ -58,6 +58,8 @@ mcp-server/
 * Python 3.10+
 * llama3.1:8b - Instructions below
 
+---
+
 **System requirements for llama3.1:8b**
 
 **Minimum (Slow but Works)**
@@ -70,9 +72,11 @@ mcp-server/
 * GPU: Any modern GPU with 6GB+ VRAM
 * Speed: 30-100+ tokens/sec
 
+---
+
 ### Installation
 
-**1. Install dependencies:**
+**1. Install dependencies**
 
 ```
 curl -fsSL https://ollama.com/install.sh | sh
@@ -81,24 +85,32 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Optional:**
+---
 
-* Create `.env` file
-* If you'd like weather info, go to [Weather API Key](https://www.weatherapi.com/) (Free) and update `.env`
+**Optional Environment Configuration**
+
+* Create `.env` file if needed.
+
+Weather API
+
+Get a free key [Weather API Key](https://www.weatherapi.com/)
 ```
 WEATHER_API_KEY=<Weather API Key>
 ```
 
-* If you have a Plex server, add
+Plex Integration
 ```
 PLEX_BASE_URL=http://<ip>:32400
 PLEX_TOKEN=<plex_token>
 ```
 
-* Adjust session message history (default: 20 messages), add
+Conversation History Size
 ```
 MAX_MESSAGE_HISTORY = 30
 ```
+(Default: 20 messages)
+
+---
 
 **2. Run Ollama server and download model:**
 
@@ -130,6 +142,8 @@ Browse models at [ollama.com/library](https://ollama.com/library). Use models wi
 ```
 ollama pull <model>
 ```
+
+⚠️ Note: Some models may cause recursive loops or degraded tool behavior.
 
 ### Claude Desktop Integration
 

@@ -132,8 +132,6 @@ def list_commands():
     print(":model - View the current active model")
     print(":model <model> - Use the model passed")
     print(":models - List available models")
-    print(":interface <cli|web> - Switch interface mode")
-
 
 def create_langgraph_agent(llm_with_tools, tools):
     """
