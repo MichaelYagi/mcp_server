@@ -5,7 +5,8 @@ import requests
 import operator
 import json
 import websockets
-import sys
+import platform
+import httpx
 import threading
 from queue import Queue
 
@@ -26,6 +27,16 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 # How many messages to keep (user + assistant only)
 MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
 
+async def ensure_ollama_running(host: str = "http://127.0.0.1:11434"):
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            r = await client.get(f"{host}/api/tags")
+            r.raise_for_status()
+    except Exception as e:
+        raise RuntimeError(
+            f"Ollama server is not running or unreachable at {host}. "
+            f"Start it with 'ollama serve'. Original error: {e}"
+        )
 
 # ============================================================================
 # LangGraph State Definition
@@ -34,7 +45,6 @@ MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
 class AgentState(TypedDict):
     """State that gets passed between nodes in the graph"""
     messages: Annotated[Sequence[BaseMessage], operator.add]
-
 
 # ============================================================================
 # Stop Condition Function - THIS PREVENTS INFINITE LOOPS
@@ -194,21 +204,30 @@ def get_public_ip():
     except:
         return None
 
-
 def get_venv_python(project_root: Path) -> str:
-    """Return the correct Python executable path by checking known locations."""
-    candidates = [
-        project_root / ".venv" / "bin" / "python",  # WSL/Linux/macOS
-        project_root / ".venv-wsl" / "bin" / "python",  # Legacy WSL
-        project_root / ".venv" / "Scripts" / "python.exe",  # Windows
-        project_root / ".venv" / "Scripts" / "python",  # Windows alt
-    ]
+    """Return the correct Python executable path for the project's virtual environment."""
+
+    venv = project_root / ".venv"
+
+    # Windows first — avoids WinError 1920 on nonexistent .venv/bin
+    if platform.system() == "Windows":
+        candidates = [
+            venv / "Scripts" / "python.exe",
+            venv / "Scripts" / "python",
+        ]
+    else:
+        candidates = [
+            venv / "bin" / "python",
+            project_root / ".venv-wsl" / "bin" / "python",
+        ]
 
     for path in candidates:
         if path.exists():
             return str(path)
 
-    raise FileNotFoundError("No valid Python executable found in expected venv locations.")
+    raise FileNotFoundError(
+        f"No valid Python executable found. Checked: {', '.join(str(p) for p in candidates)}"
+    )
 
 
 # ============================================================================
@@ -553,7 +572,7 @@ async def main():
 
     if system_prompt_path.exists():
         logger.info(f"4️⃣  System prompt found!")
-        system_prompt = system_prompt_path.read_text()
+        system_prompt = system_prompt_path.read_text(encoding="utf-8")
     else:
         logger.warning(f"⚠️  System prompt file not found, using default")
 
@@ -562,6 +581,8 @@ async def main():
     if last is not None and last != model_name:
         model_name = last
     logger.info(f"🤖 Using model: {model_name}")
+
+    await ensure_ollama_running()
 
     # 4️⃣ Initialize LLM
     llm = ChatOllama(

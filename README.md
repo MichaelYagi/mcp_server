@@ -80,9 +80,11 @@ mcp-server/
 
 ```
 curl -fsSL https://ollama.com/install.sh | sh
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate (Linux)
+.\.venv\bin\activate (Windows)
+pip install -r requirements.txt (Linux)
+.\.venv\Scripts\pip.exe install -r .\requirements.txt (Windows)
 ```
 
 ---
@@ -122,7 +124,8 @@ ollama pull llama3.1:8b
 **3. Start the client:**
 
 ```
-python client.py
+python client.py (Linux)
+.\.venv\Scripts\python.exe client.py (Windows)
 ```
 
 ### Interface
