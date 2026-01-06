@@ -208,7 +208,7 @@ def get_venv_python(project_root: Path) -> str:
 
 GLOBAL_CONVERSATION_STATE = {"messages": []}
 
-async def websocket_handler(websocket, agent_ref, tools, system_prompt, logger):
+async def websocket_handler(websocket, agent_ref, tools, logger):
     conversation_state = GLOBAL_CONVERSATION_STATE
 
     async for raw in websocket:
@@ -250,7 +250,20 @@ async def websocket_handler(websocket, agent_ref, tools, system_prompt, logger):
         # 4. Browser requests model switch
         if data.get("type") == "switch_model":
             model_name = data.get("model")
-            agent_ref[0] = await switch_model(model_name, tools, logger)
+
+            # Attempt to switch
+            new_agent = await switch_model(model_name, tools, logger)
+
+            # If switching failed (model not installed)
+            if new_agent is None:
+                await websocket.send(json.dumps({
+                    "type": "model_error",
+                    "message": f"Model '{model_name}' is not installed."
+                }))
+                continue
+
+            # Success — update the agent
+            agent_ref[0] = new_agent
 
             await websocket.send(json.dumps({
                 "type": "model_switched",
@@ -294,9 +307,9 @@ async def websocket_handler(websocket, agent_ref, tools, system_prompt, logger):
                 "text": final_message.content
             }))
 
-async def start_websocket_server(agent, system_prompt):
+async def start_websocket_server(agent, tools, logger):
     async with websockets.serve(
-        lambda ws: websocket_handler(ws, agent, system_prompt),
+        lambda ws: websocket_handler(ws, [agent], tools, logger),
         "127.0.0.1",
         8765
     ):
@@ -379,8 +392,14 @@ async def cli_loop(agent, system_prompt, logger, tools, model_name):
                     continue
 
                 model_name = parts[1]
-                agent = await switch_model(model_name, tools, logger)
+                new_agent = await switch_model(model_name, tools, logger)
+                if new_agent is None:
+                    continue
+
+                agent = new_agent
+                model_name = model_name  # update current model
                 print(f"🤖 Model switched to {model_name}\n")
+
                 continue
 
             # 3. If user typed ":model" with no argument
@@ -542,7 +561,7 @@ async def main():
         index_path = PROJECT_ROOT / "index.html"
         open_browser_file(index_path)
 
-        await start_websocket_server(agent, system_prompt)
+        await start_websocket_server(agent, tools, logger)
 
     else:
         print("🖥️ Starting CLI mode...")
