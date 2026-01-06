@@ -57,16 +57,17 @@ mcp-server/
 
 * Python 3.10+
 * [Weather API Key](https://www.weatherapi.com/) (Free)
-* System requirements for `qwen2.5:3b`:
+* System requirements for `llama3.1:8b`
 
-| Category            | Minimum                | Recommended           |
-|---------------------|------------------------|-----------------------|
-| **GPU VRAM (FP16)** | 6 GB                   | 20.6 GB               |
-| **GPU VRAM (INT8)** | 4.27 GB                | 12.17 GB              |
-| **System RAM**      | 16 GB                  | 32 GB                 |
-| **Storage**         | ~50 GB SSD             | 50 GB+ SSD            |
-| **GPU Type**        | 6 GB+ NVIDIA/AMD       | 24 GB NVIDIA          |
-| **Context Length**  | 1k–4k tokens           | Full 32,768 tokens    |
+**Minimum (Slow but Works)**
+* RAM: 8GB total system RAM 
+* Model will use: ~5-6GB RAM 
+* Speed: Slow (2-5 tokens/sec)
+
+**Optimal (Smooth)**
+* RAM: 32GB+
+* GPU: Any modern GPU with 6GB+ VRAM
+* Speed: 30-100+ tokens/sec
 
 ### Installation
 
@@ -74,12 +75,12 @@ mcp-server/
 
 ```
 WEATHER_API_KEY=<Weather API Key>
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_MODEL=llama3.1:8b
 ```
 
 **2. Install dependencies:**
 
-```bash
+```
 curl -fsSL https://ollama.com/install.sh | sh
 python3 -m venv .venv
 source .venv/bin/activate
@@ -88,14 +89,14 @@ pip install -r requirements.txt
 
 **3. Run Ollama and download model:**
 
-```bash
-ollama serve  # Run in separate terminal
-ollama pull qwen2.5:3b  # 1.9GB download
+```
+ollama serve
+ollama pull llama3.1:8b
 ```
 
 **4. Start the client:**
 
-```bash
+```
 python client.py
 ```
 
@@ -119,14 +120,14 @@ Both modes use the same backend and tools.
 **Conversation History:**  
 Adjust in `client.py` (default: 20 messages):
 
-```python
+```
 MAX_MESSAGE_HISTORY = 20
 ```
 
 **Alternative Models:**  
 Browse models at [ollama.com/library](https://ollama.com/library). Use models with advertised tool support:
 
-```bash
+```
 ollama pull <model>
 ```
 
@@ -136,7 +137,7 @@ Update `.env`: `OLLAMA_MODEL=<model name>`
 
 Edit `%APPDATA%\Roaming\Claude\claude_desktop_config.json` with **absolute paths**:
 
-```json
+```
 { 
     "mcpServers": { 
         "mcp-server": { 
