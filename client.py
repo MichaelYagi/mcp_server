@@ -514,7 +514,7 @@ async def main():
     else:
         logger.warning(f"⚠️  System prompt file not found, using default")
 
-    model_name = os.getenv("DEFAULT_OLLAMA_MODEL", "llama3.1:8b")
+    model_name = "llama3.1:8b"
     last = load_last_model()
     if last is not None and last != model_name:
         model_name = last

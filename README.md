@@ -56,7 +56,6 @@ mcp-server/
 ### Prerequisites
 
 * Python 3.10+
-* [Weather API Key](https://www.weatherapi.com/) (Free)
 * System requirements for `llama3.1:8b`
 
 **Minimum (Slow but Works)**
@@ -71,14 +70,7 @@ mcp-server/
 
 ### Installation
 
-**1. Create `.env` file:**
-
-```
-WEATHER_API_KEY=<Weather API Key>
-DEFAULT_OLLAMA_MODEL=llama3.1:8b
-```
-
-**2. Install dependencies:**
+**1. Install dependencies:**
 
 ```
 curl -fsSL https://ollama.com/install.sh | sh
@@ -87,14 +79,29 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**3. Run Ollama and download model:**
+**Optional:**
+
+* Create `.env` file
+* If you'd like weather info, go to [Weather API Key](https://www.weatherapi.com/) (Free) and update `.env`
+```
+WEATHER_API_KEY=<Weather API Key>
+```
+
+* If you have a Plex server, add
+```
+PLEX_BASE_URL=http://<ip>:32400
+PLEX_TOKEN=<plex_token>
+```
+
+
+**2. Run Ollama and download model:**
 
 ```
 ollama serve
 ollama pull llama3.1:8b
 ```
 
-**4. Start the client:**
+**3. Start the client:**
 
 ```
 python client.py
@@ -130,8 +137,6 @@ Browse models at [ollama.com/library](https://ollama.com/library). Use models wi
 ```
 ollama pull <model>
 ```
-
-Update `.env`: `DEFAULT_OLLAMA_MODEL=<model name>`
 
 ### Claude Desktop Integration
 
