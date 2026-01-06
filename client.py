@@ -16,12 +16,12 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-# How many messages to keep (user + assistant only)
-MAX_MESSAGE_HISTORY = 20
-
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
+
+# How many messages to keep (user + assistant only)
+MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
 
 # ============================================================================
 # LangGraph State Definition

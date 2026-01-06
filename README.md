@@ -95,6 +95,10 @@ PLEX_BASE_URL=http://<ip>:32400
 PLEX_TOKEN=<plex_token>
 ```
 
+* Adjust session message history (default: 20 messages), add
+```
+MAX_MESSAGE_HISTORY = 30
+```
 
 **2. Run Ollama server and download model:**
 
@@ -126,13 +130,7 @@ Both modes use the same backend and tools.
 
 ### Configuration
 
-**Conversation History:**  
-Adjust in `client.py` (default: 20 messages):
-
-```
-MAX_MESSAGE_HISTORY = 20
-```
-
+**Conversation History:**
 **Alternative Models:**  
 Browse models at [ollama.com/library](https://ollama.com/library). Use models with advertised tool support:
 
