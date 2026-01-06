@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "title": "Scene Locator",
+  "description": "Locate semantically relevant scenes within a Plex media item using subtitle analysis.",
+  "properties": {
+    "media_id": {
+      "type": "string",
+      "description": "The Plex ratingKey of the movie or episode to analyze."
+    },
+    "query": {
+      "type": "string",
+      "description": "Natural language description of the scene you're looking for."
+    },
+    "limit": {
+      "type": "number",
+      "default": 5,
+      "description": "Maximum number of matching scenes to return."
+    }
+  },
+  "required": ["media_id", "query"]
+}

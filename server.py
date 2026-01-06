@@ -69,6 +69,7 @@ from tools.rag.rag_ingest import ingest_text_document
 # Plex Tools
 # ─────────────────────────────────────────────
 from tools.plex.semantic_media_search import semantic_media_search
+from tools.plex.scene_locator import scene_locator
 
 mcp = FastMCP("MCP server")
 
@@ -649,13 +650,89 @@ def rag_ingest_text(doc_id: str, text: str) -> str:
 @mcp.tool()
 def semantic_media_search_text(query: str, limit: int = 10) -> Dict[str, Any]:
     """
-    Semantic search over the Plex media index using pure-Python TF-IDF.
-    Returns the top 'limit' matching media items with similarity scores.
+    Search for movies and TV shows in the Plex library.
+
+    Use this tool to find media by title, genre, actor, or description.
+    Returns a list of matching items with their Plex ratingKey (id field).
+
+    REQUIRED FIRST STEP: If you need to locate scenes in a movie/show,
+    you MUST call this tool first to get the ratingKey, then use that
+    ratingKey with the scene_locator_tool.
+
+    Args:
+        query: Search terms (movie title, genre, actor name, etc.)
+        limit: Maximum number of results (default: 10)
+
+    Returns:
+        Dictionary with 'results' array. Each result contains:
+        - id: The Plex ratingKey (USE THIS for scene_locator_tool)
+        - title: Media title
+        - summary: Description
+        - genres: List of genres
+        - year: Release year
+        - score: Search relevance score
     """
-    # Full implementation already provided earlier.
-    # This block is the MCP tool interface exactly as the server expects.
     return semantic_media_search(query=query, limit=limit)
 
+@mcp.tool()
+def scene_locator_tool(media_id: str, query: str, limit: int = 5):
+    """
+    Find specific scenes within a movie or TV show using subtitle search.
+
+    CRITICAL: media_id MUST be a Plex ratingKey (numeric ID), NOT a title.
+
+    REQUIRED WORKFLOW:
+    1. If you only have a movie/show title, call semantic_media_search_text FIRST
+    2. Extract the 'id' field from the search results (this is the ratingKey)
+    3. Then call this tool with that ratingKey
+
+    WRONG: scene_locator_tool(media_id="3:10 to Yuma", ...)
+    RIGHT: scene_locator_tool(media_id="12345", ...)
+
+    Args:
+        media_id: Plex ratingKey (numeric ID) - get this from semantic_media_search_text
+        query: Description of the scene to find (e.g., "first confrontation")
+        limit: Maximum number of scenes to return (default: 5)
+
+    Returns:
+        List of matching scenes with timestamps and subtitle text
+    """
+    return scene_locator(media_id=media_id, query=query, limit=limit)
+
+@mcp.tool()
+def find_scene_by_title(movie_title: str, scene_query: str, limit: int = 5):
+    """
+    Find a specific scene in a movie by searching for the movie first, then locating the scene.
+
+    This is a convenience tool that combines semantic_media_search and scene_locator.
+    Use this when you have a movie title and want to find a scene.
+
+    Args:
+        movie_title: The name of the movie (e.g., "3:10 to Yuma")
+        scene_query: Description of the scene (e.g., "first confrontation")
+        limit: Number of scenes to return (default: 5)
+
+    Returns:
+        Matching scenes with timestamps
+    """
+    # Step 1: Search for the movie
+    search_results = semantic_media_search(query=movie_title, limit=1)
+
+    if not search_results.get("results"):
+        return {"error": f"Could not find movie '{movie_title}' in Plex library"}
+
+    # Step 2: Get the ratingKey
+    media_id = search_results["results"][0]["id"]
+    movie_name = search_results["results"][0]["title"]
+
+    # Step 3: Find the scene
+    scenes = scene_locator(media_id=media_id, query=scene_query, limit=limit)
+
+    return {
+        "movie": movie_name,
+        "media_id": media_id,
+        "scenes": scenes
+    }
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
