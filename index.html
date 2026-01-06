@@ -123,15 +123,16 @@
     <div id="status"></div>
 
     <script>
+        const status = document.getElementById("status");
+        status.textContent = "Connecting…";
+
         const STORAGE_KEY = "mcp_chat_history";
-        const ws = new WebSocket("ws://localhost:8765");
         const chat = document.getElementById("chat");
         const input = document.getElementById("input");
         const sendBtn = document.getElementById("sendBtn");
-        const status = document.getElementById("status");
+        sendBtn.disabled = true;
 
-        status.textContent = "Connecting";
-
+        let ws = null;
         let isProcessing = false;
         let chatHistory = loadHistory();
 
@@ -144,61 +145,91 @@
             return raw ? JSON.parse(raw) : [];
         }
 
-        ws.onopen = () => {
-            status.textContent = "Connected";
+        try {
+            ws = new WebSocket("ws://localhost:8765");
+        } catch (err) {
+            status.textContent = "Invalid WebSocket URL";
+            console.error("WebSocket constructor error:", err);
+        }
 
-            ws.send(JSON.stringify({ type: "history_request" }));
-        };
+        // If constructor failed, ws will be null
+        if (!ws) {
+            // You might want to disable input permanently or show a retry button
+        } else {
+            ws.onopen = () => {
+                sendBtn.disabled = false;
+                status.textContent = "Connected";
 
-        ws.onclose = () => {
-            status.textContent = "Disconnected";
-        };
+                ws.send(JSON.stringify({ type: "history_request" }));
+            };
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+            ws.onerror = (event) => {
+                // This may or may not fire depending on browser and failure mode
+                console.error("WebSocket error:", event);
+            };
 
-            if (data.type === "history_sync") {
-                const history = data.history;
-
-                if (history.length === 0) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    chat.innerHTML = "";
-                    chatHistory = [];
-                } else {
-                    chatHistory = history;
-                    saveHistory(chatHistory);
-                    chat.innerHTML = "";
-                    chatHistory.forEach(msg => addMessage(msg.text, msg.role));
+            ws.onclose = (event) => {
+                let reason = `code ${event.code}`;
+                if (event.code === 1006) {
+                    reason = "Abnormal closure (connection failed, refused, unreachable)";
+                } else if (event.code === 1000) {
+                    reason = "Normal close";
+                } else if (event.code === 1001) {
+                    reason = "Going away";
+                } else if (event.code === 1015) {
+                    reason = "TLS/handshake failure";
                 }
 
-                // Re-enable UI here too
-                isProcessing = false;
-                sendBtn.disabled = false;
-                status.textContent = "Connected";
-                return;
-            }
+                status.textContent = "Disconnected: " + reason;
+                sendBtn.disabled = true;
+            };
 
-            if (data.type === "assistant_message") {
-                addMessage(data.text, "assistant");
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (e) {
+                    console.error("Invalid JSON from server:", event.data);
+                    return;
+                }
 
-                // Re-enable UI
-                isProcessing = false;
-                sendBtn.disabled = false;
-                status.textContent = "Connected";
-            }
-        };
+                if (data.type === "history_sync") {
+                    const history = data.history;
+
+                    if (!Array.isArray(history) || history.length === 0) {
+                        localStorage.removeItem(STORAGE_KEY);
+                        chat.innerHTML = "";
+                        chatHistory = [];
+                    } else {
+                        chatHistory = history;
+                        saveHistory(chatHistory);
+                        chat.innerHTML = "";
+                        chatHistory.forEach(msg => addMessage(msg.text, msg.role));
+                    }
+
+                    isProcessing = false;
+                    sendBtn.disabled = false;
+                    status.textContent = "Connected";
+                    return;
+                }
+
+                if (data.type === "assistant_message") {
+                    addMessage(data.text, "assistant");
+
+                    isProcessing = false;
+                    sendBtn.disabled = false;
+                    status.textContent = "Connected";
+                }
+            };
+        }
 
         function formatMessage(text) {
             // 1. Preserve blank line before list items
-            // Convert "\n\n- " into "\n\n" (keeps the blank line)
             text = text.replace(/\n\s*\n\s*-\s+/g, "\n\n");
-
-            // 2. Convert single-line list items "- X" into "X" without adding blank lines
+            // 2. Convert single-line list items "- X" into "X"
             text = text.replace(/\n\s*-\s+/g, "\n");
-
             // 3. Convert **bold** to <strong>
             text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
             // 4. Convert blank lines to <br><br>
             text = text.replace(/\n\s*\n/g, "<br><br>");
 
@@ -211,11 +242,9 @@
             div.innerHTML = formatMessage(text);
             chat.appendChild(div);
 
-            // Save to localStorage
             chatHistory.push({ role, text });
             saveHistory(chatHistory);
 
-            // Auto-scroll
             chat.scrollTop = chat.scrollHeight;
         }
 
@@ -225,10 +254,13 @@
             const text = input.value.trim();
             if (!text) return;
 
-            // Add user message to UI
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                status.textContent = "Cannot send: WebSocket not connected";
+                return;
+            }
+
             addMessage(text, "user");
 
-            // Disable UI while processing
             isProcessing = true;
             sendBtn.disabled = true;
             status.textContent = "Processing…";
@@ -253,8 +285,8 @@
             chat.appendChild(div);
         });
 
-        // Scroll to bottom
         chat.scrollTop = chat.scrollHeight;
+
 
     </script>
 
