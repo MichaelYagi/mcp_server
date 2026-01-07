@@ -17,7 +17,7 @@ from mcp_use.agents.mcpagent import MCPAgent
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
@@ -27,6 +27,11 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 # How many messages to keep (user + assistant only)
 MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
+
+SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
+    When you call a tool and receive a result, use that result to answer the user's question.
+    Do not call the same tool repeatedly with the same parameters.
+    Provide clear, concise answers based on the tool results."""
 
 async def ensure_ollama_running(host: str = "http://127.0.0.1:11434"):
     try:
@@ -167,6 +172,15 @@ def create_langgraph_agent(llm_with_tools, tools):
 
     # Build the graph
     workflow = StateGraph(AgentState)
+
+    def add_system_prompt(state):
+        if not state["messages"]:
+            return {"messages": [SystemMessage(content=SYSTEM_PROMPT)]}
+        return {}
+
+    workflow.add_node("init", add_system_prompt)
+    workflow.set_entry_point("init")
+    workflow.add_edge("init", "agent")
 
     # Add nodes
     workflow.add_node("agent", call_model)
@@ -328,28 +342,18 @@ async def websocket_handler(websocket, agent_ref, tools, logger):
                 # Trim history
                 conversation_state["messages"] = [
                     m for m in conversation_state["messages"]
-                    if isinstance(m, (HumanMessage, AIMessage))
+                    if isinstance(m, (HumanMessage, AIMessage, SystemMessage))
                 ][-MAX_MESSAGE_HISTORY:]
 
                 # Run agent (using current model)
                 agent = agent_ref[0]
-                result = await agent.ainvoke(
-                    conversation_state,
-                    config={"recursion_limit": 50}
-                )
+                answer = await run_agent(agent, conversation_state, prompt, logger)
 
-                final_message = result["messages"][-1]
+                print("\n" + answer + "\n")
 
-                # Add assistant message
-                conversation_state["messages"].append(final_message)
-
-                # PRINT TO BACKEND CLI (same as CLI mode)
-                print("\n" + final_message.content + "\n")
-
-                # Send response
                 await websocket.send(json.dumps({
                     "type": "assistant_message",
-                    "text": final_message.content
+                    "text": answer
                 }))
     finally:
         # Remove this client when they disconnect
@@ -379,6 +383,45 @@ def input_thread(input_queue, stop_event):
         except (EOFError, KeyboardInterrupt):
             break
 
+async def run_agent(agent, conversation_state, user_message, logger):
+    """
+    Unified agent invocation for both CLI and WebSocket.
+    Ensures consistent system prompt injection, state management, and tool execution.
+    """
+
+    # 1. Inject system prompt ONCE
+    if not conversation_state["messages"]:
+        conversation_state["messages"].append(
+            SystemMessage(content=SYSTEM_PROMPT)
+        )
+
+    # 2. Add user message
+    conversation_state["messages"].append(
+        HumanMessage(content=user_message)
+    )
+
+    # 3. Trim history (keep all message types except tool messages)
+    conversation_state["messages"] = [
+        m for m in conversation_state["messages"]
+        if m.type != "tool"
+    ][-MAX_MESSAGE_HISTORY:]
+
+    # 4. Invoke LangGraph correctly (NO agent[0]!)
+    logger.info(f"🧠 Calling LLM with {len(conversation_state['messages'])} messages")
+
+    result = await agent.ainvoke({"messages": conversation_state["messages"]})
+
+    # 5. Extract final message
+    final_message = result["messages"][-1]
+
+    # 6. Update conversation state
+    conversation_state["messages"].append(final_message)
+
+    # 7. Return final answer text
+    if isinstance(final_message, AIMessage):
+        return final_message.content or ""
+    else:
+        return str(final_message)
 
 async def cli_input_loop(agent, logger, tools, model_name):
     """Handle CLI input using a separate thread"""
@@ -470,38 +513,14 @@ async def cli_input_loop(agent, logger, tools, model_name):
                 # Normal chat
                 logger.info(f"💬 Received query: '{query}'")
 
-                conversation_state["messages"].append(
-                    HumanMessage(content=query)
-                )
+                # Run unified agent pipeline
+                answer = await run_agent(agent, conversation_state, query, logger)
 
-                # Broadcast user message to web clients
-                await broadcast_message("cli_user_message", {"text": query})
-
-                # Trim history
-                conversation_state["messages"] = [
-                    m for m in conversation_state["messages"]
-                    if isinstance(m, (HumanMessage, AIMessage))
-                ][-MAX_MESSAGE_HISTORY:]
-
-                logger.info("🏁 Starting agent execution")
-                result = await agent.ainvoke(
-                    conversation_state,
-                    config={"recursion_limit": 50}
-                )
-
-                final_message = result["messages"][-1]
-                conversation_state["messages"].append(final_message)
-
-                answer = (
-                    final_message.content
-                    if isinstance(final_message, AIMessage)
-                    else str(final_message)
-                )
-
+                # Print to CLI
                 print("\n" + answer + "\n")
                 logger.info("✅ Query completed successfully")
 
-                # Broadcast assistant message to web clients
+                # Broadcast to web clients
                 await broadcast_message("cli_assistant_message", {"text": answer})
 
     except KeyboardInterrupt:
@@ -566,14 +585,10 @@ async def main():
 
     # 3️⃣ Load system prompt
     system_prompt_path = PROJECT_ROOT / "prompts/tool_usage_guide.md"
-    system_prompt = """You are a helpful assistant with access to tools.
-    When you call a tool and receive a result, use that result to answer the user's question.
-    Do not call the same tool repeatedly with the same parameters.
-    Provide clear, concise answers based on the tool results."""
 
     if system_prompt_path.exists():
         logger.info(f"⚙️ System prompt found!")
-        system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        SYSTEM_PROMPT = system_prompt_path.read_text(encoding="utf-8")
     else:
         logger.warning(f"⚠️  System prompt file not found, using default")
 
@@ -605,7 +620,7 @@ async def main():
         llm=llm,
         client=client,
         max_steps=10,  # This won't be used, but needed for initialization
-        system_prompt=system_prompt
+        system_prompt=SYSTEM_PROMPT
     )
 
     mcp_agent.debug = True
