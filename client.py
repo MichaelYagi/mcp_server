@@ -145,6 +145,7 @@ async def switch_model(model_name, tools, logger):
 
 def list_commands():
     print(":commands - List all available commands")
+    print(":tools - List all available tools")
     print(":model - View the current active model")
     print(":model <model> - Use the model passed")
     print(":models - List available models")
@@ -423,6 +424,11 @@ async def cli_input_loop(agent, logger, tools, model_name):
     thread = threading.Thread(target=input_thread, args=(input_queue, stop_event), daemon=True)
     thread.start()
 
+    def list_tools(tools_obj):
+        logger.info(f"🛠 Found {len(tools_obj)} MCP tools:")
+        for t in tools_obj:
+            logger.info(f"  - {t.name}: {t.description}")
+
     def list_models():
         import subprocess, json
 
@@ -473,6 +479,10 @@ async def cli_input_loop(agent, logger, tools, model_name):
 
                 if query == ":commands":
                     list_commands()
+                    continue
+
+                if query == ":tools":
+                    list_tools(tools)
                     continue
 
                 if query == ":models":
