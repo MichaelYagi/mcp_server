@@ -91,6 +91,10 @@ logging.basicConfig(
 logging.getLogger("mcp").setLevel(logging.DEBUG)
 logger = logging.getLogger("mcp_server")
 
+# ─────────────────────────────────────────────
+# To-do Tools
+# ─────────────────────────────────────────────
+
 @mcp.tool()
 def add_entry(title: str, content: str, tags: List[str] | None = None) -> str:
     """
