@@ -81,10 +81,18 @@ mcp-server/
 ```
 curl -fsSL https://ollama.com/install.sh | sh
 python -m venv .venv
-source .venv/bin/activate (Linux)
-.\.venv\bin\activate (Windows)
-pip install -r requirements.txt (Linux)
-.\.venv\Scripts\pip.exe install -r .\requirements.txt (Windows)
+```
+
+Linux
+```
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Windows PowerShell
+```
+.venv\Scripts\activate
+.venv\Scripts\pip.exe install -r .\requirements.txt
 ```
 
 ---
@@ -173,4 +181,5 @@ Three steps to add new tools:
 
 1. **Logic**: Add Python script to `tools/<new_domain>/`
 2. **Schema**: Define inputs in `schemas/<new_domain>/<tool_name>.json`
+
 3. **Register**: Import in `server.py` and wrap with `@mcp.tool()`
