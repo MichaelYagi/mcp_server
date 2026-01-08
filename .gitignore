@@ -18,3 +18,4 @@ knowledge/
 /.venv-wsl/
 /.vscode
 /rag_db/
+/debug_ingest.py

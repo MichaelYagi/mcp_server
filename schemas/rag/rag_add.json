@@ -1,0 +1,11 @@
+{
+  "name": "rag_add",
+  "description": "Add text to the RAG knowledge base.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" }
+    },
+    "required": ["text"]
+  }
+}

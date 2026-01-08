@@ -80,6 +80,44 @@ def should_continue(state: AgentState) -> str:
     # Otherwise, stop
     return "end"
 
+# ============================================================================
+# RAG router
+# ============================================================================
+
+# Decide when to use RAG
+def router(state):
+    last = state["messages"][-1].content.lower()
+
+    if state.get("tool_calls"):
+        return "tools"
+
+    if "ingest" in last or "update knowledge" in last:
+        return "ingest"
+
+    if any(x in last for x in ["what is", "who is", "explain", "tell me about"]):
+        return "rag"
+
+    return "agent"
+
+# Call rag_search tool and inject context
+async def rag_node(state):
+    query = state["messages"][-1].content
+
+    # Call the RAG search tool
+    rag_result = await state["tools"]["rag_search_tool"].ainvoke({"query": query})
+
+    chunks = rag_result.get("chunks", [])
+    context = "\n\n".join(chunks)
+
+    augmented = [
+        SystemMessage(content="Use the provided context to answer."),
+        HumanMessage(content=f"Context:\n{context}\n\nQuestion: {query}")
+    ]
+
+    response = await state["llm"].ainvoke(augmented)
+    state["messages"].append(response)
+
+    return state
 
 # ============================================================================
 # Agent Graph Builder
@@ -119,6 +157,19 @@ def save_last_model(model_name):
     with open(MODEL_STATE_FILE, "w") as f:
         f.write(model_name)
 
+async def ingest_node(state: AgentState):
+    ingest_tool = state["tools"]["plex_ingest_batch"]
+    result = await ingest_tool.ainvoke({"limit": 5})
+
+    msg = AIMessage(
+        content=f"Ingested: {result['ingested']}\nRemaining: {result['remaining']}"
+    )
+
+    return {
+        "messages": state["messages"] + [msg],
+        "tool_calls": [],
+        "tools": state["tools"],
+    }
 
 async def switch_model(model_name, tools, logger):
     global agent
@@ -158,55 +209,89 @@ def list_commands():
     print(":clear history - Clear the chat history")
 
 def create_langgraph_agent(llm_with_tools, tools):
-    """
-    Creates a LangGraph agent with proper stop conditions.
-
-    Args:
-        llm_with_tools: LLM with tools bound to it
-        tools: List of LangChain tools
-
-    Returns:
-        Compiled graph ready to execute
-    """
     logger = logging.getLogger("mcp_client")
 
-    # Define the agent node
+    #
+    # 1. Agent (LLM) node
+    #
     async def call_model(state: AgentState):
-        """Node that calls the LLM"""
         messages = state["messages"]
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
-        response = await llm_with_tools.ainvoke(messages)
-        return {"messages": [response]}
 
-    # Build the graph
+        response = await llm_with_tools.ainvoke(messages)
+
+        return {
+            "messages": messages + [response],
+            "tool_calls": getattr(response, "tool_calls", []),
+            "tools": state.get("tools", tools),
+        }
+
+    #
+    # 2. Ingestion node
+    #
+    async def ingest_node(state: AgentState):
+        ingest_tool = state["tools"].get("plex_ingest_batch")
+        if not ingest_tool:
+            msg = AIMessage(content="Ingestion tool not available.")
+            return {
+                "messages": state["messages"] + [msg],
+                "tool_calls": [],
+                "tools": state["tools"],
+            }
+
+        result = await ingest_tool.ainvoke({"limit": 5})
+        msg = AIMessage(
+            content=f"Ingested: {result.get('ingested')}\nRemaining: {result.get('remaining')}"
+        )
+
+        return {
+            "messages": state["messages"] + [msg],
+            "tool_calls": [],
+            "tools": state["tools"],
+        }
+
+    #
+    # 3. Build graph
+    #
     workflow = StateGraph(AgentState)
 
-    # Add nodes
+    # Nodes
     workflow.add_node("agent", call_model)
     workflow.add_node("tools", ToolNode(tools))
+    workflow.add_node("rag", rag_node)
+    workflow.add_node("ingest", ingest_node)   # ← REQUIRED
 
-    # Set entry point
+    # Entry point
     workflow.set_entry_point("agent")
 
-    # Add conditional edges - THIS IS THE CRITICAL PART THAT PREVENTS INFINITE LOOPS
+    #
+    # 4. Router transitions
+    #
     workflow.add_conditional_edges(
         "agent",
-        should_continue,
+        router,
         {
-            "continue": "tools",  # If there are tool calls, execute them
-            "end": END  # If no tool calls, stop and return answer
+            "tools": "tools",
+            "rag": "rag",
+            "ingest": "ingest",   # ← REQUIRED
+            "agent": END
         }
     )
 
-    # After tools execute, always go back to agent to process results
-    workflow.add_edge("tools", "agent")
+    #
+    # 5. Node-to-node edges
+    #
+    workflow.add_edge("tools", "agent")     # tools → agent
+    workflow.add_edge("ingest", "agent")    # ingest → agent
+    workflow.add_edge("rag", END)           # rag → end
 
-    # Compile
+    #
+    # 6. Compile
+    #
     app = workflow.compile()
     logger.info("✅ LangGraph agent compiled successfully")
 
     return app
-
 
 # ============================================================================
 # Helper Functions

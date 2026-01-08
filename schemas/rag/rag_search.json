@@ -1,0 +1,11 @@
+{
+  "name": "rag_search",
+  "description": "Retrieve relevant knowledge base chunks.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" }
+    },
+    "required": ["query"]
+  }
+}

@@ -1,5 +1,4 @@
 httpx
-# Core MCP dependencies
 mcp
 mcp-use
 psutil

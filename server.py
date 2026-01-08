@@ -64,8 +64,9 @@ from tools.text_tools.concept_contextualizer import concept_contextualizer
 # ─────────────────────────────────────────────
 # RAG Tools
 # ─────────────────────────────────────────────
-
-
+from tools.plex.ingest import ingest_next_batch
+from tools.rag.rag_add import rag_add
+from tools.rag.rag_search import rag_search
 # ─────────────────────────────────────────────
 # Plex Tools
 # ─────────────────────────────────────────────
@@ -674,7 +675,21 @@ def concept_contextualizer_tool(concept: str) -> str:
 # ─────────────────────────────────────────────
 # RAG Tools
 # ─────────────────────────────────────────────
+@mcp.tool()
+def rag_add_tool(text: str):
+    return rag_add(text)
 
+@mcp.tool()
+def rag_search_tool(query: str):
+    return rag_search(query)
+
+@mcp.tool()
+def plex_ingest_batch(limit: int = 5):
+    """
+    Ingests up to `limit` unprocessed Plex items into RAG.
+    Returns a summary of what was ingested.
+    """
+    return ingest_next_batch(limit)
 
 # ─────────────────────────────────────────────
 # Plex Tools
