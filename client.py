@@ -57,27 +57,25 @@ class AgentState(TypedDict):
 # ============================================================================
 
 def should_continue(state: AgentState) -> str:
-    """
-    Determines whether to continue with tool execution or end.
-
-    Returns:
-        "continue" if there are tool calls to execute
-        "end" if the agent has finished and should return the final answer
-    """
     messages = state["messages"]
-    last_message = messages[-1]
+    last = messages[-1]
 
-    # If it's an AI message with tool calls, continue to execute them
-    if isinstance(last_message, AIMessage):
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            tool_calls = last_message.tool_calls
-            logging.getLogger("mcp_client").info(f"🔄 Continuing - found {len(tool_calls)} tool call(s)")
-            for call in tool_calls:
-                logging.getLogger("mcp_client").info(f" ↳ Tool: {call['name']} Args: {call.get('args')}")
-            return "continue"
+    # Only continue if the last message contains at least one valid tool call
+    if isinstance(last, AIMessage):
+        tool_calls = getattr(last, "tool_calls", None)
 
-    # Otherwise, we're done
-    logging.getLogger("mcp_client").info("✅ Stopping - no more tool calls, returning final answer")
+        if tool_calls and isinstance(tool_calls, list):
+            valid_calls = [
+                call for call in tool_calls
+                if isinstance(call, dict)
+                and "name" in call
+                and call.get("args") is not None
+            ]
+
+            if valid_calls:
+                return "continue"
+
+    # Otherwise, stop
     return "end"
 
 
@@ -243,7 +241,10 @@ def get_venv_python(project_root: Path) -> str:
 # Main Function
 # ============================================================================
 
-GLOBAL_CONVERSATION_STATE = {"messages": []}
+GLOBAL_CONVERSATION_STATE = {
+    "messages": [],
+    "loop_count": 0
+}
 CONNECTED_WEBSOCKETS = set()  # Track all connected clients
 
 
@@ -382,28 +383,79 @@ def input_thread(input_queue, stop_event):
             break
 
 async def run_agent(agent, conversation_state, user_message, logger):
-    if not conversation_state["messages"]:
+    try:
+        conversation_state["loop_count"] += 1
+
+        if conversation_state["loop_count"] >= 5:
+            logger.error("⚠️ Loop detected — stopping early after 5 iterations.")
+
+            error_msg = AIMessage(
+                content=(
+                    "I detected that this request was causing repeated reasoning loops. "
+                    "I'm stopping early to avoid getting stuck. "
+                    "Try rephrasing your request or simplifying what you're asking for."
+                )
+            )
+
+            conversation_state["messages"].append(error_msg)
+
+            # Reset loop counter for next user request
+            conversation_state["loop_count"] = 0
+
+            return {"messages": conversation_state["messages"]}
+
+        # 1. Ensure system prompt exists
+        if not conversation_state["messages"]:
+            conversation_state["messages"].append(
+                SystemMessage(content=SYSTEM_PROMPT)
+            )
+
+        # 2. Add user message
         conversation_state["messages"].append(
-            SystemMessage(content=SYSTEM_PROMPT)
+            HumanMessage(content=user_message)
         )
 
-    conversation_state["messages"].append(
-        HumanMessage(content=user_message)
-    )
+        # 3. Trim history but DO NOT remove tool messages
+        conversation_state["messages"] = conversation_state["messages"][-MAX_MESSAGE_HISTORY:]
 
-    conversation_state["messages"] = [
-        m for m in conversation_state["messages"]
-        if m.type != "tool"
-    ][-MAX_MESSAGE_HISTORY:]
+        # 4. Ensure system prompt stays at index 0
+        if not isinstance(conversation_state["messages"][0], SystemMessage):
+            conversation_state["messages"].insert(0, SystemMessage(content=SYSTEM_PROMPT))
 
-    logger.info(f"🧠 Calling LLM with {len(conversation_state['messages'])} messages")
+        logger.info(f"🧠 Calling LLM with {len(conversation_state['messages'])} messages")
 
-    result = await agent.ainvoke({"messages": conversation_state["messages"]})
+        # 5. Run the agent
+        result = await agent.ainvoke({"messages": conversation_state["messages"]})
 
-    final_message = result["messages"][-1]
-    conversation_state["messages"].append(final_message)
+        # 6. Replace conversation state with the agent's returned messages
+        conversation_state["messages"] = result["messages"]
+        conversation_state["loop_count"] = 0
 
-    return result
+        return {"messages": conversation_state["messages"]}
+
+    except Exception as e:
+        # Recursion limit handling
+        if "GraphRecursionError" in str(e):
+            logger.error("❌ Recursion limit reached — stopping agent loop safely.")
+
+            error_msg = AIMessage(
+                content=(
+                    "I ran into a recursion limit while processing your request. "
+                    "This usually means the model kept looping instead of producing a final answer. "
+                    "Try rephrasing your request or simplifying what you're asking for."
+                )
+            )
+
+            conversation_state["messages"].append(error_msg)
+            return {"messages": conversation_state["messages"]}
+
+        # Other errors
+        logger.exception("❌ Unexpected error in agent execution")
+
+        error_msg = AIMessage(content="An unexpected error occurred while running the agent.")
+        conversation_state["messages"].append(error_msg)
+
+        return {"messages": conversation_state["messages"]}
 
 async def cli_input_loop(agent, logger, tools, model_name):
     """Handle CLI input using a separate thread"""

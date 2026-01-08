@@ -749,6 +749,8 @@ def semantic_media_search_text(query: str, limit: int = 10) -> Dict[str, Any]:
         - year: Release year
         - score: Search relevance score
     """
+    if not query or not query.strip():
+        raise ValueError("semantic_media_search_text called with empty query")
     logger.info(f"🛠 [server] semantic_media_search called with query: {query}, limit: {limit}")
     return semantic_media_search(query=query, limit=limit)
 
