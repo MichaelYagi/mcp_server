@@ -150,6 +150,7 @@ def list_commands():
     print(":model - View the current active model")
     print(":model <model> - Use the model passed")
     print(":models - List available models")
+    print(":clear history - Clear the chat history")
 
 def create_langgraph_agent(llm_with_tools, tools):
     """
@@ -174,15 +175,6 @@ def create_langgraph_agent(llm_with_tools, tools):
 
     # Build the graph
     workflow = StateGraph(AgentState)
-
-    def add_system_prompt(state):
-        if not state["messages"]:
-            return {"messages": [SystemMessage(content=SYSTEM_PROMPT)]}
-        return {}
-
-    workflow.add_node("init", add_system_prompt)
-    workflow.set_entry_point("init")
-    workflow.add_edge("init", "agent")
 
     # Add nodes
     workflow.add_node("agent", call_model)
@@ -528,6 +520,24 @@ async def cli_input_loop(agent, logger, tools, model_name):
                 if query == ":model":
                     print(f"Using model: {model_name}\n")
                     continue
+
+                if query.startswith(":clear "):
+                    parts = query.split()
+                    if len(parts) == 1:
+                        print(f"Specify what to clear")
+                        continue
+
+                    target = parts[1]
+
+                    if target == "history":
+                        conversation_state["messages"] = []
+                        conversation_state["messages"].append(SystemMessage(content=SYSTEM_PROMPT))
+                        print(f"Chat history cleared.")
+                        continue
+
+                    else:
+                        print(f"Unknown clear target: {target}")
+                        continue
 
                 # Normal chat
                 logger.info(f"💬 Received query: '{query}'")
