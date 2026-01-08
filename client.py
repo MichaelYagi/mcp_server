@@ -33,6 +33,8 @@ SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
     Do not call the same tool repeatedly with the same parameters.
     Provide clear, concise answers based on the tool results."""
 
+agent = None
+
 async def ensure_ollama_running(host: str = "http://127.0.0.1:11434"):
     try:
         async with httpx.AsyncClient(timeout=1.0) as client:
@@ -119,6 +121,8 @@ def save_last_model(model_name):
 
 
 async def switch_model(model_name, tools, logger):
+    global agent
+
     available = get_available_models()
 
     if model_name not in available:
@@ -127,18 +131,21 @@ async def switch_model(model_name, tools, logger):
         for m in available:
             print(f" - {m}")
         print()
-        return None  # signal failure
+        return None
 
     logger.info(f"🔄 Switching model to: {model_name}")
 
+    # Build new LLM
     new_llm = ChatOllama(model=model_name, temperature=0)
     llm_with_tools = new_llm.bind_tools(tools)
-    new_agent = create_langgraph_agent(llm_with_tools, tools)
+
+    # Rebuild LangGraph agent
+    agent = create_langgraph_agent(llm_with_tools, tools)
 
     save_last_model(model_name)
 
     logger.info(f"✅ Model switched to {model_name}")
-    return new_agent
+    return agent
 
 
 def list_commands():
