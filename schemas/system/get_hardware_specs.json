@@ -1,0 +1,13 @@
+{
+  "name": "get_hardware_specs_tool",
+  "description": "Get detailed hardware specifications including CPU, GPU, and RAM across different platforms.",
+  "input_schema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  },
+  "output_schema": {
+    "type": "string",
+    "description": "JSON string containing CPU model and cores, GPU devices with VRAM, RAM size/type/speed, and OS information"
+  }
+}

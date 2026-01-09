@@ -275,41 +275,65 @@ def create_langgraph_agent(llm_with_tools, tools):
         tool_calls = getattr(response, "tool_calls", [])
         logger.info(f"🔧 LLM returned {len(tool_calls)} tool calls")
 
-        # WORKAROUND: If no tool calls but response looks like a tool call, parse it
+        # WORKAROUND: Parse text output and convert to tool calls
         if len(tool_calls) == 0 and response.content:
             import re
-            # Look for pattern like: semantic_media_search_text(query="...", limit=10)
-            match = re.search(r'(\w+)\((.*?)\)', response.content.replace('\n', ''))
-            if match:
-                tool_name = match.group(1)
-                args_str = match.group(2)
+            import json as json_module
 
-                # Parse arguments
-                args = {}
-                for arg_match in re.finditer(r'(\w+)=(["\']?)([^,\)]+)\2', args_str):
-                    key = arg_match.group(1)
-                    value = arg_match.group(3)
-                    # Try to convert to int if it's a number
-                    try:
-                        value = int(value)
-                    except:
-                        pass
-                    args[key] = value
+            content = response.content.strip()
 
-                logger.info(f"🔧 Parsed tool call from text: {tool_name}({args})")
+            # Try JSON format: {"type": "function", "name": "tool_name", "arguments": {...}}
+            try:
+                parsed = json_module.loads(content)
+                if isinstance(parsed, dict) and parsed.get("name"):
+                    tool_name = parsed["name"]
+                    args = parsed.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json_module.loads(args)
+                        except:
+                            args = {}
 
-                # Manually create tool call
-                response.tool_calls = [{
-                    "name": tool_name,
-                    "args": args,
-                    "id": "manual_call_1"
-                }]
+                    logger.info(f"🔧 Parsed JSON tool call: {tool_name}({args})")
+                    response.tool_calls = [{
+                        "name": tool_name,
+                        "args": args,
+                        "id": "manual_call_1",
+                        "type": "tool_call"
+                    }]
+            except (json_module.JSONDecodeError, ValueError):
+                # Try function format: tool_name(arg="value", arg2=123)
+                match = re.search(r'(\w+)\((.*?)\)', content.replace('\n', '').replace('`', ''))
+                if match:
+                    tool_name = match.group(1)
+                    args_str = match.group(2).strip()
+
+                    args = {}
+                    if args_str:
+                        # Parse key=value pairs
+                        for arg_match in re.finditer(r'(\w+)\s*=\s*(["\']?)([^,\)]+)\2', args_str):
+                            key = arg_match.group(1)
+                            value = arg_match.group(3).strip().strip('"\'')
+                            # Try converting to int
+                            try:
+                                value = int(value)
+                            except:
+                                pass
+                            args[key] = value
+
+                    logger.info(f"🔧 Parsed function call: {tool_name}({args})")
+                    response.tool_calls = [{
+                        "name": tool_name,
+                        "args": args,
+                        "id": "manual_call_1",
+                        "type": "tool_call"
+                    }]
 
         if hasattr(response, 'tool_calls') and response.tool_calls:
             for tc in response.tool_calls:
                 logger.info(f"🔧   Tool: {tc.get('name', 'unknown')}, Args: {tc.get('args', {})}")
         else:
-            logger.info(f"🔧 LLM response (text): {response.content[:200]}")
+            logger.info(f"🔧 No tool calls. Response: {response.content[:200]}")
 
         return {
             "messages": messages + [response],

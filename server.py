@@ -26,6 +26,7 @@ from tools.knowledge_base.kb_update_versioned import kb_update_versioned
 # ─────────────────────────────────────────────
 # System Tools
 # ─────────────────────────────────────────────
+from tools.system import get_hardware_specs
 from tools.system.system_info import get_system_stats
 from tools.system.processes import list_processes, kill_process
 # ─────────────────────────────────────────────
@@ -232,8 +233,28 @@ def update_entry_versioned(entry_id: str,
     return json.dumps(result, indent=2)
 
 # ─────────────────────────────────────────────
-# System MCP Tools
+# System Tools
 # ─────────────────────────────────────────────
+@mcp.tool()
+def get_hardware_specs_tool() -> str:
+    """
+    Get detailed hardware specifications including CPU, GPU, and RAM.
+
+    Works across Windows, Linux, and macOS.
+    Returns CPU model and cores, GPU devices with VRAM, RAM size/type/speed.
+
+    Call this tool when user asks about:
+    - hardware specs, system specs, computer specs
+    - CPU, processor, chip
+    - GPU, graphics card, video card
+    - RAM, memory
+
+    Example: get_hardware_specs_tool()
+    """
+    logger.info(f"🛠 [server] get_hardware_specs_tool called")
+    result = get_hardware_specs()
+    return json.dumps(result, indent=2)
+
 @mcp.tool()
 def get_system_info() -> str:
     """
