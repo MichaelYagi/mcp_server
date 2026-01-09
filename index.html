@@ -58,6 +58,48 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
+        /* Thinking indicator */
+        .thinking {
+            align-self: flex-start;
+            padding: 0.75rem 1rem;
+            color: #666;
+            font-size: 2rem;
+        }
+
+        .thinking-dots {
+            display: inline-block;
+            letter-spacing: 0.2rem;
+        }
+
+        .thinking-dots span {
+            animation: blink 1.4s infinite;
+            opacity: 0;
+        }
+
+        .thinking-dots span:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .thinking-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes blink {
+            0%, 20% {
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+
         #inputRow {
             display: flex;
             gap: 0.5rem;
@@ -170,6 +212,7 @@
 
         let isProcessing = false;
         let chatHistory = loadHistory();
+        let thinkingIndicator = null;
 
         // -------------------------
         // WebSocket connection
@@ -177,6 +220,7 @@
         const hostname = window.location.hostname || 'localhost';
         const ws = new WebSocket(`ws://${hostname}:8765`);
         console.log('Connecting to:', `ws://${hostname}:8765`);
+
         // -------------------------
         // Local storage helpers
         // -------------------------
@@ -190,15 +234,37 @@
         }
 
         // -------------------------
+        // Thinking indicator
+        // -------------------------
+        function showThinking() {
+            if (thinkingIndicator) return; // Already showing
+
+            thinkingIndicator = document.createElement("div");
+            thinkingIndicator.className = "thinking";
+            thinkingIndicator.innerHTML = '<div class="thinking-dots"><span>.</span><span>.</span><span>.</span></div>';
+            chat.appendChild(thinkingIndicator);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function hideThinking() {
+            if (thinkingIndicator) {
+                thinkingIndicator.remove();
+                thinkingIndicator = null;
+            }
+        }
+
+        // -------------------------
         // WebSocket events
         // -------------------------
         ws.onerror = (event) => {
             status.textContent = "WebSocket error";
+            hideThinking();
         };
 
         ws.onclose = (event) => {
             status.textContent = "Disconnected";
             sendBtn.disabled = true;
+            hideThinking();
         };
 
         ws.onopen = () => {
@@ -227,6 +293,7 @@
             // CLI assistant message
             // -------------------------
             if (data.type === "cli_assistant_message") {
+                hideThinking();
                 addMessage(data.text, "assistant");
                 return;
             }
@@ -238,6 +305,7 @@
                 status.textContent = "Model: " + data.model;
                 sendBtn.disabled = false;
                 isProcessing = false;
+                hideThinking();
                 return;
             }
 
@@ -261,6 +329,7 @@
                 isProcessing = false;
                 sendBtn.disabled = false;
                 status.textContent = "Connected";
+                hideThinking();
                 return;
             }
 
@@ -268,6 +337,7 @@
             // Assistant message
             // -------------------------
             if (data.type === "assistant_message") {
+                hideThinking();
                 addMessage(data.text, "assistant");
 
                 isProcessing = false;
@@ -304,6 +374,7 @@
             status.textContent = "Switching model…";
             sendBtn.disabled = true;
             isProcessing = true;
+            showThinking();
 
             ws.send(JSON.stringify({
                 type: "switch_model",
@@ -356,6 +427,7 @@
             isProcessing = true;
             sendBtn.disabled = true;
             status.textContent = "Processing…";
+            showThinking(); // Show thinking dots
 
             ws.send(JSON.stringify({
                 type: "user",
@@ -373,13 +445,6 @@
                 e.preventDefault();
                 send();
             }
-        });
-
-        modelSelect.addEventListener("change", (e) => {
-            ws.send(JSON.stringify({
-                type: "switch_model",
-                model: e.target.value
-            }));
         });
 
         // -------------------------
