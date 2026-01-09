@@ -42,7 +42,7 @@ def ingest_next_batch(limit: int = 5) -> Dict[str, Any]:
         limit: Maximum number of items to ingest
 
     Returns:
-        Dictionary with ingested items and remaining count
+        Dictionary with ingested items, remaining count, and total ingested
     """
     try:
         progress = load_progress()
@@ -104,7 +104,8 @@ def ingest_next_batch(limit: int = 5) -> Dict[str, Any]:
 
         return {
             "ingested": ingested,
-            "remaining": remaining
+            "remaining": remaining,
+            "total_ingested": len(progress)  # Add this line
         }
 
     except Exception as e:
@@ -114,5 +115,6 @@ def ingest_next_batch(limit: int = 5) -> Dict[str, Any]:
         return {
             "error": str(e),
             "ingested": [],
-            "remaining": 0
+            "remaining": 0,
+            "total_ingested": 0  # Add this line
         }

@@ -363,17 +363,22 @@ def create_langgraph_agent(llm_with_tools, tools):
             else:
                 ingested = result.get('ingested', []) if isinstance(result, dict) else []
                 remaining = result.get('remaining', 0) if isinstance(result, dict) else 0
+                total_ingested = result.get('total_ingested', 0) if isinstance(result, dict) else 0
 
                 if ingested:
                     msg = AIMessage(
-                        content=f"✅ Ingested {len(ingested)} items:\n" +
+                        content=f"✅ **Newly Ingested ({len(ingested)} items):**\n" +
                                 "\n".join(f"  • {item}" for item in ingested) +
-                                f"\n\n📊 Remaining: {remaining}"
+                                f"\n\n📊 **Total Ingested:** {total_ingested} items" +
+                                f"\n📊 **Remaining:** {remaining} items"
                     )
                 else:
-                    msg = AIMessage(content="✅ All items already ingested.")
+                    msg = AIMessage(
+                        content=f"✅ All items already ingested.\n\n📊 **Total Ingested:** {total_ingested} items"
+                    )
 
         except Exception as e:
+            logger = logging.getLogger("mcp_client")
             logger.error(f"❌ Error in ingest_node: {e}")
             import traceback
             traceback.print_exc()
