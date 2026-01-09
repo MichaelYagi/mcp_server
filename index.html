@@ -477,7 +477,6 @@
             isProcessing = true;
             sendBtn.disabled = true;
             status.textContent = "Processing…";
-            showThinking(); // Show thinking dots
 
             ws.send(JSON.stringify({
                 type: "user",
