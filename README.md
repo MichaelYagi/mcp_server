@@ -88,6 +88,12 @@ curl -fsSL https://ollama.com/install.sh | sh
 python -m venv .venv
 ```
 
+WSL
+```
+source .venv-wsl/bin/activate
+pip install -r requirements.txt
+```
+
 Linux
 ```
 source .venv/bin/activate
