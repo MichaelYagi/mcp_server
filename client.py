@@ -591,11 +591,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger):
                 # Show user prompt in CLI
                 print(f"\n> {prompt}")
 
-                # Send user prompt to Web UI
-                await websocket.send(json.dumps({
-                    "type": "user_message",
-                    "text": prompt
-                }))
+                # BROADCAST user message to ALL web clients (so all see the question)
+                await broadcast_message("user_message", {"text": prompt})
 
                 # Run agent
                 agent = agent_ref[0]
@@ -608,11 +605,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger):
                 # Print assistant response to CLI
                 print("\n" + assistant_text + "\n")
 
-                # Send assistant response to Web UI
-                await websocket.send(json.dumps({
-                    "type": "assistant_message",
-                    "text": assistant_text
-                }))
+                # BROADCAST assistant response to ALL web clients
+                await broadcast_message("assistant_message", {"text": assistant_text})
     finally:
         # Remove this client when they disconnect
         CONNECTED_WEBSOCKETS.discard(websocket)

@@ -282,10 +282,26 @@
             const data = JSON.parse(event.data);
 
             // -------------------------
-            // CLI user message
+            // CLI user message (from terminal)
             // -------------------------
             if (data.type === "cli_user_message") {
                 addMessage(data.text, "user");
+                showThinking();
+                isProcessing = true;
+                sendBtn.disabled = true;
+                status.textContent = "Processing…";
+                return;
+            }
+
+            // -------------------------
+            // Web UI user message (from another browser/client)
+            // -------------------------
+            if (data.type === "user_message") {
+                addMessage(data.text, "user");
+                showThinking();
+                isProcessing = true;
+                sendBtn.disabled = true;
+                status.textContent = "Processing…";
                 return;
             }
 
@@ -295,6 +311,16 @@
             if (data.type === "cli_assistant_message") {
                 hideThinking();
                 addMessage(data.text, "assistant");
+
+                isProcessing = false;
+                sendBtn.disabled = false;
+
+                if (modelSelect.value) {
+                    status.textContent = "Model: " + modelSelect.value;
+                } else {
+                    status.textContent = "Connected";
+                }
+
                 return;
             }
 
@@ -319,17 +345,32 @@
                     localStorage.removeItem(STORAGE_KEY);
                     chat.innerHTML = "";
                     chatHistory = [];
+                    isProcessing = false;
+                    sendBtn.disabled = false;
+                    status.textContent = "Connected";
+                    hideThinking();
                 } else {
                     chatHistory = history;
                     saveHistory(chatHistory);
                     chat.innerHTML = "";
                     chatHistory.forEach(msg => addMessage(msg.text, msg.role));
+
+                    // Check if we're waiting for a response AFTER history is loaded
+                    if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
+                        // Still waiting for assistant response
+                        isProcessing = true;
+                        sendBtn.disabled = true;
+                        status.textContent = "Processing…";
+                        showThinking();
+                    } else {
+                        // All caught up
+                        isProcessing = false;
+                        sendBtn.disabled = false;
+                        status.textContent = "Connected";
+                        hideThinking();
+                    }
                 }
 
-                isProcessing = false;
-                sendBtn.disabled = false;
-                status.textContent = "Connected";
-                hideThinking();
                 return;
             }
 
@@ -342,7 +383,15 @@
 
                 isProcessing = false;
                 sendBtn.disabled = false;
-                status.textContent = "Connected";
+
+                // Show model name in status after processing is done
+                if (modelSelect.value) {
+                    status.textContent = "Model: " + modelSelect.value;
+                } else {
+                    status.textContent = "Connected";
+                }
+
+                return; // Add this return to prevent fall-through
             }
 
             if (data.type === "models_list") {
@@ -358,7 +407,10 @@
 
                 if (data.last_used && data.models.includes(data.last_used)) {
                     select.value = data.last_used;
-                    status.textContent = "Model: " + data.last_used;
+                    // Only update status if NOT currently processing
+                    if (!isProcessing) {
+                        status.textContent = "Model: " + data.last_used;
+                    }
                 }
 
                 return;
@@ -421,8 +473,6 @@
                 status.textContent = "Cannot send: WebSocket not connected";
                 return;
             }
-
-            addMessage(text, "user");
 
             isProcessing = true;
             sendBtn.disabled = true;
