@@ -11,7 +11,7 @@ plexapi
 langchain-ollama
 websockets
 openai
-panda
+pandas
 lancedb
 sentence-transformers
 tzdata
