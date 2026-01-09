@@ -965,16 +965,16 @@ async def main():
     # Get the tools from MCPAgent
     tools = mcp_agent._tools
 
-    logger.info(f"🛠 Found {len(tools)} MCP tools:")
-    for t in tools:
-        logger.info(f"  - {t.name}: {t.description}")
+    # logger.info(f"🛠 Found {len(tools)} MCP tools:")
+    # for t in tools:
+    #     logger.info(f"  - {t.name}: {t.description}")
 
     # 6️⃣ Bind tools to LLM
     llm_with_tools = llm.bind_tools(tools)
 
     # ADD THIS TEST HERE:
     logger.info("=" * 60)
-    logger.info("🧪 TESTING TOOL BINDING")
+    logger.info("🧪 TESTING TOOL BINDING, ALMOST THERE!")
     test_messages = [
         SystemMessage(content="You have access to tools. Call the semantic_media_search_text tool to find movies."),
         HumanMessage(content="find action movies")
