@@ -2,6 +2,7 @@ httpx
 mcp
 mcp-use
 psutil
+gputil
 pathlib2
 typing-extensions
 python-dotenv

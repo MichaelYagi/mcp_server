@@ -10,8 +10,8 @@ import platform
 import httpx
 import threading
 import socket
-from datetime import datetime
 
+from datetime import datetime
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
 from queue import Queue
@@ -24,6 +24,15 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+
+# Import system monitor
+try:
+    from tools.system_monitor import system_monitor_loop, SystemMonitor
+
+    SYSTEM_MONITOR_AVAILABLE = True
+except ImportError:
+    SYSTEM_MONITOR_AVAILABLE = False
+    print("⚠️  System monitor not available. Install with: pip install psutil gputil nvidia-ml-py3")
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent
@@ -171,6 +180,7 @@ async def tail_log_file(filepath: Path, check_interval: float = 0.5):
 # ============================================================================
 
 LOG_WEBSOCKET_CLIENTS = set()
+SYSTEM_MONITOR_CLIENTS = set()  # For system stats monitoring
 MAIN_EVENT_LOOP = None  # Will be set in main()
 
 
@@ -657,6 +667,9 @@ async def broadcast_message(message_type, data):
 async def websocket_handler(websocket, agent_ref, tools, logger):
     CONNECTED_WEBSOCKETS.add(websocket)
 
+    # Track if this client wants system stats
+    subscribe_to_stats = False
+
     try:
         conversation_state = GLOBAL_CONVERSATION_STATE
 
@@ -669,6 +682,25 @@ async def websocket_handler(websocket, agent_ref, tools, logger):
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 data = {"type": "user", "text": raw}
+
+            # Handle system stats subscription
+            if data.get("type") == "subscribe_system_stats":
+                subscribe_to_stats = True
+                SYSTEM_MONITOR_CLIENTS.add(websocket)
+                await websocket.send(json.dumps({
+                    "type": "subscribed",
+                    "subscription": "system_stats"
+                }))
+                continue
+
+            if data.get("type") == "unsubscribe_system_stats":
+                subscribe_to_stats = False
+                SYSTEM_MONITOR_CLIENTS.discard(websocket)
+                await websocket.send(json.dumps({
+                    "type": "unsubscribed",
+                    "subscription": "system_stats"
+                }))
+                continue
 
             if data.get("type") == "list_models":
                 models = get_available_models()
@@ -731,6 +763,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger):
                 await broadcast_message("assistant_message", {"text": assistant_text})
     finally:
         CONNECTED_WEBSOCKETS.discard(websocket)
+        SYSTEM_MONITOR_CLIENTS.discard(websocket)  # Clean up stats subscription
 
 
 async def log_websocket_handler(websocket):
@@ -1197,6 +1230,16 @@ async def main():
 
     # Start tailing the server log file to capture server.py logs in Web UI
     asyncio.create_task(tail_log_file(SERVER_LOG_FILE))
+
+    # Start system monitor for real-time CPU/GPU stats
+    if SYSTEM_MONITOR_AVAILABLE:
+        asyncio.create_task(system_monitor_loop(SYSTEM_MONITOR_CLIENTS, update_interval=1.0))
+        print("📊 System monitor started (update interval: 1.0s)")
+    else:
+        print("⚠️  System monitor disabled (install psutil, gputil, nvidia-ml-py3)")
+
+    # Start system monitor for real-time CPU/GPU stats
+    asyncio.create_task(system_monitor_loop(SYSTEM_MONITOR_CLIENTS, update_interval=1.0))
 
     print("🖥️  CLI interface ready")
     print("🌐 Browser interface ready at http://localhost:9000")

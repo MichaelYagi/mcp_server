@@ -65,6 +65,21 @@
             background: #2980b9;
         }
 
+        #monitorToggle {
+            padding: 0.5rem 1rem;
+            background: #9b59b6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        #monitorToggle:hover {
+            background: #8e44ad;
+        }
+
         #mainContainer {
             flex: 1;
             display: flex;
@@ -426,6 +441,130 @@
             50% { opacity: 0.5; }
         }
 
+        /* System Monitor Panel */
+        #systemMonitor {
+            width: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+            overflow: hidden;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #systemMonitor.open {
+            width: 320px;
+        }
+
+        .monitor-header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .monitor-header h2 {
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .monitor-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .monitor-btn {
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .monitor-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .monitor-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .stat-group {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            color: white;
+        }
+
+        .stat-unit {
+            font-size: 14px;
+            font-weight: 400;
+            opacity: 0.9;
+        }
+
+        .stat-secondary {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 4px;
+            color: white;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            border-radius: 4px;
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+
+        .progress-fill.high {
+            background: linear-gradient(90deg, #ff9800, #ff5722);
+        }
+
+        .progress-fill.critical {
+            background: linear-gradient(90deg, #f44336, #d32f2f);
+        }
+
+        /* Scrollbar Styles */
         ::-webkit-scrollbar {
             width: 10px;
         }
@@ -451,12 +590,52 @@
             background: #cbd5e1;
         }
 
+        #systemMonitor::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #systemMonitor::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #systemMonitor::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        #systemMonitor::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .monitor-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .monitor-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .monitor-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .monitor-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Tablet */
         @media (max-width: 1024px) {
             #logPanel.open {
                 width: 400px;
             }
+
+            #systemMonitor.open {
+                width: 280px;
+            }
         }
 
+        /* Mobile */
         @media (max-width: 768px) {
             body {
                 overflow: hidden;
@@ -477,9 +656,15 @@
             #modelSelect {
                 padding: 0.4rem;
                 font-size: 0.85rem;
+                font-size: 16px; /* Prevents iOS zoom on focus */
             }
 
             #logToggle {
+                padding: 0.4rem 0.7rem;
+                font-size: 0.85rem;
+            }
+
+            #monitorToggle {
                 padding: 0.4rem 0.7rem;
                 font-size: 0.85rem;
             }
@@ -504,10 +689,6 @@
                 font-size: 0.95rem;
             }
 
-            #modelSelect {
-                font-size: 16px; /* Prevents iOS zoom on focus */
-            }
-
             /* Log panel takes full screen on mobile */
             #logPanel.open {
                 width: 100%;
@@ -523,6 +704,9 @@
 
             #logHeader {
                 padding: 0.75rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
             }
 
             #logHeader h2 {
@@ -531,6 +715,7 @@
 
             .log-controls {
                 flex-wrap: wrap;
+                width: 100%;
             }
 
             .mobile-close {
@@ -575,6 +760,54 @@
             .log-status {
                 font-size: 0.75rem;
             }
+
+            /* System Monitor takes full screen on mobile */
+            #systemMonitor.open {
+                width: 100%;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                height: 100%;
+                z-index: 1000;
+                border-left: none;
+            }
+
+            .monitor-header {
+                padding: 0.75rem;
+            }
+
+            .monitor-header h2 {
+                font-size: 0.95rem;
+            }
+
+            .monitor-controls {
+                flex-wrap: wrap;
+                width: 100%;
+            }
+
+            .monitor-btn.mobile-close {
+                width: 100%;
+            }
+
+            .monitor-btn {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.75rem;
+            }
+
+            .monitor-content {
+                padding: 0.75rem;
+            }
+
+            .stat-group {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+
+            .stat-value {
+                font-size: 20px;
+            }
         }
 
         /* Extra small phones */
@@ -603,6 +836,11 @@
                 font-size: 0.8rem;
             }
 
+            #monitorToggle {
+                width: 100%;
+                font-size: 0.8rem;
+            }
+
             .msg {
                 max-width: 90%;
                 font-size: 0.85rem;
@@ -626,6 +864,16 @@
             .log-status {
                 width: 100%;
             }
+
+            .monitor-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .monitor-controls {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -637,7 +885,8 @@
             <select id="modelSelect">
                 <option value="llama3.1:8b">Llama 3.1 8B</option>
             </select>
-            <button id="logToggle" onclick="toggleLogPanel()">📊 Show Logs</button>
+            <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
+            <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
         </div>
     </div>
 
@@ -655,11 +904,11 @@
 
         <div id="logPanel">
             <div id="logHeader">
-                <h2>📊 Live Logs</h2>
+                <h2>📋 Live Logs</h2>
                 <div class="log-controls">
                     <button class="log-btn danger" onclick="clearLogs()">Clear</button>
-                    <button class="log-btn" onclick="toggleAutoscroll()">
-                        <span id="autoscrollText">Auto</span>
+                    <button class="log-btn" onclick="toggleAutoscroll()" title="Automatically scroll to newest logs">
+                        <span id="autoscrollText">Auto-scroll: On</span>
                     </button>
                     <button class="log-btn mobile-close" onclick="toggleLogPanel()" style="display: none;">✖ Close</button>
                 </div>
@@ -677,6 +926,62 @@
             </div>
 
             <div id="logContainer"></div>
+        </div>
+
+        <div id="systemMonitor">
+            <div class="monitor-header">
+                <h2>📊 System Monitor</h2>
+                <div class="monitor-controls">
+                    <button class="monitor-btn mobile-close" onclick="toggleSystemMonitor()">✖ Close</button>
+                </div>
+            </div>
+
+            <div class="monitor-content">
+                <!-- CPU Stats -->
+                <div class="stat-group">
+                    <div class="stat-label">🖥️ CPU</div>
+                    <div class="stat-value">
+                        <span id="cpuPercent">0</span>
+                        <span class="stat-unit">%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="cpuBar" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="stat-secondary">
+                        <span id="cpuFreq">0.00</span> GHz
+                    </div>
+                </div>
+
+                <!-- GPU Stats -->
+                <div id="gpuStats" class="stat-group" style="display: none;">
+                    <div class="stat-label">🎮 GPU</div>
+                    <div class="stat-value">
+                        <span id="gpuPercent">0</span>
+                        <span class="stat-unit">%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="gpuBar" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="stat-secondary">
+                        <span id="gpuTemp">0</span>°C • <span id="gpuMemory">0/0</span> MB
+                    </div>
+                </div>
+
+                <!-- Memory Stats -->
+                <div class="stat-group">
+                    <div class="stat-label">💾 Memory</div>
+                    <div class="stat-value">
+                        <span id="memPercent">0</span>
+                        <span class="stat-unit">%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="memBar" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="stat-secondary">
+                        <span id="memUsed">0.0</span> / <span id="memTotal">0.0</span> GB
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -702,20 +1007,30 @@
         let logFilters = new Set(['DEBUG', 'INFO', 'WARNING', 'ERROR']);
         let logWs = null;
 
-        // Check if mobile
+        // System monitor state
+        let systemMonitorOpen = false;
+        let systemStatsEnabled = true;
+
+        // -------------------------
+        // Utility Functions
+        // -------------------------
         function isMobile() {
             return window.innerWidth <= 768;
         }
 
-        // Update mobile close button visibility
         function updateMobileCloseButton() {
-            const mobileCloseBtn = document.querySelector('.mobile-close');
-            if (mobileCloseBtn) {
-                mobileCloseBtn.style.display = isMobile() ? 'inline-block' : 'none';
+            const logCloseBtn = document.querySelector('#logPanel .mobile-close');
+            const monitorCloseBtn = document.querySelector('#systemMonitor .mobile-close');
+            const mobile = isMobile();
+
+            if (logCloseBtn) {
+                logCloseBtn.style.display = mobile ? 'inline-block' : 'none';
+            }
+            if (monitorCloseBtn) {
+                monitorCloseBtn.style.display = mobile ? 'inline-block' : 'none';
             }
         }
 
-        // Listen for window resize
         window.addEventListener('resize', updateMobileCloseButton);
 
         // -------------------------
@@ -740,24 +1055,34 @@
 
             if (logPanelOpen) {
                 panel.classList.add('open');
-                button.textContent = '✖ Hide Logs';
+                button.textContent = '✖ Logs';
                 updateMobileCloseButton();
                 if (!logWs || logWs.readyState !== WebSocket.OPEN) {
                     connectLogWebSocket();
                 }
             } else {
                 panel.classList.remove('open');
-                button.textContent = '📊 Show Logs';
+                button.textContent = '📋 Logs';
             }
         }
 
         function connectLogWebSocket() {
             const hostname = window.location.hostname || 'localhost';
-            logWs = new WebSocket(`ws://${hostname}:8766`);
+            const wsUrl = `ws://${hostname}:8766`;
+
+            console.log(`Attempting to connect to log WebSocket: ${wsUrl}`);
+
+            try {
+                logWs = new WebSocket(wsUrl);
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+                updateLogStatus(false);
+                return;
+            }
 
             logWs.onopen = () => {
                 updateLogStatus(true);
-                console.log('Log WebSocket connected');
+                console.log('✅ Log WebSocket connected successfully to', wsUrl);
             };
 
             logWs.onmessage = (event) => {
@@ -768,14 +1093,17 @@
             };
 
             logWs.onerror = (error) => {
-                console.error('Log WebSocket error:', error);
+                console.error('❌ Log WebSocket error:', error);
+                console.error('Connection URL was:', wsUrl);
+                console.error('Make sure the server is running and port 8766 is accessible');
                 updateLogStatus(false);
             };
 
-            logWs.onclose = () => {
+            logWs.onclose = (event) => {
+                console.log('Log WebSocket closed. Code:', event.code, 'Reason:', event.reason);
                 updateLogStatus(false);
-                // Auto-reconnect if panel is still open
                 if (logPanelOpen) {
+                    console.log('Reconnecting in 3 seconds...');
                     setTimeout(connectLogWebSocket, 3000);
                 }
             };
@@ -803,7 +1131,6 @@
             logEntry.className = `log-entry ${entry.level}`;
             logEntry.dataset.level = entry.level;
 
-            // Apply filter
             if (!logFilters.has(entry.level)) {
                 logEntry.style.display = 'none';
             }
@@ -823,7 +1150,6 @@
 
             container.appendChild(logEntry);
 
-            // Keep only last 500 logs for performance
             while (container.children.length > 500) {
                 container.removeChild(container.firstChild);
             }
@@ -839,7 +1165,7 @@
 
         function toggleAutoscroll() {
             logAutoscroll = !logAutoscroll;
-            document.getElementById('autoscrollText').textContent = logAutoscroll ? 'Auto' : 'Manual';
+            document.getElementById('autoscrollText').textContent = logAutoscroll ? 'Auto-scroll: On' : 'Auto-scroll: Off';
         }
 
         function toggleLogFilter(level) {
@@ -853,7 +1179,6 @@
                 btn.classList.add('active');
             }
 
-            // Update visibility
             document.querySelectorAll('.log-entry').forEach(entry => {
                 const entryLevel = entry.dataset.level;
                 entry.style.display = logFilters.has(entryLevel) ? 'flex' : 'none';
@@ -864,6 +1189,64 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // -------------------------
+        // System Monitor Functions
+        // -------------------------
+        function toggleSystemMonitor() {
+            systemMonitorOpen = !systemMonitorOpen;
+            const panel = document.getElementById('systemMonitor');
+            const button = document.getElementById('monitorToggle');
+
+            if (systemMonitorOpen) {
+                panel.classList.add('open');
+                button.textContent = '✖ System';
+                updateMobileCloseButton();
+            } else {
+                panel.classList.remove('open');
+                button.textContent = '📊 System';
+            }
+        }
+
+        function updateProgressBar(elementId, percent) {
+            const bar = document.getElementById(elementId);
+            bar.style.width = percent + '%';
+
+            bar.classList.remove('high', 'critical');
+            if (percent > 80) {
+                bar.classList.add('critical');
+            } else if (percent > 60) {
+                bar.classList.add('high');
+            }
+        }
+
+        function updateSystemStats(stats) {
+            if (!systemStatsEnabled) return;
+
+            if (stats.cpu) {
+                document.getElementById('cpuPercent').textContent = stats.cpu.usage_percent;
+                document.getElementById('cpuFreq').textContent = stats.cpu.frequency_ghz.toFixed(2);
+                updateProgressBar('cpuBar', stats.cpu.usage_percent);
+            }
+
+            if (stats.gpu) {
+                const gpuStats = document.getElementById('gpuStats');
+                gpuStats.style.display = 'block';
+
+                document.getElementById('gpuPercent').textContent = stats.gpu.usage_percent;
+                document.getElementById('gpuTemp').textContent = stats.gpu.temperature_c;
+                document.getElementById('gpuMemory').textContent =
+                    Math.round(stats.gpu.memory_used_mb) + '/' + Math.round(stats.gpu.memory_total_mb);
+                updateProgressBar('gpuBar', stats.gpu.usage_percent);
+            }
+
+            if (stats.memory) {
+                document.getElementById('memPercent').textContent = stats.memory.percent;
+                document.getElementById('memUsed').textContent = stats.memory.used_gb.toFixed(1);
+                document.getElementById('memTotal').textContent = stats.memory.total_gb.toFixed(1);
+                updateProgressBar('memBar', stats.memory.percent);
+            }
         }
 
         // -------------------------
@@ -910,12 +1293,23 @@
 
             ws.send(JSON.stringify({ type: "history_request" }));
             ws.send(JSON.stringify({ type: "list_models" }));
+            ws.send(JSON.stringify({ type: "subscribe_system_stats" }));
         };
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            if (data.type === "cli_user_message") {
+            if (data.type === 'system_stats') {
+                updateSystemStats(data);
+                return;
+            }
+
+            if (data.type === 'subscribed' && data.subscription === 'system_stats') {
+                console.log('✅ Subscribed to system stats');
+                return;
+            }
+
+            if (data.type === "cli_user_message" || data.type === "user_message") {
                 addMessage(data.text, "user");
                 showThinking();
                 isProcessing = true;
@@ -924,28 +1318,12 @@
                 return;
             }
 
-            if (data.type === "user_message") {
-                addMessage(data.text, "user");
-                showThinking();
-                isProcessing = true;
-                sendBtn.disabled = true;
-                status.textContent = "Processing…";
-                return;
-            }
-
-            if (data.type === "cli_assistant_message") {
+            if (data.type === "cli_assistant_message" || data.type === "assistant_message") {
                 hideThinking();
                 addMessage(data.text, "assistant");
-
                 isProcessing = false;
                 sendBtn.disabled = false;
-
-                if (modelSelect.value) {
-                    status.textContent = "Model: " + modelSelect.value;
-                } else {
-                    status.textContent = "Connected";
-                }
-
+                status.textContent = modelSelect.value ? "Model: " + modelSelect.value : "Connected";
                 return;
             }
 
@@ -986,23 +1364,6 @@
                         hideThinking();
                     }
                 }
-
-                return;
-            }
-
-            if (data.type === "assistant_message") {
-                hideThinking();
-                addMessage(data.text, "assistant");
-
-                isProcessing = false;
-                sendBtn.disabled = false;
-
-                if (modelSelect.value) {
-                    status.textContent = "Model: " + modelSelect.value;
-                } else {
-                    status.textContent = "Connected";
-                }
-
                 return;
             }
 
@@ -1023,7 +1384,6 @@
                         status.textContent = "Model: " + data.last_used;
                     }
                 }
-
                 return;
             }
         };
