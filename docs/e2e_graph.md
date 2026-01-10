@@ -30,7 +30,7 @@
                 ▼                     ▼                     ▼
        ┌──────────────────┐   ┌────────────────────┐   ┌────────────────────┐
        │  LLM Reasoning   │   │  Tool Call Node    │   │  State Update Node │
-       │  (Qwen 14B GPU)  │   │  (MCP invocation)  │   │  (Graph memory)    │
+       │  (llama3.1:8b)   │   │  (MCP invocation)  │   │  (Graph memory)    │
        └──────────────────┘   └────────────────────┘   └────────────────────┘
                 │                     │
                 │                     │ invokes
