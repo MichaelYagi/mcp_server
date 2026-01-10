@@ -10,6 +10,7 @@ import platform
 import httpx
 import threading
 import socket
+from datetime import datetime
 
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
@@ -37,6 +38,133 @@ SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
     Provide clear, concise answers based on the tool results."""
 
 agent = None
+
+
+# ============================================================================
+# Subprocess Log Streaming via File Tailing
+# ============================================================================
+
+async def tail_log_file(filepath: Path, check_interval: float = 0.5):
+    """
+    Tail a log file and stream new lines to WebSocket clients.
+    This allows us to capture server.py logs that are written to the shared log file.
+    """
+    if not filepath.exists():
+        print(f"⏳ Waiting for log file to be created: {filepath}")
+        # Wait for file to be created (max 30 seconds)
+        for _ in range(30):
+            await asyncio.sleep(1)
+            if filepath.exists():
+                break
+        else:
+            print(f"❌ Log file never created: {filepath}")
+            return
+
+    print(f"📋 Starting to tail log file: {filepath}")
+
+    # Track last file position and size
+    last_size = 0
+    last_position = 0
+
+    # Seek to end initially to only read new content
+    try:
+        last_size = filepath.stat().st_size
+        last_position = last_size
+        print(f"📋 Initial file size: {last_size} bytes, starting from end")
+    except Exception as e:
+        print(f"❌ Error getting initial file size: {e}")
+        last_size = 0
+        last_position = 0
+
+    lines_read = 0
+
+    while True:
+        try:
+            # Check if file size changed
+            current_size = filepath.stat().st_size
+
+            if current_size < last_size:
+                # File was truncated/rotated, start from beginning
+                print(f"📋 Log file was truncated, restarting from beginning")
+                last_position = 0
+                last_size = current_size
+
+            if current_size > last_size:
+                # New content available
+                with open(filepath, 'r', encoding='utf-8', errors='replace') as file:
+                    # Seek to last known position
+                    file.seek(last_position)
+
+                    # Read all new lines
+                    new_lines = file.readlines()
+
+                    for line in new_lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        lines_read += 1
+
+                        # Debug: print every 10th line to console
+                        if lines_read % 10 == 0:
+                            print(f"📋 Tailed {lines_read} lines from server log")
+
+                        # Parse the log line
+                        # Format: "2024-01-09 18:17:35,070 [INFO] logger_name: message"
+                        log_entry = {
+                            "timestamp": datetime.now().isoformat(),
+                            "level": "INFO",
+                            "name": "SERVER",
+                            "message": line
+                        }
+
+                        # Try to extract log level
+                        if "[DEBUG]" in line:
+                            log_entry["level"] = "DEBUG"
+                        elif "[INFO]" in line:
+                            log_entry["level"] = "INFO"
+                        elif "[WARNING]" in line or "[WARN]" in line:
+                            log_entry["level"] = "WARNING"
+                        elif "[ERROR]" in line:
+                            log_entry["level"] = "ERROR"
+
+                        # Extract logger name if possible
+                        if "] " in line:
+                            try:
+                                # Format: "timestamp [LEVEL] name: message"
+                                parts = line.split("] ", 1)
+                                if len(parts) > 1:
+                                    remaining = parts[1]
+                                    if ": " in remaining:
+                                        logger_name = remaining.split(": ", 1)[0]
+                                        log_entry["name"] = logger_name
+                            except:
+                                pass
+
+                        # Broadcast to WebSocket clients
+                        if LOG_WEBSOCKET_CLIENTS and MAIN_EVENT_LOOP:
+                            message = json.dumps({"type": "log", **log_entry})
+                            await asyncio.gather(
+                                *[ws.send(message) for ws in LOG_WEBSOCKET_CLIENTS],
+                                return_exceptions=True
+                            )
+
+                    # Update position
+                    last_position = file.tell()
+                    last_size = current_size
+
+            # Wait before next check
+            await asyncio.sleep(check_interval)
+
+        except FileNotFoundError:
+            print(f"❌ Log file disappeared: {filepath}")
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"❌ Error tailing log file: {e}")
+            import traceback
+            traceback.print_exc()
+            await asyncio.sleep(1)
+
 
 # ============================================================================
 # WebSocket Log Handler
@@ -939,22 +1067,35 @@ async def main():
     LOG_DIR = Path(str(PROJECT_ROOT / "logs"))
     LOG_DIR.mkdir(exist_ok=True)
 
+    # Client logs go to mcp-client.log
+    CLIENT_LOG_FILE = LOG_DIR / "mcp-client.log"
+    # Server logs are in mcp-server.log (we'll tail this)
+    SERVER_LOG_FILE = LOG_DIR / "mcp-server.log"
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(LOG_DIR / "mcp-client.log", encoding="utf-8"),
+            logging.FileHandler(CLIENT_LOG_FILE, encoding="utf-8"),
             logging.StreamHandler()
         ],
     )
 
+    # Add WebSocket log handler to root logger to catch ALL logs
     ws_log_handler = WebSocketLogHandler()
-    ws_log_handler.setLevel(logging.INFO)
-    logging.getLogger().addHandler(ws_log_handler)
+    ws_log_handler.setLevel(logging.DEBUG)  # Capture DEBUG and above
+    root_logger = logging.getLogger()
+    root_logger.addHandler(ws_log_handler)
 
+    # Set specific log levels for different components
     logging.getLogger("httpx").setLevel(logging.INFO)
     logging.getLogger("langchain").setLevel(logging.DEBUG)
     logging.getLogger("mcp").setLevel(logging.DEBUG)
+
+    # Set these to propagate to root (default behavior, but being explicit)
+    logging.getLogger("httpx").propagate = True
+    logging.getLogger("langchain").propagate = True
+    logging.getLogger("mcp").propagate = True
 
     logger = logging.getLogger("mcp_client")
 
@@ -1048,9 +1189,23 @@ async def main():
     websocket_server = await start_websocket_server(agent, tools, logger, host="0.0.0.0", port=8765)
     log_websocket_server = await start_log_websocket_server(host="0.0.0.0", port=8766)
 
+    # Start tailing the server log file to capture server.py logs in Web UI
+    asyncio.create_task(tail_log_file(SERVER_LOG_FILE))
+
     print("🖥️  CLI interface ready")
     print("🌐 Browser interface ready at http://localhost:9000")
     print("📊 Log streaming ready at ws://localhost:8766")
+    print("📋 Tailing server logs: {}".format(SERVER_LOG_FILE))
+    print()
+
+    # Show file status
+    if SERVER_LOG_FILE.exists():
+        size = SERVER_LOG_FILE.stat().st_size
+        print(f"📋 Server log file exists: {size} bytes")
+    else:
+        print(f"⚠️  Server log file does NOT exist yet: {SERVER_LOG_FILE}")
+        print(f"   It will be created when server.py starts")
+    print()
     print("=" * 60)
     print("\nBoth interfaces share the same conversation state!")
     print("Commands:")

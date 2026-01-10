@@ -7,8 +7,42 @@ from typing import Dict, Any
 import logging
 
 # Load environment variables from .env file
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(PROJECT_ROOT / ".env", override=True)
+
+LOG_DIR = PROJECT_ROOT / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+# Create the root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Remove any existing handlers (in case something already configured it)
+root_logger.handlers.clear()
+
+# Create formatter
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+# Create file handler
+file_handler = logging.FileHandler(LOG_DIR / "mcp-server.log", encoding="utf-8")
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# Add handlers to root logger
+root_logger.addHandler(file_handler)
+root_logger.addHandler(console_handler)
+
+# Disable propagation to avoid duplicate logs
+logging.getLogger("mcp").setLevel(logging.DEBUG)
+logging.getLogger("mcp_server").setLevel(logging.INFO)
+
+logger = logging.getLogger("mcp_server")
+logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 
 # ─────────────────────────────────────────────
 # Knowledge Base Tools
@@ -75,21 +109,6 @@ from tools.plex.scene_locator import scene_locator
 from tools.plex.ingest import ingest_next_batch
 
 mcp = FastMCP("MCP server")
-PROJECT_ROOT = Path(__file__).resolve().parent
-LOG_DIR = Path(str(PROJECT_ROOT / "logs"))
-LOG_DIR.mkdir(exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "mcp-server.log", encoding="utf-8"),
-        logging.StreamHandler()
-    ],
-)
-
-# If you want to see exactly what the MCP Server is saying
-logging.getLogger("mcp").setLevel(logging.DEBUG)
-logger = logging.getLogger("mcp_server")
 
 # ─────────────────────────────────────────────
 # To-do Tools
