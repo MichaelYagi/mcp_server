@@ -4,6 +4,8 @@ A modular **Model Context Protocol (MCP)** architecture for exposing Python-base
 
 The server is plug-and-play—add new capabilities by simply dropping modules into the directory structure.
 
+This started as a tool for me to learn about implementing MCP and its core components.
+
 ---
 
 ## Key Features
