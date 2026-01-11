@@ -372,6 +372,10 @@ def create_langgraph_agent(llm_with_tools, tools):
             content = response.content if hasattr(response, 'content') else str(response)
             logger.info(f"🔧 No tool calls. Full response: {content}")  # Changed from [:200]
 
+        if hasattr(response, 'content'):
+            if not response.content or not response.content.strip():
+                logger.info("⚠️ LLM returned empty content (may have tool_calls)")
+
         return {
             "messages": messages + [response],
             "tools": state.get("tools", {}),
@@ -416,22 +420,89 @@ def create_langgraph_agent(llm_with_tools, tools):
             logger.info(f"📥 Starting ingest operation with limit={limit}...")
             result = await ingest_tool.ainvoke({"limit": limit})
 
+            logger.info(f"🔍 Raw result type: {type(result)}")
+            logger.info(f"🔍 Raw result: {result}")
+
+            if isinstance(result, list) and len(result) > 0:
+                if hasattr(result[0], 'text'):
+                    logger.info("🔍 Detected TextContent object in list")
+                    result = result[0].text
+                    logger.info(f"🔍 Extracted text from object, length: {len(result)}")
+
             if isinstance(result, str) and result.startswith('[TextContent('):
+                logger.info("🔍 Detected TextContent string, extracting...")
                 import re
-                match = re.search(r"text='([^']*(?:\\'[^']*)*)'", result)
-                if match:
-                    result = match.group(1).replace("\\'", "'").replace("\\n", "\n")
+
+                # More robust extraction that handles escaped quotes
+                # Look for text=' and then find the matching ', taking into account escaping
+                start_marker = "text='"
+                start_idx = result.find(start_marker)
+
+                if start_idx != -1:
+                    start_idx += len(start_marker)
+
+                    # Now find the closing quote, accounting for escape sequences
+                    # We need to find ', annotations= or ', type=
+                    end_markers = ["', annotations=", "', type="]
+                    end_idx = -1
+
+                    for marker in end_markers:
+                        idx = result.find(marker, start_idx)
+                        if idx != -1:
+                            if end_idx == -1 or idx < end_idx:
+                                end_idx = idx
+
+                    if end_idx != -1:
+                        json_str = result[start_idx:end_idx]
+
+                        # Decode escape sequences
+                        import codecs
+                        try:
+                            json_str = codecs.decode(json_str, 'unicode_escape')
+                        except Exception as decode_err:
+                            logger.warning(f"⚠️ Codecs decode failed: {decode_err}, trying manual decode")
+                            json_str = json_str.replace('\\n', '\n').replace('\\t', '\t')
+                            json_str = json_str.replace('\\\\', '\\').replace("\\'", "'").replace('\\"', '"')
+
+                        result = json_str
+                        logger.info(f"🔍 Extracted text, length: {len(result)}")
+                    else:
+                        logger.error(f"❌ Could not find end marker in TextContent")
+                        logger.error(f"❌ First 500 chars: {result[:500]}")
+                else:
+                    logger.error(f"❌ Could not find start marker in TextContent")
+                    logger.error(f"❌ First 500 chars: {result[:500]}")
 
             if isinstance(result, str):
+                # Check if it's a TextContent string
+                if result.startswith('[TextContent('):
+                    logger.info("🔍 Detected TextContent string, extracting...")
+                    import re
+                    match = re.search(r"text='([^']*(?:\\'[^']*)*)'", result)
+                    if match:
+                        result = match.group(1).replace("\\'", "'").replace("\\n", "\n")
+                        logger.info(f"🔍 Extracted text, length: {len(result)}")
+                    else:
+                        logger.error(f"❌ Could not extract text from TextContent")
+                        logger.error(f"❌ First 500 chars: {result[:500]}")
+
+                # Now try to parse as JSON
                 try:
                     result = json.loads(result)
-                except json.JSONDecodeError:
-                    msg = AIMessage(content=f"Error: Could not parse ingestion result")
+                    logger.info(f"✅ Successfully parsed JSON result")
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ JSON decode error: {e}")
+                    logger.error(f"❌ Result type: {type(result)}")
+                    logger.error(f"❌ Result length: {len(result) if isinstance(result, str) else 'N/A'}")
+                    logger.error(f"❌ First 1000 chars of result: {str(result)[:1000]}")
+
+                    msg = AIMessage(
+                        content=f"Error: Could not parse ingestion result (length: {len(result)} chars). Check logs for details.")
                     return {
                         "messages": state["messages"] + [msg],
                         "tools": state.get("tools", {}),
                         "llm": state.get("llm"),
-                        "ingest_completed": True,  # Mark as completed even on error
+                        "ingest_completed": True,
                     }
 
             if isinstance(result, dict) and "error" in result:
