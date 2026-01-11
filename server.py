@@ -715,9 +715,6 @@ def concept_contextualizer_tool(concept: str) -> str:
 # ─────────────────────────────────────────────
 # RAG Tools
 # ─────────────────────────────────────────────
-# ─────────────────────────────────────────────
-# RAG Tools
-# ─────────────────────────────────────────────
 @mcp.tool()
 def rag_add_tool(text: str, source: str | None = None, chunk_size: int = 500) -> str:
     """
