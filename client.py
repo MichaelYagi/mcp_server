@@ -38,10 +38,37 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 # Configuration
 MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
 
-SYSTEM_PROMPT = """You are a helpful assistant with access to tools.
-    When you call a tool and receive a result, use that result to answer the user's question.
-    Do not call the same tool repeatedly with the same parameters.
-    Provide clear, concise answers based on the tool results."""
+# Default system prompt - will be overridden if tool_usage_guide.md exists
+SYSTEM_PROMPT = """# SYSTEM INSTRUCTION: YOU ARE A TOOL-USING AGENT
+
+CRITICAL RULES:
+1. ALWAYS respond in ENGLISH only
+2. Read the user's intent carefully before choosing a tool
+3. DO NOT make multiple redundant tool calls
+
+TOOL SELECTION:
+
+"add to my todo" → use add_todo_item (NOT rag_search_tool)
+"remember this" → use rag_add_tool
+"find a movie" → use semantic_media_search_text
+"using the RAG tool" → use rag_search_tool (ONE search only)
+
+EXAMPLES:
+
+User: "add to my todo due tomorrow, make breakfast"
+CORRECT: add_todo_item(title="make breakfast", due_by="[tomorrow date]")
+WRONG: rag_search_tool(query="make breakfast") ❌
+
+User: "remember that password is abc123"
+CORRECT: rag_add_tool(text="password is abc123", source="notes")
+WRONG: add_todo_item(title="password is abc123") ❌
+
+VERIFICATION:
+- "add to my todo" = add_todo_item
+- "remember" = rag_add_tool
+- "find movie" = semantic_media_search_text
+
+Read the user's message carefully and call the RIGHT tool."""
 
 # Global conversation state
 GLOBAL_CONVERSATION_STATE = {
@@ -51,6 +78,8 @@ GLOBAL_CONVERSATION_STATE = {
 
 
 async def main():
+    global SYSTEM_PROMPT
+
     # Setup logging
     LOG_DIR = PROJECT_ROOT / "logs"
     LOG_DIR.mkdir(exist_ok=True)
@@ -78,13 +107,16 @@ async def main():
         }
     })
 
-    # Load system prompt
+    # Load system prompt from file if it exists
     system_prompt_path = PROJECT_ROOT / "prompts/tool_usage_guide.md"
     if system_prompt_path.exists():
-        logger.info(f"⚙️ System prompt found!")
+        logger.info(f"⚙️ System prompt loaded from {system_prompt_path}")
         SYSTEM_PROMPT = system_prompt_path.read_text(encoding="utf-8")
     else:
-        logger.warning(f"⚠️  System prompt file not found, using default")
+        logger.warning(f"⚠️  System prompt file not found at {system_prompt_path}, using default")
+
+    # Log first 200 chars of system prompt for verification
+    logger.info(f"📝 System prompt preview: {SYSTEM_PROMPT[:200]}...")
 
     # Check for available models
     available = models.get_available_models()
@@ -104,7 +136,7 @@ async def main():
     # Check Ollama is running
     await utils.ensure_ollama_running()
 
-    # Initialize LLM and MCP agent
+    # Initialize LLM with temperature=0 for deterministic responses
     llm = ChatOllama(model=model_name, temperature=0)
 
     mcp_agent = MCPAgent(
@@ -122,7 +154,7 @@ async def main():
 
     # Test tool binding
     logger.info("=" * 60)
-    logger.info("🧪 TESTING TOOL BINDING, HOLD TIGHT!")
+    logger.info("🧪 TESTING TOOL BINDING")
     test_messages = [
         SystemMessage(content="You have access to tools. Call the semantic_media_search_text tool to find movies."),
         HumanMessage(content="find action movies")

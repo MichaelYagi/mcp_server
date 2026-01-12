@@ -346,17 +346,147 @@ The movies shown above ARE the search results. Just present them."""),
         return {"messages": state["messages"] + [msg], "llm": state.get("llm")}
 
 
+def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
+    """
+    Filter tools based on user intent to reduce confusion.
+    Only show the LLM the tools relevant to the current request.
+    """
+    user_message_lower = user_message.lower()
+    logger = logging.getLogger("mcp_client")
+
+    # Todo/task keywords - COMPREHENSIVE LIST
+    todo_keywords = [
+        # Adding
+        "add to my todo", "add to my tasks", "remind me to", "i need to", "don't forget",
+        "create a todo", "create a task", "new todo", "new task",
+
+        # Viewing/Listing
+        "todo list", "my todos", "my tasks", "task list", "what do i need to do",
+        "show my todos", "list my todos", "show my tasks", "what's in my todo",
+        "what's on my todo", "check my todos", "view my todos", "see my todos",
+        "display todos", "display tasks", "show tasks", "list tasks",
+
+        # Status-specific
+        "incomplete todos", "non complete todos", "unfinished todos", "open todos",
+        "pending todos", "active todos", "incomplete tasks", "unfinished tasks",
+        "open tasks", "pending tasks", "active tasks",
+
+        # Searching
+        "find todos", "search todos", "find tasks", "search tasks",
+        "todos about", "tasks about", "todos for", "tasks for",
+
+        # Updating
+        "update todo", "update task", "change todo", "modify todo",
+        "mark as complete", "mark as done", "complete todo", "finish todo",
+
+        # Deleting
+        "delete todo", "remove todo", "delete task", "remove task",
+        "clear todos", "clear tasks"
+    ]
+
+    if any(keyword in user_message_lower for keyword in todo_keywords):
+        logger.info("🎯 Detected TODO intent")
+        return [t for t in all_tools if t.name in [
+            "add_todo_item", "list_todo_items", "search_todo_items",
+            "update_todo_item", "delete_todo_item", "delete_all_todo_items"
+        ]]
+
+    # Note/memory keywords
+    note_keywords = [
+        "remember", "save this", "make a note", "write down", "store this",
+        "note that", "keep track of", "record this", "jot down",
+        "save note", "add note", "create note"
+    ]
+
+    if any(keyword in user_message_lower for keyword in note_keywords):
+        logger.info("🎯 Detected MEMORY/NOTE intent")
+        return [t for t in all_tools if t.name in [
+            "rag_add_tool", "add_entry", "list_entries", "get_entry", "search_entries"
+        ]]
+
+    # RAG search keywords
+    rag_search_keywords = [
+        "using the rag tool", "search my notes", "what do i know about",
+        "find information", "search for information", "look up in notes",
+        "what did i save about", "search notes", "find in notes"
+    ]
+
+    if any(keyword in user_message_lower for keyword in rag_search_keywords):
+        logger.info("🎯 Detected RAG SEARCH intent")
+        return [t for t in all_tools if t.name in [
+            "rag_search_tool", "search_entries", "search_semantic", "search_by_tag"
+        ]]
+
+    # Media/Plex keywords
+    media_keywords = [
+        "find movie", "find movies", "search plex", "what movies", "show me",
+        "movies about", "films about", "search for movie", "look for movie",
+        "search media", "find film", "find films"
+    ]
+
+    if any(keyword in user_message_lower for keyword in media_keywords):
+        logger.info("🎯 Detected MEDIA search intent")
+        return [t for t in all_tools if t.name in [
+            "semantic_media_search_text", "scene_locator_tool", "find_scene_by_title"
+        ]]
+
+    # Weather keywords
+    if any(keyword in user_message_lower for keyword in ["weather", "temperature", "forecast"]):
+        logger.info("🎯 Detected WEATHER intent")
+        return [t for t in all_tools if t.name in [
+            "get_weather_tool", "get_location_tool"
+        ]]
+
+    # System/hardware keywords
+    if any(keyword in user_message_lower for keyword in [
+        "system", "hardware", "cpu", "gpu", "memory", "processes", "specs"
+    ]):
+        logger.info("🎯 Detected SYSTEM intent")
+        return [t for t in all_tools if t.name in [
+            "get_hardware_specs_tool", "get_system_info", "list_system_processes", "terminate_process"
+        ]]
+
+    # Default: return all tools but log warning
+    logger.warning(f"🎯 No specific intent detected for: '{user_message}' - using all {len(all_tools)} tools")
+    return all_tools
+
 def create_langgraph_agent(llm_with_tools, tools):
     """Create and compile the LangGraph agent"""
     logger = logging.getLogger("mcp_client")
 
+    # IMPORTANT: Store the base LLM (without tools) for dynamic binding
+    # llm_with_tools is a RunnableBinding, we need the underlying LLM
+    base_llm = llm_with_tools.bound if hasattr(llm_with_tools, 'bound') else llm_with_tools
+
     async def call_model(state: AgentState):
         messages = state["messages"]
+
+        # Get user's original message for tool filtering
+        user_message = None
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                user_message = msg.content
+                break
+
+        # Filter tools based on user intent
+        if user_message:
+            # Get all available tools from state
+            all_tools = list(state.get("tools", {}).values())
+            filtered_tools = filter_tools_by_intent(user_message, all_tools)
+            tool_names = [t.name for t in filtered_tools]
+            logger.info(f"🎯 Filtered to {len(filtered_tools)} relevant tools: {tool_names}")
+
+            # Bind the filtered tools to the BASE LLM
+            llm_to_use = base_llm.bind_tools(filtered_tools)
+        else:
+            # No user message, use all tools
+            llm_to_use = llm_with_tools
+
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
 
         start_time = time.time()
         try:
-            response = await llm_with_tools.ainvoke(messages)
+            response = await llm_to_use.ainvoke(messages)
             duration = time.time() - start_time
 
             # Track LLM metrics
