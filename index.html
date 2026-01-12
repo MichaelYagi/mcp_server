@@ -1383,8 +1383,14 @@
         // Add message to UI
         // -------------------------
         function addMessage(text, role) {
+            // Filter out raw TextContent strings
+            if (text.startsWith("[TextContent(")) {
+                console.log("Skipping raw ToolMessage:", text.substring(0, 50));
+                return;
+            }
+
             if (text.trim() === "") {
-                text = "No results. Please see logs.";
+                return;
             }
 
             const div = document.createElement("div");
