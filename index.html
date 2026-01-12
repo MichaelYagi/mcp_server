@@ -1020,9 +1020,9 @@
                 panel.classList.add('open');
                 button.textContent = '✖ Logs';
                 updateMobileCloseButton();
-                if (!logWs || logWs.readyState !== WebSocket.OPEN) {
-                    connectLogWebSocket();
-                }
+                // if (!logWs || logWs.readyState !== WebSocket.OPEN) {
+                //     connectLogWebSocket();
+                // }
             } else {
                 panel.classList.remove('open');
                 button.textContent = '📋 Logs';
@@ -1257,6 +1257,9 @@
             ws.send(JSON.stringify({ type: "history_request" }));
             ws.send(JSON.stringify({ type: "list_models" }));
             ws.send(JSON.stringify({ type: "subscribe_system_stats" }));
+
+            // Log right away
+            connectLogWebSocket();
         };
 
         ws.onmessage = (event) => {
