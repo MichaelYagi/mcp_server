@@ -768,7 +768,7 @@
             }
 
             .mode-toggle-container {
-                order: -1;
+                /*order: -1;*/
                 width: 100%;
             }
         }
@@ -798,8 +798,8 @@
                 align-items: center;
                 justify-content: flex-start;
                 gap: 0.75rem;
-                padding: 0.6rem 0.8rem;
-                order: -1;
+                padding: 0.3rem 0.3rem;
+                /*order: -1;*/
                 background: rgba(255, 255, 255, 0.15);
             }
 
@@ -813,13 +813,6 @@
                 font-size: 0.85rem;
                 min-width: auto;
                 flex: 1;
-            }
-
-            #dashboardBtn, #modelSelect, #logToggle, #monitorToggle {
-                padding: 0.5rem 0.8rem;
-                font-size: 0.85rem;
-                height: 38px;
-                min-height: 38px;
             }
 
             #modelSelect {
@@ -950,13 +943,47 @@
                 display: none;
             }
 
-            /* Force toggle to be visible on small phones */
+            #modelSelect {
+                width: 100%;
+                font-size: 0.8rem;
+                height: 36px;
+                min-height: 36px;
+                order: 1 !important;
+            }
+
             .mode-toggle-container {
-                width: 100% !important;
-                order: -1 !important;
-                flex: 0 0 100% !important;
+                flex: 1 1 calc(50% - 0.2rem);
+                min-width: 0;
                 display: flex !important;
                 visibility: visible !important;
+                order: 2 !important;
+            }
+
+            #dashboardBtn {
+                flex: 1 1 calc(50% - 0.2rem);
+                min-width: 0;
+                font-size: 0.8rem;
+                height: 36px;
+                min-height: 36px;
+                order: 2 !important;
+            }
+
+            #logToggle {
+                flex: 1 1 calc(50% - 0.2rem);
+                min-width: 0;
+                font-size: 0.8rem;
+                height: 36px;
+                min-height: 36px;
+                order: 3 !important;
+            }
+
+            #monitorToggle {
+                flex: 1 1 calc(50% - 0.2rem);
+                min-width: 0;
+                font-size: 0.8rem;
+                height: 36px;
+                min-height: 36px;
+                order: 3 !important;
             }
 
             .toggle-switch {
@@ -966,14 +993,6 @@
             .mode-status {
                 flex: 1;
                 text-align: left;
-            }
-
-            #modelSelect, #logToggle, #monitorToggle, #dashboardBtn {
-                flex: 1 1 calc(50% - 0.2rem);
-                min-width: 0;
-                font-size: 0.8rem;
-                height: 36px;
-                min-height: 36px;
             }
 
             .msg {
