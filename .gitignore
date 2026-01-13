@@ -21,3 +21,4 @@ knowledge/
 /debug_ingest.py
 /test_metrics.py
 /test_plex_subtitles.py
+/tools/rag/ingested_items.json
