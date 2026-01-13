@@ -794,8 +794,26 @@
 
             .mode-toggle-container {
                 width: 100%;
-                justify-content: space-between;
-                padding: 0.5rem 0.8rem;
+                display: flex !important;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 0.75rem;
+                padding: 0.6rem 0.8rem;
+                order: -1;
+                margin-bottom: 0.5rem;
+                background: rgba(255, 255, 255, 0.15);
+            }
+
+            .toggle-switch {
+                flex-shrink: 0;
+                width: 50px;
+                height: 26px;
+            }
+
+            .mode-status {
+                font-size: 0.85rem;
+                min-width: auto;
+                flex: 1;
             }
 
             #dashboardBtn, #modelSelect, #logToggle, #monitorToggle {
@@ -933,6 +951,25 @@
                 display: none;
             }
 
+            /* ADD THIS - Force toggle to be visible on small phones */
+            .mode-toggle-container {
+                width: 100% !important;
+                order: -1 !important;
+                flex: 0 0 100% !important;
+                margin-bottom: 0.5rem !important;
+                display: flex !important;
+                visibility: visible !important;
+            }
+
+            .toggle-switch {
+                flex-shrink: 0 !important;
+            }
+
+            .mode-status {
+                flex: 1;
+                text-align: left;
+            }
+
             #modelSelect, #logToggle, #monitorToggle, #dashboardBtn {
                 flex: 1 1 calc(50% - 0.2rem);
                 min-width: 0;
@@ -968,33 +1005,31 @@
                 width: 100%;
             }
         }
+
+        .toggle-switch {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+        }
     </style>
 </head>
 <body>
     <div id="header">
         <h1>🤖 MCP Browser Client</h1>
         <div id="topBar">
-            <!-- Multi-Agent Toggle -->
-            <div class="mode-toggle-container">
-                <span class="mode-toggle-label">
-                    <span class="mode-icon">🤖</span>
-                    <span>Single</span>
-                </span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="multiAgentToggle" onchange="toggleMultiAgent()">
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="mode-toggle-label">
-                    <span class="mode-icon">🎭</span>
-                    <span>Multi</span>
-                </span>
-                <span class="mode-status single" id="modeStatus">Single Agent</span>
-            </div>
-
             <label for="modelSelect" style="color: white;">Model:</label>
             <select id="modelSelect">
                 <option value="llama3.1:8b">Llama 3.1 8B</option>
             </select>
+            <!-- Multi-Agent Toggle -->
+            <div class="mode-toggle-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="multiAgentToggle" onchange="toggleMultiAgent()">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="mode-status single" id="modeStatus">Single Agent</span>
+            </div>
             <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
             <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
             <a href="dashboard.html" id="dashboardBtn">📈 Dashboard</a>
@@ -1172,11 +1207,11 @@
             let baseStatus = modelSelect.value ? "Model: " + modelSelect.value : "Connected";
 
             if (lastResponseWasMultiAgent) {
-                status.innerHTML = baseStatus + ' <span class="status-badge multi">🎭 Multi-Agent</span>';
+                status.innerHTML = baseStatus + ' <span class="status-badge multi">Multi-Agent</span>';
             } else if (multiAgentEnabled) {
-                status.innerHTML = baseStatus + ' <span class="status-badge multi" style="opacity: 0.5;">🎭 Ready</span>';
+                status.innerHTML = baseStatus + ' <span class="status-badge multi" style="opacity: 0.5;">Multi-Agent</span>';
             } else {
-                status.innerHTML = baseStatus + ' <span class="status-badge single">🤖 Single</span>';
+                status.innerHTML = baseStatus + ' <span class="status-badge single">Single Agent</span>';
             }
         }
 
