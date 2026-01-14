@@ -1511,13 +1511,6 @@
             ws.send(JSON.stringify({ type: "list_models" }));
             ws.send(JSON.stringify({ type: "subscribe_system_stats" }));
 
-            // Send initial multi-agent state
-            const command = multiAgentEnabled ? ":multi on" : ":multi off";
-            ws.send(JSON.stringify({
-                type: "user",
-                text: command
-            }));
-
             // Connect to log websocket
             connectLogWebSocket();
         };
@@ -1563,11 +1556,6 @@
                         saveMultiAgentSetting(false);
                     }
                     updateModeStatus();
-                    hideThinking();
-                    isProcessing = false;
-                    sendBtn.disabled = false;
-                    updateStatusWithMode();
-                    return;
                 }
 
                 hideThinking();
