@@ -117,6 +117,15 @@ async def handle_command(query, tools, model_name, conversation_state, models_mo
     if query == ":commands":
         return True, "\n".join(get_commands_list()), None, None
 
+    if query == ":stop":
+        # Import and trigger stop signal
+        try:
+            from client.stop_signal import request_stop
+            request_stop()
+            return True, "🛑 Stop requested. Operations will halt at their next checkpoint.", None, None
+        except ImportError:
+            return True, "Stop signal module not available.", None, None
+
     if query == ":stats":
         return True, format_stats_display(), None, None
 

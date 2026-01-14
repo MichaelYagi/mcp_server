@@ -302,11 +302,10 @@
             box-shadow: 0 0 0 2px rgba(77,163,255,0.3);
         }
 
-        #sendBtn {
+        #sendBtn, #stopBtn {
             padding: 0.75rem 1.5rem;
             font-size: 1rem;
             cursor: pointer;
-            background: #1c7dff;
             color: white;
             border: none;
             border-radius: 8px;
@@ -315,6 +314,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        #sendBtn {
+            background: #1c7dff;
         }
 
         #sendBtn:hover {
@@ -326,13 +329,22 @@
             cursor: not-allowed;
         }
 
+        #stopBtn {
+            background: #e74c3c;
+            display: none;
+        }
+
+        #stopBtn:hover {
+            background: #c0392b;
+        }
+
         @media (hover: none) and (pointer: coarse) {
             button, .log-btn, .filter-btn {
                 min-height: 44px;
                 touch-action: manipulation;
             }
 
-            #sendBtn {
+            #sendBtn, #stopBtn {
                 min-width: 80px;
             }
         }
@@ -837,7 +849,7 @@
                 padding: 0.6rem;
             }
 
-            #sendBtn {
+            #sendBtn, #stopBtn {
                 padding: 0.6rem 1rem;
                 font-size: 0.95rem;
                 min-height: 90px;
@@ -1005,7 +1017,7 @@
                 min-height: 80px;
             }
 
-            #sendBtn {
+            #sendBtn, #stopBtn {
                 min-height: 80px;
             }
 
@@ -1060,6 +1072,7 @@
             <div id="inputRow">
                 <textarea id="input" placeholder="Type your message..."></textarea>
                 <button id="sendBtn" onclick="send()">Send</button>
+                <button id="stopBtn" onclick="stopProcessing()">Stop</button>
             </div>
 
             <div id="status"></div>
@@ -1157,6 +1170,7 @@
         const chat = document.getElementById("chat");
         const input = document.getElementById("input");
         const sendBtn = document.getElementById("sendBtn");
+        const stopBtn = document.getElementById("stopBtn");
         sendBtn.disabled = true;
 
         const modelSelect = document.getElementById("modelSelect");
@@ -1230,6 +1244,19 @@
             } else {
                 status.innerHTML = baseStatus + ' <span class="status-badge single">Single Agent</span>';
             }
+        }
+
+        // -------------------------
+        // Stop Processing Function
+        // -------------------------
+        function stopProcessing() {
+            ws.send(JSON.stringify({
+                type: "user",
+                text: ":stop"
+            }));
+            stopBtn.style.display = 'none';
+            sendBtn.style.display = 'flex';
+            isProcessing = false;
         }
 
         // -------------------------
@@ -1530,21 +1557,22 @@
 
             if (data.type === "cli_user_message" || data.type === "user_message") {
                 // Check if it's a multi-agent command
-                if (data.text.startsWith(":multi")) {
-                    return; // Don't show multi-agent commands in chat
+                if (data.text.startsWith(":multi") || data.text === ":stop") {
+                    return; // Don't show commands in chat
                 }
 
                 addMessage(data.text, "user");
                 showThinking();
                 isProcessing = true;
-                sendBtn.disabled = true;
+                sendBtn.style.display = 'none';
+                stopBtn.style.display = 'flex';
                 status.textContent = "Processing…";
                 return;
             }
 
             if (data.type === "cli_assistant_message" || data.type === "assistant_message") {
                 // Check if it's a multi-agent command response
-                if (data.text.includes("Multi-agent mode") || data.text.includes("multi-agent")) {
+                if (data.text.includes("Multi-agent mode")) {
                     // Update toggle if needed based on response
                     if (data.text.includes("ENABLED")) {
                         multiAgentToggle.checked = true;
@@ -1565,6 +1593,8 @@
 
                 addMessage(data.text, "assistant", lastResponseWasMultiAgent);
                 isProcessing = false;
+                stopBtn.style.display = 'none';
+                sendBtn.style.display = 'flex';
                 sendBtn.disabled = false;
                 updateStatusWithMode();
                 return;
@@ -1587,6 +1617,8 @@
                     chatHistory = [];
                     isProcessing = false;
                     sendBtn.disabled = false;
+                    stopBtn.style.display = 'none';
+                    sendBtn.style.display = 'flex';
                     updateStatusWithMode();
                     hideThinking();
                 } else {
@@ -1597,12 +1629,15 @@
 
                     if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
                         isProcessing = true;
-                        sendBtn.disabled = true;
+                        sendBtn.style.display = 'none';
+                        stopBtn.style.display = 'flex';
                         status.textContent = "Processing…";
                         showThinking();
                     } else {
                         isProcessing = false;
                         sendBtn.disabled = false;
+                        stopBtn.style.display = 'none';
+                        sendBtn.style.display = 'flex';
                         updateStatusWithMode();
                         hideThinking();
                     }
@@ -1705,7 +1740,8 @@
             }
 
             isProcessing = true;
-            sendBtn.disabled = true;
+            sendBtn.style.display = 'none';
+            stopBtn.style.display = 'flex';
             status.textContent = "Processing…";
             lastResponseWasMultiAgent = false;
 

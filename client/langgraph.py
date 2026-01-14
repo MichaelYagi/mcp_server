@@ -13,6 +13,16 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
+# Import stop signal
+try:
+    from client.stop_signal import is_stop_requested, clear_stop
+except ImportError:
+    # Fallback if stop_signal not available
+    def is_stop_requested():
+        return False
+    def clear_stop():
+        pass
+
 # Try to import metrics, but don't fail if not available
 try:
     from metrics import metrics
@@ -773,6 +783,10 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
 
     start_time = time.time()
 
+    # CLEAR STOP SIGNAL AT START OF NEW REQUEST
+    # This ensures old stop requests don't block new requests
+    clear_stop()
+
     try:
         if METRICS_AVAILABLE:
             metrics["agent_runs"] += 1
@@ -820,6 +834,8 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
         tool_registry = {tool.name: tool for tool in tools}
 
         # Invoke the agent
+        # NOTE: ainvoke is atomic - can't check stop mid-execution
+        # For interruptible execution, switch to astream in the future
         result = await agent.ainvoke({
             "messages": conversation_state["messages"],
             "tools": tool_registry,

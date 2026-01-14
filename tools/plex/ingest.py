@@ -11,6 +11,16 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from tools.rag.rag_storage import check_if_ingested, mark_as_ingested, get_ingestion_stats
 
+# Import stop signal
+try:
+    from client.stop_signal import is_stop_requested, clear_stop
+except ImportError:
+    # Fallback if stop_signal not available
+    def is_stop_requested():
+        return False
+    def clear_stop():
+        pass
+
 logger = logging.getLogger("mcp_server")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -245,6 +255,16 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
 
     # Process in batches
     for batch_num, i in enumerate(range(0, total_items, CONCURRENT_LIMIT), 1):
+        # CHECK STOP SIGNAL BEFORE EACH BATCH
+        if is_stop_requested():
+            logger.warning(f"🛑 Ingestion stopped by user after processing {len(results)} items")
+            results.append({
+                "status": "stopped",
+                "message": f"Stopped after {len(results)} items",
+                "items_remaining": total_items - len(results)
+            })
+            break
+
         batch = items[i:i + CONCURRENT_LIMIT]
         batch_size = len(batch)
 
@@ -276,9 +296,9 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
             await asyncio.sleep(0.5)
 
     overall_duration = time.time() - overall_start
-    avg_rate = total_items / overall_duration if overall_duration > 0 else 0
+    avg_rate = len(results) / overall_duration if overall_duration > 0 else 0
 
-    logger.info(f"🏁 Parallel ingestion completed: {total_items} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
+    logger.info(f"🏁 Parallel ingestion completed: {len(results)} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
 
     return results
 
@@ -302,6 +322,9 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         Dictionary with ingestion results
     """
     try:
+        # Clear stop signal at start
+        clear_stop()
+
         logger.info(f"📥 Starting PARALLEL batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
         overall_start = time.time()
 
@@ -334,13 +357,21 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
 
         results = await ingest_batch_parallel_conservative(unprocessed_items)
 
-        # Separate successful and skipped
+        # Separate successful, skipped, and stopped
         ingested_items = []
         skipped_items = []
+        was_stopped = False
 
         for result in results:
             if result.get("status") == "success":
                 ingested_items.append(result)
+            elif result.get("status") == "stopped":
+                was_stopped = True
+                skipped_items.append({
+                    "title": "Operation Stopped",
+                    "reason": result.get("message", "Stopped by user"),
+                    "items_remaining": result.get("items_remaining", 0)
+                })
             elif result.get("status") == "no_subtitles":
                 skipped_items.append({
                     "title": result["title"],
@@ -357,30 +388,36 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         # Get total stats
         stats = get_ingestion_stats()
         overall_duration = time.time() - overall_start
+        items_processed = len(ingested_items) + len([s for s in skipped_items if s.get("title") != "Operation Stopped"])
 
         result = {
             "ingested": ingested_items,
             "skipped": skipped_items,
+            "stopped": was_stopped,
             "stats": {
                 "total_items": stats["total_items"],
                 "successfully_ingested": stats["successfully_ingested"],
                 "missing_subtitles": stats["missing_subtitles"],
                 "remaining_unprocessed": stats["remaining"]
             },
-            "items_processed": len(unprocessed_items),
-            "items_checked": len(unprocessed_items),
+            "items_processed": items_processed,
+            "items_checked": items_processed,
             "duration": round(overall_duration, 2),
             "mode": "parallel",
             "concurrent_limit": CONCURRENT_LIMIT,
-            "average_rate": round(len(unprocessed_items) / overall_duration, 2) if overall_duration > 0 else 0
+            "average_rate": round(items_processed / overall_duration, 2) if overall_duration > 0 else 0
         }
 
-        logger.info(f"📊 Parallel batch complete:")
-        logger.info(f"   - Items processed: {len(unprocessed_items)}")
+        if was_stopped:
+            logger.warning(f"🛑 Parallel batch STOPPED by user:")
+        else:
+            logger.info(f"📊 Parallel batch complete:")
+        logger.info(f"   - Items processed: {items_processed}")
         logger.info(f"   - Ingested: {len(ingested_items)}")
         logger.info(f"   - Skipped: {len(skipped_items)}")
         logger.info(f"   - Duration: {overall_duration:.2f}s")
-        logger.info(f"   - Rate: {result['average_rate']:.2f} items/sec")
+        if items_processed > 0:
+            logger.info(f"   - Rate: {result['average_rate']:.2f} items/sec")
 
         return result
 

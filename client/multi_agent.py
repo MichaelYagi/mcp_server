@@ -13,6 +13,16 @@ from enum import Enum
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain.agents import create_agent
 
+# Import stop signal
+try:
+    from client.stop_signal import is_stop_requested, clear_stop
+except ImportError:
+    # Fallback if stop_signal not available
+    def is_stop_requested():
+        return False
+    def clear_stop():
+        pass
+
 
 class AgentRole(Enum):
     """Defines different agent specializations"""
@@ -327,6 +337,13 @@ If this is a simple task that doesn't need multiple agents, respond with:
         results = {}
 
         while len(completed) < len(tasks):
+            # CHECK STOP SIGNAL
+            if is_stop_requested():
+                self.logger.warning(f"🛑 Multi-agent execution stopped by user after {len(completed)}/{len(tasks)} tasks")
+                results["_stopped"] = True
+                results["_stopped_message"] = f"Stopped after completing {len(completed)} of {len(tasks)} tasks"
+                break
+
             ready_tasks = [
                 task for task in tasks
                 if task.task_id not in completed
