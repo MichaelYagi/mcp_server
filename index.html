@@ -1213,7 +1213,7 @@
 
         function loadMultiAgentSetting() {
             const saved = localStorage.getItem(MULTI_AGENT_KEY);
-            return saved === null ? true : saved === "true";
+            return saved === null ? false : saved === "true";
         }
 
         function saveMultiAgentSetting(enabled) {

@@ -274,8 +274,8 @@ async def main():
         models,
         model_name,
         SYSTEM_PROMPT,
-        orchestrator=orchestrator,  # ADD THIS
-        multi_agent_state=MULTI_AGENT_STATE,  # ADD THIS
+        orchestrator=orchestrator,
+        multi_agent_state=MULTI_AGENT_STATE,
         host="0.0.0.0",
         port=8765
     )

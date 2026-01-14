@@ -118,7 +118,7 @@ async def handle_command(query, tools, model_name, conversation_state, models_mo
     if query == ":multi status":
         # Check actual state from the dict
         if multi_agent_state is not None:
-            is_enabled = multi_agent_state.get("enabled", True)
+            is_enabled = multi_agent_state.get("enabled", False)
             if logger:
                 logger.info(f"📊 Status check - multi_agent_state: {multi_agent_state}")
         else:

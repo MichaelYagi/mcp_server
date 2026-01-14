@@ -148,8 +148,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                         system_prompt, agent_ref=agent_ref,
                         create_agent_fn=lambda llm, t: agent_ref[0].__class__(llm, t),
                         logger=logger,
-                        orchestrator=orchestrator,  # ADDED
-                        multi_agent_state=multi_agent_state  # ADDED
+                        orchestrator=orchestrator,
+                        multi_agent_state=multi_agent_state
                     )
 
                     if handled:
@@ -189,8 +189,8 @@ async def start_websocket_server(agent, tools, logger, conversation_state, run_a
             await websocket_handler(
                 websocket, [agent], tools, logger, conversation_state, run_agent_fn,
                 models_module, model_name, system_prompt,
-                orchestrator=orchestrator,  # PASS THROUGH
-                multi_agent_state=multi_agent_state  # PASS THROUGH
+                orchestrator=orchestrator,
+                multi_agent_state=multi_agent_state
             )
         except websockets.exceptions.ConnectionClosed:
             pass
