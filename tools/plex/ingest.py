@@ -1,10 +1,12 @@
 """
 Plex Ingestion Tool
-Ingests Plex media subtitles into RAG database with parallelizable functions
+Ingests Plex media subtitles into RAG database with parallelization
 """
 
 import json
 import logging
+import asyncio
+import time
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from tools.rag.rag_storage import check_if_ingested, mark_as_ingested, get_ingestion_stats
@@ -20,6 +22,9 @@ from .plex_utils import stream_all_media, extract_metadata, stream_subtitles, ch
 
 # Import RAG add function
 from tools.rag.rag_add import rag_add
+
+# Conservative concurrency limit (safe for most systems)
+CONCURRENT_LIMIT = 3  # Process 3 items at a time
 
 
 def load_progress() -> Dict[str, bool]:
@@ -41,12 +46,12 @@ def save_progress(progress: Dict[str, bool]) -> None:
 
 
 # ============================================================================
-# REFACTORED FUNCTIONS FOR MULTI-AGENT PARALLELIZATION
+# PARALLELIZABLE FUNCTIONS
 # ============================================================================
 
 def find_unprocessed_items(limit: int, rescan_no_subtitles: bool = False) -> List[Dict[str, Any]]:
     """
-    STEP 1: Find unprocessed media items (parallelizable - just discovery)
+    STEP 1: Find unprocessed media items
 
     Args:
         limit: Maximum number of unprocessed items to find
@@ -84,7 +89,7 @@ def find_unprocessed_items(limit: int, rescan_no_subtitles: bool = False) -> Lis
 
 def extract_subtitles_for_item(media_item: Dict[str, Any]) -> Tuple[str, str, List[str], str]:
     """
-    STEP 2: Extract subtitles for a single item (parallelizable - independent per item)
+    STEP 2: Extract subtitles for a single item (parallelizable)
 
     Args:
         media_item: Media item dictionary
@@ -118,7 +123,7 @@ def ingest_item_to_rag(
     metadata_text: str
 ) -> Dict[str, Any]:
     """
-    STEP 3: Ingest a single item's subtitles into RAG (parallelizable - independent per item)
+    STEP 3: Ingest a single item's subtitles into RAG (parallelizable)
 
     Args:
         media_id: Plex media ID
@@ -150,7 +155,7 @@ def ingest_item_to_rag(
         result = rag_add(
             text=chunk,
             source=f"plex:{media_id}:{title}",
-            chunk_size=400
+            chunk_size=200
         )
         if result.get("success"):
             chunks_added += result.get("chunks_added", 0)
@@ -163,7 +168,7 @@ def ingest_item_to_rag(
             result = rag_add(
                 text=metadata_summary,
                 source=f"plex:{media_id}:metadata",
-                chunk_size=400
+                chunk_size=200
             )
             if result.get("success"):
                 chunks_added += result.get("chunks_added", 0)
@@ -184,29 +189,127 @@ def ingest_item_to_rag(
 
 
 # ============================================================================
-# MAIN ORCHESTRATION FUNCTION (Can use single or multi-agent)
+# ASYNC PARALLELIZATION (3 concurrent items at a time)
 # ============================================================================
 
-def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict[str, Any]:
+async def process_item_async(media_item: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Ingest the next batch of unprocessed Plex items into RAG.
+    Process a single item asynchronously (extract + ingest)
 
-    This is the main orchestration function that can be used in:
-    - Single-agent mode: Sequential processing
-    - Multi-agent mode: Parallel processing (if multi-agent is available)
+    Args:
+        media_item: Media item to process
+
+    Returns:
+        Ingestion result dictionary
+    """
+    loop = asyncio.get_event_loop()
+
+    try:
+        # Run extraction in thread pool (blocking I/O)
+        media_id, title, subtitle_lines, metadata_text = await loop.run_in_executor(
+            None, extract_subtitles_for_item, media_item
+        )
+
+        # Run ingestion in thread pool (blocking I/O)
+        result = await loop.run_in_executor(
+            None, ingest_item_to_rag, media_id, title, subtitle_lines, metadata_text
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ Failed to process item: {e}")
+        return {
+            "title": media_item.get("title", "Unknown"),
+            "id": str(media_item.get("id", "Unknown")),
+            "status": "error",
+            "reason": str(e)
+        }
+
+
+async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Process items in small parallel batches (CONSERVATIVE: 3 at a time)
+
+    Args:
+        items: List of media items to process
+
+    Returns:
+        List of ingestion results
+    """
+    results = []
+    total_items = len(items)
+
+    logger.info(f"🚀 Starting parallel ingestion of {total_items} items ({CONCURRENT_LIMIT} concurrent)")
+    overall_start = time.time()
+
+    # Process in batches
+    for batch_num, i in enumerate(range(0, total_items, CONCURRENT_LIMIT), 1):
+        batch = items[i:i + CONCURRENT_LIMIT]
+        batch_size = len(batch)
+
+        logger.info(f"⚙️  Processing batch {batch_num} ({batch_size} items)...")
+        batch_start = time.time()
+
+        # Process this batch in parallel
+        batch_results = await asyncio.gather(
+            *[process_item_async(item) for item in batch],
+            return_exceptions=True
+        )
+
+        batch_duration = time.time() - batch_start
+        logger.info(f"✅ Batch {batch_num} completed in {batch_duration:.2f}s ({batch_size / batch_duration:.2f} items/sec)")
+
+        # Handle results
+        for result in batch_results:
+            if isinstance(result, Exception):
+                logger.error(f"❌ Batch task failed: {result}")
+                results.append({
+                    "status": "error",
+                    "reason": str(result)
+                })
+            else:
+                results.append(result)
+
+        # Brief pause between batches to be kind to the Plex server
+        if i + CONCURRENT_LIMIT < total_items:
+            await asyncio.sleep(0.5)
+
+    overall_duration = time.time() - overall_start
+    avg_rate = total_items / overall_duration if overall_duration > 0 else 0
+
+    logger.info(f"🏁 Parallel ingestion completed: {total_items} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
+
+    return results
+
+
+# ============================================================================
+# MAIN ASYNC FUNCTION (NO asyncio.run() - WORKS WITH ASYNC MCP SERVER)
+# ============================================================================
+
+async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict[str, Any]:
+    """
+    Ingest the next batch of unprocessed Plex items into RAG (ASYNC)
+
+    IMPORTANT: This is an async function that works with async MCP servers.
+    Do NOT wrap it in asyncio.run() - just await it directly!
 
     Args:
         limit: Maximum number of NEW items to process
         rescan_no_subtitles: If True, re-check items that previously had no subtitles
 
     Returns:
-        Dictionary with ingestion results including detailed item information
+        Dictionary with ingestion results
     """
     try:
-        logger.info(f"📥 Starting batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
+        logger.info(f"📥 Starting PARALLEL batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
+        overall_start = time.time()
 
-        # STEP 1: Find unprocessed items
-        unprocessed_items = find_unprocessed_items(limit, rescan_no_subtitles)
+        # STEP 1: Find unprocessed items (synchronous, fast)
+        loop = asyncio.get_event_loop()
+        unprocessed_items = await loop.run_in_executor(
+            None, find_unprocessed_items, limit, rescan_no_subtitles
+        )
 
         if not unprocessed_items:
             logger.info("✅ No unprocessed items found")
@@ -221,31 +324,39 @@ def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict
                     "remaining_unprocessed": stats["remaining"]
                 },
                 "items_processed": 0,
-                "items_checked": 0
+                "items_checked": 0,
+                "duration": 0,
+                "mode": "parallel"
             }
 
-        # STEP 2 & 3: Extract and ingest (sequential in single-agent mode)
+        # STEP 2 & 3: Extract and ingest IN PARALLEL (3 at a time)
+        logger.info(f"🚀 Processing {len(unprocessed_items)} items in parallel batches of {CONCURRENT_LIMIT}...")
+
+        results = await ingest_batch_parallel_conservative(unprocessed_items)
+
+        # Separate successful and skipped
         ingested_items = []
         skipped_items = []
 
-        for media_item in unprocessed_items:
-            # Extract subtitles
-            media_id, title, subtitle_lines, metadata_text = extract_subtitles_for_item(media_item)
-
-            # Ingest to RAG
-            result = ingest_item_to_rag(media_id, title, subtitle_lines, metadata_text)
-
-            if result["status"] == "success":
+        for result in results:
+            if result.get("status") == "success":
                 ingested_items.append(result)
-            else:
+            elif result.get("status") == "no_subtitles":
                 skipped_items.append({
                     "title": result["title"],
                     "id": result["id"],
-                    "reason": result.get("reason", "Unknown")
+                    "reason": result.get("reason", "No subtitles found")
+                })
+            elif result.get("status") == "error":
+                skipped_items.append({
+                    "title": result.get("title", "Unknown"),
+                    "id": result.get("id", "Unknown"),
+                    "reason": result.get("reason", "Processing error")
                 })
 
         # Get total stats
         stats = get_ingestion_stats()
+        overall_duration = time.time() - overall_start
 
         result = {
             "ingested": ingested_items,
@@ -257,55 +368,24 @@ def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict
                 "remaining_unprocessed": stats["remaining"]
             },
             "items_processed": len(unprocessed_items),
-            "items_checked": len(unprocessed_items)
+            "items_checked": len(unprocessed_items),
+            "duration": round(overall_duration, 2),
+            "mode": "parallel",
+            "concurrent_limit": CONCURRENT_LIMIT,
+            "average_rate": round(len(unprocessed_items) / overall_duration, 2) if overall_duration > 0 else 0
         }
 
-        logger.info(f"📊 Batch complete:")
+        logger.info(f"📊 Parallel batch complete:")
         logger.info(f"   - Items processed: {len(unprocessed_items)}")
         logger.info(f"   - Ingested: {len(ingested_items)}")
         logger.info(f"   - Skipped: {len(skipped_items)}")
+        logger.info(f"   - Duration: {overall_duration:.2f}s")
+        logger.info(f"   - Rate: {result['average_rate']:.2f} items/sec")
 
         return result
 
     except Exception as e:
-        logger.error(f"❌ Ingestion error: {e}")
+        logger.error(f"❌ Parallel ingestion error: {e}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e)}
-
-
-# ============================================================================
-# HELPER FOR MULTI-AGENT: Process multiple items in parallel
-# ============================================================================
-
-async def ingest_batch_parallel(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Process multiple items in parallel (for multi-agent use)
-
-    Args:
-        items: List of media items to process
-
-    Returns:
-        List of ingestion results
-    """
-    import asyncio
-
-    async def process_item(media_item):
-        """Async wrapper for processing a single item"""
-        loop = asyncio.get_event_loop()
-
-        # Extract subtitles
-        media_id, title, subtitle_lines, metadata_text = await loop.run_in_executor(
-            None, extract_subtitles_for_item, media_item
-        )
-
-        # Ingest to RAG
-        result = await loop.run_in_executor(
-            None, ingest_item_to_rag, media_id, title, subtitle_lines, metadata_text
-        )
-
-        return result
-
-    # Process all items in parallel
-    results = await asyncio.gather(*[process_item(item) for item in items])
-    return results
+        return {"error": str(e), "mode": "parallel"}

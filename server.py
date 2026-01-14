@@ -1251,35 +1251,19 @@ def rag_status_tool() -> str:
         logger.error(f"❌ Error getting RAG status: {e}")
         return json.dumps({"error": str(e)}, indent=2)
 
+
 @mcp.tool()
-def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> str:
+async def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> str:
     """
-    Ingest the NEXT unprocessed Plex items into RAG database.
-
-    IMPORTANT: This tool automatically skips already-processed items and finds
-    the next NEW items to ingest. The 'limit' refers to NEW items to process,
-    not total items to check.
-
-    Args:
-        limit (int, optional): Number of NEW items to ingest (default: 5)
-                              The tool will check as many items as needed to find this many new ones.
-        rescan_no_subtitles (bool, optional): If True, re-check items that previously had no subtitles.
-                                             Use this if you've added subtitle files. (default: False)
-
-    Returns:
-        JSON string with:
-        - ingested: Array of successfully ingested NEW items
-        - skipped: Array of NEW items that were skipped (no subtitles)
-        - stats: Overall library statistics
-        - items_processed: Number of NEW items processed in this batch
-        - items_checked: Total items examined (including already-processed ones)
-
-    Example: If you have 5 items already ingested and call this with limit=10,
-    it will skip those 5 and ingest the next 10 NEW items.
+        Ingest Plex items into RAG
+        Uses coroutines to parallelize Plex media into RAG database
     """
     logger.info(f"🛠 [server] plex_ingest_batch called with limit: {limit}, rescan: {rescan_no_subtitles}")
-    result = ingest_next_batch(limit, rescan_no_subtitles)
-    logger.info(f"🛠 [server] plex_ingest_batch returning: {result}")
+
+    # Must await the async function!
+    result = await ingest_next_batch(limit, rescan_no_subtitles)
+
+    logger.info(f"🛠 [server] plex_ingest_batch completed")
     return json.dumps(result, indent=2)
 
 @mcp.tool()
