@@ -50,14 +50,6 @@ A Model Context Protocol (MCP) architecture for exposing Python-based tools to A
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 python -m venv .venv
-source .venv/bin/activate  # Linux/WSL
-pip install -r requirements.txt
-```
-
-WSL
-```bash
-source .venv-wsl/bin/activate
-pip install -r requirements.txt
 ```
 
 Linux
