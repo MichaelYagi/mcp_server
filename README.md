@@ -190,7 +190,7 @@ sudo ufw allow 9000/tcp
 ## Directory Structure
 
 ```
-mcp-server/
+mcp_a2a/
 ├── server.py              # Registers and exposes tools
 ├── client.py              # AI Agent with multi-agent orchestration
 ├── index.html             # Web UI
