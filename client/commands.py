@@ -1,9 +1,7 @@
 """
-Shared Commands Module (WITH :stats AND :stop COMMANDS)
-Handles command processing for both CLI and WebSocket
+Command Handlers for MCP Client
+Compatible with existing CLI/WebSocket interfaces
 """
-
-from langchain_core.messages import SystemMessage
 
 
 def get_commands_list():
@@ -20,258 +18,199 @@ def get_commands_list():
         ":multi on - Enable multi-agent mode",
         ":multi off - Disable multi-agent mode",
         ":multi status - Check multi-agent status",
+        ":a2a on - Enable agent-to-agent mode",
+        ":a2a off - Disable agent-to-agent mode",
+        ":a2a status - Check A2A system status",
         ":clear history - Clear the chat history"
     ]
 
 
-def get_tools_list(tools):
-    """Get formatted list of all tools"""
-    lines = [f"Found {len(tools)} MCP tools:"]
-    for t in tools:
-        lines.append(f"  - {t.name}")
-    return "\n".join(lines)
+def list_commands():
+    """Print all available commands"""
+    print("\nAvailable Commands:")
+    for cmd in get_commands_list():
+        print(f"  {cmd}")
 
 
-def get_tool_description(tools, tool_name):
-    """Get description for a specific tool"""
-    for t in tools:
-        if t.name == tool_name:
-            return f"  - {t.description}"
-    return f"MCP tool {tool_name} not found"
-
-
-def format_stats_display():
-    """Format metrics for CLI/web display"""
-    try:
-        from client.metrics import prepare_metrics
-    except ImportError:
-        try:
-            from metrics import prepare_metrics
-        except ImportError:
-            return "Metrics not available"
-
-    metrics = prepare_metrics()
-
-    lines = []
-    lines.append("=" * 60)
-    lines.append("PERFORMANCE METRICS")
-    lines.append("=" * 60)
-    lines.append("")
-
-    # Agent Stats
-    agent = metrics["agent"]
-    lines.append("AGENT EXECUTION:")
-    lines.append(f"  Total Runs:    {agent['runs']}")
-    lines.append(f"  Errors:        {agent['errors']} ({agent['error_rate']}%)")
-    lines.append(f"  Avg Time:      {agent['avg_time']:.2f}s")
-    lines.append("")
-
-    # LLM Stats
-    llm = metrics["llm"]
-    lines.append("LLM CALLS:")
-    lines.append(f"  Total Calls:   {llm['calls']}")
-    lines.append(f"  Errors:        {llm['errors']}")
-    lines.append(f"  Avg Time:      {llm['avg_time']:.2f}s")
-    lines.append("")
-
-    # Tool Stats
-    tools = metrics["tools"]
-    lines.append("TOOL USAGE:")
-    lines.append(f"  Total Calls:   {tools['total_calls']}")
-    lines.append(f"  Errors:        {tools['total_errors']}")
-    lines.append("")
-
-    # Per-Tool Breakdown
-    if tools["per_tool"]:
-        lines.append("  Top Tools:")
-        # Sort by call count
-        sorted_tools = sorted(
-            tools["per_tool"].items(),
-            key=lambda x: x[1]["calls"],
-            reverse=True
-        )[:10]  # Show top 10
-
-        for tool_name, tool_stats in sorted_tools:
-            calls = tool_stats["calls"]
-            errors = tool_stats["errors"]
-            avg_time = tool_stats["avg_time"]
-            lines.append(f"    {tool_name:30s} {calls:3d} calls, {avg_time:5.2f}s avg, {errors} errors")
-        lines.append("")
-
-    # Overall
-    lines.append("OVERALL:")
-    lines.append(f"  Total Errors:  {metrics['overall_errors']}")
-    lines.append("")
-    lines.append("=" * 60)
-
-    return "\n".join(lines)
-
-
-async def handle_command(query, tools, model_name, conversation_state, models_module, system_prompt, agent_ref=None,
-                         create_agent_fn=None, logger=None, orchestrator=None, multi_agent_state=None):
+async def handle_a2a_commands(command: str, orchestrator):
     """
-    Process a command starting with ':'
-    Returns: (handled: bool, response: str, new_agent: object or None, new_model: str or None)
+    Handle A2A-specific commands
+    Returns result string or None if command not handled
     """
-    query = query.strip()
-
-    if query == ":commands":
-        return True, "\n".join(get_commands_list()), None, None
-
-    if query == ":stop":
-        # Import and trigger stop signal with comprehensive feedback
-        try:
-            from client.stop_signal import request_stop, is_stop_requested, get_stop_status
-
-            # Check if already stopped
-            if is_stop_requested():
-                status = get_stop_status()
-                elapsed = status.get("elapsed", 0)
-
-                response = (
-                    f"⚠️  Stop already requested {elapsed:.1f}s ago.\n"
-                    f"Waiting for current operation to reach next checkpoint...\n\n"
-                    f"Operations check for stop signals:\n"
-                    f"  • Before each batch\n"
-                    f"  • Before/after each item\n"
-                    f"  • Before each chunk (~3-5 seconds)\n\n"
-                    f"If operation seems stuck, it may be in a blocking operation.\n"
-                    f"Check logs for '🛑 Stop' messages."
-                )
-
-                if logger:
-                    logger.warning(f"⚠️  Stop already active for {elapsed:.1f}s")
-
-                return True, response, None, None
-
-            # Request stop
-            request_stop()
-
-            if logger:
-                logger.warning("🛑 STOP SIGNAL ACTIVATED via :stop command")
-
-            response = (
-                "🛑 **Stop requested.**\n\n"
-                "Current operation will halt at next checkpoint:\n"
-                "  • Ingestion: After current item\n"
-                "  • Search: After current batch\n"
-                "  • Multi-agent: After current task\n\n"
-                "Watch for '🛑 Stopped' messages in logs."
-            )
-
-            return True, response, None, None
-
-        except ImportError as e:
-            if logger:
-                logger.error(f"❌ Cannot import stop_signal: {e}")
-            return True, "❌ Stop signal module not available.", None, None
-
-    if query == ":stats":
-        return True, format_stats_display(), None, None
-
-    if query == ":tools":
-        return True, get_tools_list(tools), None, None
-
-    if query.startswith(":tool "):
-        parts = query.split(maxsplit=1)
-        if len(parts) == 1:
-            return True, "Usage: :tool <tool_name>", None, None
-        tool_name = parts[1]
-        return True, get_tool_description(tools, tool_name), None, None
-
-    if query == ":models":
-        models = models_module.get_available_models()
-        lines = ["Available models:"]
-        for model in models:
-            lines.append(f"  - {model}")
-        return "\n".join(lines), None, None
-
-    if query.startswith(":model "):
-        parts = query.split(maxsplit=1)
-        if len(parts) == 1:
-            return True, "Usage: :model <model_name>", None, None
-
-        new_model_name = parts[1]
-        new_agent = await models_module.switch_model(new_model_name, tools, logger, create_agent_fn)
-        if new_agent is None:
-            return True, f"Model '{new_model_name}' is not installed.", None, None
-
-        return True, f"Model switched to {new_model_name}", new_agent, new_model_name
-
-    if query == ":model":
-        return True, f"Using model: {model_name}", None, None
-
-    if query.startswith(":clear "):
-        parts = query.split()
-        if len(parts) == 1:
-            return True, "Specify what to clear", None, None
-
-        target = parts[1]
-        if target == "history":
-            conversation_state["messages"] = []
-            conversation_state["messages"].append(SystemMessage(content=system_prompt))
-            return True, "Chat history cleared.", None, None
-        else:
-            return True, f"Unknown clear target: {target}", None, None
-
-    # Multi-agent commands (update shared state dict)
-    if query == ":multi on":
-        if multi_agent_state is not None:
-            multi_agent_state["enabled"] = True
-            if logger:
-                logger.info(f"Multi-agent mode ENABLED (state dict updated: {multi_agent_state})")
-        else:
-            if logger:
-                logger.warning("multi_agent_state is None, cannot enable")
-        return True, "Multi-agent mode ENABLED\nComplex queries will be broken down and executed by specialized agents.", None, None
-
-    if query == ":multi off":
-        if multi_agent_state is not None:
-            multi_agent_state["enabled"] = False
-            if logger:
-                logger.info(f"Multi-agent mode DISABLED (state dict updated: {multi_agent_state})")
-        else:
-            if logger:
-                logger.warning("multi_agent_state is None, cannot disable")
-        return True, "Multi-agent mode DISABLED\nAll queries will use single-agent execution.", None, None
-
-    if query == ":multi status":
-        # Check actual state from the dict
-        if multi_agent_state is not None:
-            is_enabled = multi_agent_state.get("enabled", True)
-            if logger:
-                logger.info(f"Status check - multi_agent_state: {multi_agent_state}")
-        else:
-            is_enabled = True
-            if logger:
-                logger.warning("multi_agent_state is None, defaulting to enabled")
-
-        status = "ENABLED" if is_enabled else "DISABLED"
-        details = []
-        details.append(f"Multi-agent mode: {status}")
-        details.append("")
-
+    if command == ":a2a on":
         if orchestrator:
-            details.append("Multi-agent system is available and ready.")
+            orchestrator.enable_a2a()
+            return "✅ A2A mode enabled\n   Agents will communicate via messages\n   Use ':a2a status' to see agent status"
+        return "❌ Multi-agent orchestrator not available"
+
+    elif command == ":a2a off":
+        if orchestrator:
+            orchestrator.disable_a2a()
+            return "🔗 A2A mode disabled\n   Falling back to multi-agent or single-agent mode"
+        return "❌ Multi-agent orchestrator not available"
+
+    elif command == ":a2a status":
+        if not orchestrator:
+            return "❌ Multi-agent orchestrator not available"
+
+        status = orchestrator.get_a2a_status()
+        if not status["enabled"]:
+            return "A2A mode: DISABLED\n\nUse ':a2a on' to enable agent-to-agent communication"
+
+        output = ["A2A mode: ENABLED", "=" * 60, ""]
+        output.append("Agent Status:")
+        output.append("-" * 60)
+
+        for agent_name, agent_status in status["agents"].items():
+            busy = "🔴 BUSY" if agent_status["is_busy"] else "🟢 IDLE"
+            tools_count = len(agent_status["tools"])
+            msgs = agent_status["messages_sent"]
+
+            output.append(f"  {agent_name:15} {busy} | Tools: {tools_count:2} | Messages: {msgs:3}")
+
+        output.append("")
+        output.append(f"Message Queue: {status['message_queue_size']} messages")
+        output.append("=" * 60)
+
+        return "\n".join(output)
+
+    return None
+
+
+async def handle_multi_agent_commands(command: str, orchestrator, multi_agent_state):
+    """
+    Handle multi-agent commands
+    Returns result string or None if command not handled
+    """
+    if command == ":multi on":
+        if orchestrator:
+            multi_agent_state["enabled"] = True
+            return "✅ Multi-agent mode enabled\n   Complex queries will be broken down automatically"
+        return "❌ Multi-agent orchestrator not available"
+
+    elif command == ":multi off":
+        if orchestrator:
+            multi_agent_state["enabled"] = False
+            return "🤖 Multi-agent mode disabled\n   Using single-agent execution"
+        return "❌ Multi-agent orchestrator not available"
+
+    elif command == ":multi status":
+        if not orchestrator:
+            return "❌ Multi-agent orchestrator not available"
+
+        if multi_agent_state["enabled"]:
+            return "Multi-agent mode: ENABLED\n   Complex queries are automatically distributed to specialized agents"
         else:
-            details.append("Multi-agent system is NOT available.")
-            details.append("   Add multi_agent.py to client/ directory to enable.")
-            return True, "\n".join(details), None, None
+            return "Multi-agent mode: DISABLED\n   Use ':multi on' to enable"
 
-        details.append("")
-        details.append("When enabled, complex queries are automatically:")
-        details.append("  - Broken down into subtasks")
-        details.append("  - Assigned to specialized agents (Researcher, Coder, Analyst, Writer, Planner)")
-        details.append("  - Executed in parallel where possible")
-        details.append("  - Results are aggregated")
-        details.append("")
-        details.append("Examples of multi-agent queries:")
-        details.append("  - 'Research X, analyze Y, and write Z'")
-        details.append("  - 'Find A then compare with B'")
-        details.append("  - 'Gather data and create a report'")
-        details.append("")
-        details.append("Simple queries (weather, todos, search) use single-agent automatically.")
+    return None
 
-        return True, "\n".join(details), None, None
 
-    return False, None, None, None
+def is_command(text: str) -> bool:
+    """Check if text is a command"""
+    return text.strip().startswith(":")
+
+
+async def handle_command(
+    command: str,
+    tools,
+    model_name,
+    conversation_state,
+    models_module,
+    system_prompt,
+    agent_ref=None,
+    create_agent_fn=None,
+    logger=None,
+    orchestrator=None,
+    multi_agent_state=None,
+    a2a_state=None
+):
+    """
+    Main command handler compatible with existing CLI/WebSocket interface
+
+    Returns: (handled: bool, response: str, new_agent, new_model)
+    """
+    command = command.strip()
+
+    # A2A commands
+    if command.startswith(":a2a"):
+        result = await handle_a2a_commands(command, orchestrator)
+        if result:
+            return (True, result, None, None)
+
+    # Multi-agent commands
+    if command.startswith(":multi"):
+        result = await handle_multi_agent_commands(command, orchestrator, multi_agent_state)
+        if result:
+            return (True, result, None, None)
+
+    # List commands
+    if command == ":commands":
+        result = "\n".join(get_commands_list())
+        return (True, result, None, None)
+
+    # Stop command
+    if command == ":stop":
+        from client.stop_signal import request_stop
+        request_stop()
+        return (True, "🛑 Stop signal sent - operations will halt at next checkpoint", None, None)
+
+    # Stats command
+    if command == ":stats":
+        try:
+            from client.metrics import prepare_metrics, format_metrics_summary
+            metrics = prepare_metrics()
+            summary = format_metrics_summary(metrics)
+            return (True, summary, None, None)
+        except ImportError:
+            return (True, "📊 Stats system not available", None, None)
+
+    # Tools command
+    if command == ":tools":
+        if tools:
+            tool_list = "\n".join([f"  - {tool.name}: {tool.description}" for tool in tools])
+            return (True, f"Available tools:\n{tool_list}", None, None)
+        return (True, "No tools available", None, None)
+
+    # Tool detail command
+    if command.startswith(":tool "):
+        tool_name = command[6:].strip()
+        for tool in tools:
+            if tool.name == tool_name:
+                return (True, f"Tool: {tool.name}\n\n{tool.description}", None, None)
+        return (True, f"Tool '{tool_name}' not found", None, None)
+
+    # Model commands
+    if command == ":model":
+        return (True, f"Current model: {model_name}", None, None)
+
+    if command == ":models":
+        available = models_module.get_available_models()
+        models_list = "\n".join([f"  {'→' if m == model_name else ' '} {m}" for m in available])
+        return (True, f"Available models:\n{models_list}", None, None)
+
+    if command.startswith(":model "):
+        new_model = command[7:].strip()
+
+        if logger:
+            logger.info(f"Switching to model: {new_model}")
+
+        new_agent = await models_module.switch_model(
+            new_model,
+            tools,
+            logger,
+            create_agent_fn
+        )
+
+        if new_agent is None:
+            return (True, f"❌ Model '{new_model}' is not installed", None, None)
+
+        return (True, f"✅ Switched to model: {new_model}", new_agent, new_model)
+
+    # Clear history
+    if command == ":clear history":
+        conversation_state["messages"] = []
+        return (True, "✅ Chat history cleared", None, None)
+
+    # Command not recognized
+    return (False, None, None, None)

@@ -10,8 +10,8 @@ import websockets
 
 from langchain_core.messages import HumanMessage
 
-from client.commands import handle_command
-from client.stop_signal import request_stop  # ← NEW: Import stop signal
+from client.commands import handle_command, handle_a2a_commands
+from client.stop_signal import request_stop
 
 # Import system monitor conditionally
 try:
@@ -34,8 +34,9 @@ async def broadcast_message(message_type, data):
         )
 
 async def websocket_handler(websocket, agent_ref, tools, logger, conversation_state, run_agent_fn,
-                            models_module, model_name, system_prompt, orchestrator=None, multi_agent_state=None):
-    """Handle WebSocket connections for chat (WITH MULTI-AGENT STATE + REAL-TIME STOP)"""
+                            models_module, model_name, system_prompt, orchestrator=None,
+                            multi_agent_state=None, a2a_state=None):
+    """Handle WebSocket connections for chat (WITH MULTI-AGENT STATE + A2A + REAL-TIME STOP)"""
     CONNECTED_WEBSOCKETS.add(websocket)
 
     try:
@@ -66,13 +67,28 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                     print("\n🛑 Stop requested - operation will halt at next checkpoint")
                     print("   This may take a few seconds for the current step to complete.")
                     print("   Watch for '🛑 Stopped' messages below.\n")
-                    sys.stdout.flush()  # Force output to appear immediately
+                    sys.stdout.flush()
 
                     # Send to web UI
                     await broadcast_message("assistant_message", {
                         "text": "🛑 Stop requested - operation will halt at next checkpoint.\n\nThis may take a few seconds for the current step to complete."
                     })
-                    continue  # Don't process as a regular message
+                    continue
+
+                # Handle :a2a commands specifically
+                if prompt.startswith(":a2a"):
+                    result = await handle_a2a_commands(prompt, orchestrator)
+                    if result:
+                        await broadcast_message("assistant_message", {"text": result})
+                        continue
+
+                # Handle :multi commands specifically
+                if prompt.startswith(":multi"):
+                    from client.commands import handle_multi_agent_commands
+                    result = await handle_multi_agent_commands(prompt, orchestrator, multi_agent_state)
+                    if result:
+                        await broadcast_message("assistant_message", {"text": result})
+                        continue
 
             # Handle system stats subscription
             if data.get("type") == "subscribe_system_stats":
@@ -166,7 +182,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
             if data.get("type") == "user" or "text" in data:
                 prompt = data.get("text")
 
-                # Handle commands (WITH MULTI-AGENT STATE PASSING)
+                # Handle commands (WITH MULTI-AGENT STATE AND A2A STATE PASSING)
                 if prompt.startswith(":"):
                     handled, response, new_agent, new_model = await handle_command(
                         prompt, tools, model_name, conversation_state, models_module,
@@ -174,7 +190,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                         create_agent_fn=lambda llm, t: agent_ref[0].__class__(llm, t),
                         logger=logger,
                         orchestrator=orchestrator,
-                        multi_agent_state=multi_agent_state
+                        multi_agent_state=multi_agent_state,
+                        a2a_state=a2a_state
                     )
 
                     if handled:
@@ -200,17 +217,17 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
                 await broadcast_message("assistant_message", {
                     "text": assistant_text,
-                    "multi_agent": result.get("multi_agent", False)
+                    "multi_agent": result.get("multi_agent", False),
+                    "a2a": result.get("a2a", False)
                 })
     finally:
         CONNECTED_WEBSOCKETS.discard(websocket)
         SYSTEM_MONITOR_CLIENTS.discard(websocket)
 
-
 async def start_websocket_server(agent, tools, logger, conversation_state, run_agent_fn, models_module,
                                  model_name, system_prompt, orchestrator=None, multi_agent_state=None,
-                                 host="0.0.0.0", port=8765):
-    """Start the WebSocket server for chat (WITH MULTI-AGENT STATE)"""
+                                 a2a_state=None, host="0.0.0.0", port=8765):
+    """Start the WebSocket server for chat (WITH MULTI-AGENT STATE + A2A)"""
 
     async def handler(websocket):
         try:
@@ -218,7 +235,8 @@ async def start_websocket_server(agent, tools, logger, conversation_state, run_a
                 websocket, [agent], tools, logger, conversation_state, run_agent_fn,
                 models_module, model_name, system_prompt,
                 orchestrator=orchestrator,
-                multi_agent_state=multi_agent_state
+                multi_agent_state=multi_agent_state,
+                a2a_state=a2a_state
             )
         except websockets.exceptions.ConnectionClosed:
             pass

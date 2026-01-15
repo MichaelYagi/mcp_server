@@ -1,5 +1,5 @@
 """
-CLI Module (WITH MULTI-AGENT SUPPORT - FIXED STATE + REAL-TIME STOP)
+CLI Module (WITH MULTI-AGENT SUPPORT + A2A - FIXED STATE + REAL-TIME STOP)
 Handles command-line interface and user input
 """
 
@@ -9,8 +9,8 @@ import threading
 from queue import Queue
 
 from client.websocket import broadcast_message
-from client.commands import handle_command, get_commands_list
-from client.stop_signal import request_stop  # ← NEW: Import stop signal
+from client.commands import handle_command, get_commands_list, handle_a2a_commands, handle_multi_agent_commands
+from client.stop_signal import request_stop
 
 
 def list_commands():
@@ -30,8 +30,8 @@ def input_thread(input_queue, stop_event):
 
 
 async def cli_input_loop(agent, logger, tools, model_name, conversation_state, run_agent_fn, models_module,
-                         system_prompt, create_agent_fn, orchestrator=None, multi_agent_state=None):
-    """Handle CLI input using a separate thread (with multi-agent support + REAL-TIME STOP)"""
+                         system_prompt, create_agent_fn, orchestrator=None, multi_agent_state=None, a2a_state=None):
+    """Handle CLI input using a separate thread (with multi-agent + A2A support + REAL-TIME STOP)"""
     input_queue = Queue()
     stop_event = threading.Event()
 
@@ -39,8 +39,6 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
     thread.start()
 
     try:
-        active_task = None
-
         while True:
             await asyncio.sleep(0.1)
 
@@ -58,17 +56,43 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                 if not query:
                     continue
 
+                # Handle A2A commands first
+                if query.startswith(":a2a"):
+                    result = await handle_a2a_commands(query, orchestrator)
+                    if result:
+                        print(result)
+                        await broadcast_message("cli_assistant_message", {"text": result})
+                    continue
+
+                # Handle multi-agent commands
+                if query.startswith(":multi"):
+                    result = await handle_multi_agent_commands(query, orchestrator, multi_agent_state)
+                    if result:
+                        print(result)
+                        await broadcast_message("cli_assistant_message", {"text": result})
+                    continue
+
                 # Handle other commands
                 if query.startswith(":"):
                     handled, response, new_agent, new_model = await handle_command(
-                        query, tools, model_name, conversation_state, models_module,
-                        system_prompt, agent_ref=[agent], create_agent_fn=create_agent_fn,
-                        logger=logger, orchestrator=orchestrator, multi_agent_state=multi_agent_state
+                        query,
+                        tools,
+                        model_name,
+                        conversation_state,
+                        models_module,
+                        system_prompt,
+                        agent_ref=[agent],
+                        create_agent_fn=create_agent_fn,
+                        logger=logger,
+                        orchestrator=orchestrator,
+                        multi_agent_state=multi_agent_state,
+                        a2a_state=a2a_state
                     )
 
                     if handled:
                         if response:
                             print(response)
+                            await broadcast_message("cli_assistant_message", {"text": response})
                         if new_agent:
                             agent = new_agent
                         if new_model:
@@ -89,7 +113,11 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                 print("\n" + assistant_text + "\n")
                 logger.info("✅ Query completed successfully")
 
-                await broadcast_message("cli_assistant_message", {"text": assistant_text})
+                await broadcast_message("cli_assistant_message", {
+                    "text": assistant_text,
+                    "multi_agent": result.get("multi_agent", False),
+                    "a2a": result.get("a2a", False)
+                })
 
     except KeyboardInterrupt:
         print("\n👋 Exiting.")

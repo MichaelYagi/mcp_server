@@ -50,6 +50,10 @@ MULTI_AGENT_STATE = {
     "enabled": MULTI_AGENT_AVAILABLE and os.getenv("MULTI_AGENT_ENABLED", "false").lower() == "true"
 }
 
+A2A_STATE = {
+    "enabled": False
+}
+
 # Default system prompt - will be overridden if tool_usage_guide.md exists
 SYSTEM_PROMPT = """# SYSTEM INSTRUCTION: YOU ARE A TOOL-USING AGENT
 
@@ -195,12 +199,43 @@ async def main():
 
     # Create enhanced agent runner with multi-agent support
     async def run_agent_wrapper(agent, conversation_state, user_message, logger, tools):
-        """Enhanced agent runner with multi-agent support"""
+        """Enhanced agent runner with multi-agent and A2A support"""
 
-        # Check if multi-agent should be used (check shared state)
+        # Check if A2A should be used (highest priority)
+        use_a2a = (
+            A2A_STATE["enabled"] and
+            MULTI_AGENT_AVAILABLE and
+            orchestrator and
+            await should_use_multi_agent(user_message)
+        )
+
+        if use_a2a:
+            logger.info("🔗 Using A2A execution")
+
+            try:
+                # Execute with A2A
+                result_text = await orchestrator.execute_a2a(user_message)
+
+                # Add to conversation
+                conversation_state["messages"].append(HumanMessage(content=user_message))
+                conversation_state["messages"].append(AIMessage(content=result_text))
+
+                return {
+                    "messages": conversation_state["messages"],
+                    "a2a": True
+                }
+
+            except Exception as e:
+                logger.error(f"❌ A2A execution failed: {e}, falling back to single agent")
+                import traceback
+                traceback.print_exc()
+                use_a2a = False
+
+        # Check if multi-agent should be used (second priority)
         use_multi = (
             MULTI_AGENT_STATE["enabled"] and
             MULTI_AGENT_AVAILABLE and
+            not use_a2a and
             await should_use_multi_agent(user_message)
         )
 
@@ -224,10 +259,9 @@ async def main():
                 logger.error(f"❌ Multi-agent execution failed: {e}, falling back to single agent")
                 import traceback
                 traceback.print_exc()
-                # Fallback to single agent
                 use_multi = False
 
-        if not use_multi:
+        if not use_multi and not use_a2a:
             logger.info("🤖 Using SINGLE-AGENT execution")
 
             # Use existing single agent flow
@@ -245,13 +279,17 @@ async def main():
     print("=" * 60)
 
     if MULTI_AGENT_AVAILABLE:
-        if MULTI_AGENT_STATE["enabled"]:
+        if A2A_STATE["enabled"]:
+            print("🔗 A2A mode: ENABLED")
+            print("   Agents communicate via messages for complex workflows")
+            print("   Use ':a2a off' to disable")
+        elif MULTI_AGENT_STATE["enabled"]:
             print("🎭 Multi-agent mode: ENABLED")
             print("   Complex queries will be broken down automatically")
             print("   Use ':multi off' to disable")
         else:
             print("🤖 Multi-agent mode: DISABLED")
-            print("   Use ':multi on' to enable")
+            print("   Use ':multi on' or ':a2a on' to enable")
     else:
         print("⚠️  Multi-agent mode: NOT AVAILABLE")
         print("   Add multi_agent.py to client/ directory to enable")
@@ -276,6 +314,7 @@ async def main():
         SYSTEM_PROMPT,
         orchestrator=orchestrator,
         multi_agent_state=MULTI_AGENT_STATE,
+        a2a_state=A2A_STATE,  # ADD THIS LINE
         host="0.0.0.0",
         port=8765
     )
@@ -328,7 +367,8 @@ async def main():
             SYSTEM_PROMPT,
             langgraph.create_langgraph_agent,
             orchestrator,
-            MULTI_AGENT_STATE  # Pass shared state dict
+            MULTI_AGENT_STATE,
+            A2A_STATE
         )
     except KeyboardInterrupt:
         print("\n👋 Shutting down...")

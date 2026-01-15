@@ -13,6 +13,13 @@ from enum import Enum
 from .stop_signal import is_stop_requested, clear_stop, get_stop_status
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain.agents import create_agent
+from .agents.base_agent import AgentMessage, MessageType
+from .agents.orchestrator import OrchestratorAgent
+from .agents.researcher import ResearcherAgent
+from .agents.plex_ingester import PlexIngesterAgent
+from .agents.analyst import AnalystAgent
+from .agents.planner import PlannerAgent
+from .agents.writer import WriterAgent
 
 class AgentRole(Enum):
     """Defines different agent specializations"""
@@ -51,6 +58,9 @@ class MultiAgentOrchestrator:
 
     def __init__(self, base_llm, tools, logger: logging.Logger):
         self.base_llm = base_llm
+        self.a2a_enabled = False
+        self.a2a_agents: Dict[str, Any] = {}
+        self.message_queue: asyncio.Queue = asyncio.Queue()
 
         # Handle tools as either list or dict
         if isinstance(tools, dict):
@@ -203,6 +213,204 @@ CRITICAL: Never make up item IDs! Only use IDs returned by plex_find_unprocessed
                 available_tools.append(tool)
 
         return available_tools
+
+    def enable_a2a(self):
+        """Enable Agent-to-Agent communication system"""
+        if self.a2a_enabled:
+            self.logger.info("✅ A2A already enabled")
+            return
+
+        self.logger.info("🔗 Initializing A2A system...")
+
+        # Message bus callback
+        async def message_bus(message: AgentMessage):
+            await self.message_queue.put(message)
+
+        # Create specialized A2A agents
+        tools_map = {
+            "researcher": self._get_tools_for_role(AgentRole.RESEARCHER),
+            "analyst": self._get_tools_for_role(AgentRole.ANALYST),
+            "planner": self._get_tools_for_role(AgentRole.PLANNER),
+            "plex_ingester": self._get_tools_for_role(AgentRole.PLEX_INGESTER),
+            "writer": self._get_tools_for_role(AgentRole.WRITER),
+        }
+
+        # Orchestrator (no tools needed)
+        self.a2a_agents["orchestrator"] = OrchestratorAgent(
+            agent_id="orchestrator_1",
+            llm=self.base_llm,
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        # Specialized agents
+        self.a2a_agents["researcher"] = ResearcherAgent(
+            agent_id="researcher_1",
+            llm=self.base_llm,
+            tools=tools_map["researcher"],
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        self.a2a_agents["analyst"] = AnalystAgent(
+            agent_id="analyst_1",
+            llm=self.base_llm,
+            tools=tools_map["analyst"],
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        self.a2a_agents["planner"] = PlannerAgent(
+            agent_id="planner_1",
+            llm=self.base_llm,
+            tools=tools_map["planner"],
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        self.a2a_agents["writer"] = WriterAgent(
+            agent_id="writer_1",
+            llm=self.base_llm,
+            tools=tools_map["writer"],
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        self.a2a_agents["plex_ingester"] = PlexIngesterAgent(
+            agent_id="plex_ingester_1",
+            llm=self.base_llm,
+            tools=tools_map["plex_ingester"],
+            logger=self.logger,
+            message_bus=message_bus
+        )
+
+        self.a2a_enabled = True
+        self.logger.info(f"✅ A2A system initialized with {len(self.a2a_agents)} agents")
+
+    def disable_a2a(self):
+        """Disable A2A system"""
+        self.a2a_enabled = False
+        self.a2a_agents.clear()
+        self.logger.info("🔗 A2A system disabled")
+
+    async def execute_a2a(self, user_request: str) -> str:
+        """
+        Execute using A2A system
+        Agents communicate via messages instead of shared task queue
+        """
+        if not self.a2a_enabled:
+            self.enable_a2a()
+
+        self.logger.info(f"🔗 A2A execution started: {user_request}")
+        start_time = time.time()
+
+        try:
+            # Step 1: Orchestrator creates plan
+            orchestrator = self.a2a_agents["orchestrator"]
+            plan = await orchestrator.create_plan(user_request)
+
+            # Check stop
+            if is_stop_requested():
+                return "A2A execution stopped during planning"
+
+            subtasks = plan.get("subtasks", [])
+
+            if not subtasks:
+                # Simple task - use single agent
+                self.logger.info("📌 Simple task - using single A2A agent")
+                return await self._a2a_single_agent(user_request)
+
+            # Step 2: Execute subtasks
+            self.logger.info(f"🎭 Executing {len(subtasks)} subtasks via A2A")
+            results = {}
+
+            for subtask in subtasks:
+                # Check stop before each subtask
+                if is_stop_requested():
+                    self.logger.warning("🛑 A2A execution stopped")
+                    break
+
+                task_id = subtask["id"]
+                agent_role = subtask["agent"]
+                description = subtask["description"]
+                depends_on = subtask.get("depends_on", [])
+
+                # Build context from dependencies
+                context = {"user_request": user_request}
+                for dep_id in depends_on:
+                    if dep_id in results:
+                        context[f"result_{dep_id}"] = results[dep_id]
+
+                agent = self.a2a_agents.get(agent_role)
+                if not agent:
+                    self.logger.warning(f"⚠️ Agent {agent_role} not found")
+                    results[task_id] = f"Agent {agent_role} not available"
+                    continue
+
+                # Execute task
+                self.logger.info(f"▶️  Executing {task_id} with {agent_role}")
+                result = await agent.execute_task(description, context)
+                results[task_id] = result
+
+                self.logger.info(f"✅ {task_id} completed")
+
+            # Step 3: Aggregate results
+            if is_stop_requested():
+                return f"A2A execution stopped. Partial results:\n{self._format_results(results)}"
+
+            final_result = await self._aggregate_results(user_request, results)
+
+            duration = time.time() - start_time
+            self.logger.info(f"✅ A2A execution completed in {duration:.2f}s")
+
+            return final_result
+
+        except Exception as e:
+            self.logger.error(f"❌ A2A execution failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    async def _a2a_single_agent(self, user_request: str) -> str:
+        """Execute simple task with single A2A agent"""
+        request_lower = user_request.lower()
+
+        if "plex" in request_lower or "ingest" in request_lower:
+            agent = self.a2a_agents["plex_ingester"]
+        elif "analyze" in request_lower:
+            agent = self.a2a_agents["analyst"]
+        elif "plan" in request_lower or "todo" in request_lower:
+            agent = self.a2a_agents["planner"]
+        elif "write" in request_lower or "summary" in request_lower:
+            agent = self.a2a_agents["writer"]
+        else:
+            agent = self.a2a_agents["researcher"]
+
+        self.logger.info(f"📌 Using {agent.role} agent")
+        return await agent.execute_task(user_request)
+
+    def _format_results(self, results: Dict[str, Any]) -> str:
+        """Format partial results"""
+        output = []
+        for task_id, result in results.items():
+            result_str = str(result)[:100]
+            output.append(f"{task_id}: {result_str}...")
+        return "\n".join(output)
+
+    def get_a2a_status(self) -> Dict[str, Any]:
+        """Get A2A system status"""
+        if not self.a2a_enabled:
+            return {"enabled": False}
+
+        agent_statuses = {}
+        for name, agent in self.a2a_agents.items():
+            agent_statuses[name] = agent.get_status()
+
+        return {
+            "enabled": True,
+            "agents": agent_statuses,
+            "message_queue_size": self.message_queue.qsize()
+        }
 
     async def execute(self, user_request: str) -> str:
         """
