@@ -54,10 +54,22 @@ source .venv/bin/activate  # Linux/WSL
 pip install -r requirements.txt
 ```
 
-Windows PowerShell:
+WSL
+```bash
+source .venv-wsl/bin/activate
+pip install -r requirements.txt
+```
+
+Linux
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Windows PowerShell
 ```powershell
 .venv\Scripts\activate
-pip install -r requirements.txt
+.venv\Scripts\pip.exe install -r .\requirements.txt
 ```
 
 **2. Configure environment (optional)**
@@ -113,10 +125,6 @@ Features:
 :models         List available models
 :model <name>   Switch model
 :clear history  Clear conversation
-```
-
-**Multi-Agent:**
-```
 :multi on       Enable multi-agent
 :multi off      Disable multi-agent
 :multi status   Check status
