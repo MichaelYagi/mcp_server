@@ -2,39 +2,6 @@
 
 A Model Context Protocol (MCP) architecture for exposing Python-based tools to AI agents through a JSON-RPC interface, with multi-agent orchestration for complex task execution.
 
-## Features
-
-* Multi-Agent Orchestration: Automatic task decomposition with parallel execution
-* Bidirectional Architecture: Server exposes tools, Client uses LLMs
-* RAG System: Vector-based retrieval with semantic search
-* Plex Media Integration: Automated subtitle and metadata ingestion
-* Real-Time Log Streaming: WebSocket-based live log viewer
-* System Monitor: Real-time CPU, GPU, and memory monitoring
-* Web UI: Responsive interface with chat, logs, and system monitor
-
-## Multi-Agent System
-
-### Agents
-
-* Orchestrator - Plans task decomposition and coordinates execution
-* Researcher - Gathers information using RAG, web search, and Plex media
-* Coder - Generates code with best practices
-* Analyst - Analyzes data and identifies patterns
-* Writer - Creates structured content
-* Planner - Manages tasks and creates roadmaps
-
-### Automatic Mode Selection
-
-**Multi-Agent triggers:**
-* Sequential indicators: "then", "after that", "and then"
-* Multi-step patterns: "research AND analyze", "find AND compare"
-* Complex queries (30+ words)
-
-**Single-Agent triggers:**
-* Simple questions
-* Direct tool calls
-* Quick lookups
-
 ## Installation
 
 ### Prerequisites
@@ -91,6 +58,39 @@ python client.py
 ```
 
 Access web UI at: `http://localhost:9000`
+
+## Features
+
+* Multi-Agent Orchestration: Automatic task decomposition with parallel execution
+* Bidirectional Architecture: Server exposes tools, Client uses LLMs
+* RAG System: Vector-based retrieval with semantic search
+* Plex Media Integration: Automated subtitle and metadata ingestion
+* Real-Time Log Streaming: WebSocket-based live log viewer
+* System Monitor: Real-time CPU, GPU, and memory monitoring
+* Web UI: Responsive interface with chat, logs, and system monitor
+
+## Multi-Agent System
+
+### Agents
+
+* Orchestrator - Plans task decomposition and coordinates execution
+* Researcher - Gathers information using RAG, web search, and Plex media
+* Coder - Generates code with best practices
+* Analyst - Analyzes data and identifies patterns
+* Writer - Creates structured content
+* Planner - Manages tasks and creates roadmaps
+
+### Automatic Mode Selection
+
+**Multi-Agent triggers:**
+* Sequential indicators: "then", "after that", "and then"
+* Multi-step patterns: "research AND analyze", "find AND compare"
+* Complex queries (30+ words)
+
+**Single-Agent triggers:**
+* Simple questions
+* Direct tool calls
+* Quick lookups
 
 ## Usage
 
