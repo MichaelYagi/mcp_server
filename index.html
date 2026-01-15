@@ -1250,35 +1250,35 @@
         // Stop Processing Function
         // -------------------------
         function stopProcessing() {
-            // 1. Immediate Visual Feedback
-            stopBtn.disabled = true;
-            stopBtn.style.opacity = '0.5';
-            stopBtn.innerHTML = "Stopping...";
-
-            // 2. Send the command immediately
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log("🛑 Priority Stop: Sending :stop command");
-                ws.send(JSON.stringify({
-                    type: "user",
-                    text: ":stop"
-                }));
-
-                ws.send(JSON.stringify({
-                    type: "user",
-                    text: ":stop"
-                }));
-            }
-
-            // 3. Local UI Override
-            // We don't wait for the server to tell us to stop UI-wise
-            hideThinking();
-
-            const stopMsg = document.createElement("div");
-            stopMsg.className = "msg assistant";
-            stopMsg.style.borderLeft = "4px solid #e74c3c";
-            stopMsg.innerHTML = `🛑 <strong>Interrupt sent</strong>. Halting process...`;
-            chat.appendChild(stopMsg);
-            chat.scrollTop = chat.scrollHeight;
+            // // 1. Immediate Visual Feedback
+            // stopBtn.disabled = true;
+            // stopBtn.style.opacity = '0.5';
+            // stopBtn.innerHTML = "Stopping...";
+            //
+            // // 2. Send the command immediately
+            // if (ws && ws.readyState === WebSocket.OPEN) {
+            //     console.log("🛑 Priority Stop: Sending :stop command");
+            //     ws.send(JSON.stringify({
+            //         type: "user",
+            //         text: ":stop"
+            //     }));
+            //
+            //     ws.send(JSON.stringify({
+            //         type: "user",
+            //         text: ":stop"
+            //     }));
+            // }
+            //
+            // // 3. Local UI Override
+            // // We don't wait for the server to tell us to stop UI-wise
+            // hideThinking();
+            //
+            // const stopMsg = document.createElement("div");
+            // stopMsg.className = "msg assistant";
+            // stopMsg.style.borderLeft = "4px solid #e74c3c";
+            // stopMsg.innerHTML = `🛑 <strong>Interrupt sent</strong>. Halting process...`;
+            // chat.appendChild(stopMsg);
+            // chat.scrollTop = chat.scrollHeight;
 
             // // 4. Force Reset UI after a short delay (Safety Net)
             // // This handles cases where the server is too busy to send a confirmation
@@ -1533,7 +1533,7 @@
 
             // 2. Toggle Button Visibility
             // Use 'flex' for the stop button because your CSS uses flex for centering
-            stopBtn.style.display = 'none';
+            // stopBtn.style.display = 'none';
             sendBtn.style.display = 'flex';
 
             // 3. Re-enable the Send Button
@@ -1541,11 +1541,11 @@
             sendBtn.style.opacity = '1';
             sendBtn.style.cursor = 'pointer';
 
-            // 4. Cleanup the Stop Button for its next use
-            stopBtn.disabled = false;
-            stopBtn.style.opacity = '1';
-            stopBtn.style.cursor = 'pointer';
-            stopBtn.innerHTML = "Stop";
+            // // 4. Cleanup the Stop Button for its next use
+            // stopBtn.disabled = false;
+            // stopBtn.style.opacity = '1';
+            // stopBtn.style.cursor = 'pointer';
+            // stopBtn.innerHTML = "Stop";
 
             // 5. Update the UI Status text
             updateStatusWithMode();
@@ -1623,8 +1623,9 @@
                 addMessage(data.text, "user");
                 showThinking();
                 isProcessing = true;
-                sendBtn.style.display = 'none';
-                stopBtn.style.display = 'flex';
+                sendBtn.style.display = 'flex';
+                sendBtn.disabled = true;
+                // stopBtn.style.display = 'flex';
                 status.textContent = "Processing…";
                 return;
             }
@@ -1659,7 +1660,7 @@
 
                 addMessage(data.text, "assistant", lastResponseWasMultiAgent);
                 isProcessing = false;
-                stopBtn.style.display = 'none';
+                // stopBtn.style.display = 'none';
                 sendBtn.style.display = 'flex';
                 sendBtn.disabled = false;
                 updateStatusWithMode();
@@ -1683,7 +1684,7 @@
                     chatHistory = [];
                     isProcessing = false;
                     sendBtn.disabled = false;
-                    stopBtn.style.display = 'none';
+                    // stopBtn.style.display = 'none';
                     sendBtn.style.display = 'flex';
                     updateStatusWithMode();
                     hideThinking();
@@ -1695,14 +1696,15 @@
 
                     if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
                         isProcessing = true;
-                        sendBtn.style.display = 'none';
-                        stopBtn.style.display = 'flex';
+                        sendBtn.style.display = 'flex';
+                        sendBtn.disabled = true;
+                        // stopBtn.style.display = 'flex';
                         status.textContent = "Processing…";
                         showThinking();
                     } else {
                         isProcessing = false;
                         sendBtn.disabled = false;
-                        stopBtn.style.display = 'none';
+                        // stopBtn.style.display = 'none';
                         sendBtn.style.display = 'flex';
                         updateStatusWithMode();
                         hideThinking();
@@ -1806,8 +1808,9 @@
             }
 
             isProcessing = true;
-            sendBtn.style.display = 'none';
-            stopBtn.style.display = 'flex';
+            // sendBtn.style.display = 'none';
+            sendBtn.style.display = 'flex';
+            sendBtn.disabled = true;
             status.textContent = "Processing…";
             lastResponseWasMultiAgent = false;
 
