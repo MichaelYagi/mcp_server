@@ -2,6 +2,7 @@ import json
 import os
 import httpx
 import logging
+import uuid
 
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
@@ -1720,6 +1721,7 @@ def plex_get_stats() -> str:
         logger.error(f"❌ [TOOL] plex_get_stats failed: {e}")
         return json.dumps({"error": str(e)})
 
+
 # ─────────────────────────────────────────────
 # A2A tools
 # ─────────────────────────────────────────────
@@ -1729,10 +1731,21 @@ def get_a2a_endpoint():
         raise ValueError("A2A_ENDPOINT environment variable is not set")
     return endpoint
 
+
 @mcp.tool()
 def discover_a2a() -> str:
     """
     Fetch the remote agent's Agent Card from A2A_ENDPOINT.
+
+    Returns:
+        JSON string with agent card containing:
+        - name: Agent name
+        - description: Agent description
+        - version: Agent version
+        - capabilities: Available capabilities
+        - endpoints: Available A2A endpoints
+
+    Use to discover what tools are available on the remote A2A agent.
     """
     endpoint = get_a2a_endpoint()
     with httpx.Client(timeout=10) as client:
@@ -1740,41 +1753,82 @@ def discover_a2a() -> str:
         resp.raise_for_status()
         return json.dumps(resp.json(), indent=2)
 
+
 @mcp.tool()
-def send_a2a(message: str) -> str:
+def send_a2a(tool: str, arguments: dict = None) -> str:
     """
-    Send a message to the remote A2A agent using message/send.
+    Call a tool on the remote A2A agent.
+
+    Args:
+        tool (str, required): Name of the remote MCP tool to call
+            Examples: 'list_todo_items', 'add_todo_item', 'get_weather_tool'
+        arguments (dict, optional): Arguments to pass to the remote tool
+            Example: {"title": "Buy milk", "description": "From store"}
+
+    Returns:
+        JSON string containing the tool's result from the remote agent
+
+    Use when you need to access tools on another agent/server via A2A protocol.
     """
-    # 1. Fetch agent card
-    A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
-    card = httpx.get(A2A_ENDPOINT).json()
+    logger.info(f"🛠 [server] send_a2a called with tool: {tool}, arguments: {arguments}")
 
-    # 2. Extract RPC endpoint
-    rpc_url = card["endpoints"]["a2a"]
+    try:
+        # 1. Fetch agent card
+        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+        if not A2A_ENDPOINT:
+            return json.dumps({"error": "A2A_ENDPOINT not configured"})
 
-    # 3. Build JSON-RPC payload
-    payload = {
-        "jsonrpc": "2.0",
-        "id": "1",
-        "method": "a2a.call",
-        "params": {
-            "tool": "message",
-            "arguments": {"message": message}
+        card_resp = httpx.get(A2A_ENDPOINT, timeout=10)
+        card_resp.raise_for_status()
+        card = card_resp.json()
+
+        # 2. Extract RPC endpoint
+        rpc_url = card.get("endpoints", {}).get("a2a")
+        if not rpc_url:
+            return json.dumps({"error": "No A2A endpoint in agent card"})
+
+        # 3. Build JSON-RPC payload for tool call
+        payload = {
+            "jsonrpc": "2.0",
+            "id": str(uuid.uuid4()),
+            "method": "a2a.call",
+            "params": {
+                "tool": tool,
+                "arguments": arguments or {}
+            }
         }
-    }
 
-    # 4. Send RPC request
-    resp = httpx.post(rpc_url, json=payload)
-    resp.raise_for_status()
+        logger.info(f"📤 Calling remote tool '{tool}' via A2A at {rpc_url}")
+        logger.debug(f"📤 Payload: {json.dumps(payload, indent=2)}")
 
-    # 5. Return readable output
-    data = resp.json()
-    result = data.get("result", None)
+        # 4. Send RPC request
+        resp = httpx.post(rpc_url, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
 
-    if result is None:
-        return "The A2A agent responded, but did not include a result field."
+        # 5. Handle response
+        if "error" in data:
+            error_msg = data["error"]
+            logger.error(f"❌ A2A error: {error_msg}")
+            return json.dumps({"error": f"Remote agent error: {error_msg}"})
 
-    return f"The A2A agent replied: {result}"
+        result = data.get("result")
+        logger.info(f"✅ A2A call successful, result: {str(result)[:200]}...")
+
+        # Return the result as JSON string
+        return json.dumps({"success": True, "result": result}, indent=2)
+
+    except httpx.TimeoutException as e:
+        logger.error(f"❌ A2A timeout: {e}")
+        return json.dumps({"error": "Request timed out"})
+    except httpx.HTTPError as e:
+        logger.error(f"❌ A2A HTTP error: {e}")
+        return json.dumps({"error": f"HTTP error: {str(e)}"})
+    except Exception as e:
+        logger.error(f"❌ A2A call failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": str(e)})
 
 if __name__ == "__main__":
     logger.info(f"🛠 [server] mcp server running with stdio enabled")

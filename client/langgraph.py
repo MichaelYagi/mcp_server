@@ -50,7 +50,7 @@ class AgentState(TypedDict):
 def router(state):
     """
     Route based on what the agent decided to do
-    NOW WITH STOP SIGNAL HANDLING
+    NOW WITH STOP SIGNAL HANDLING AND A2A COMPLETION CHECK
     """
     last_message = state["messages"][-1]
 
@@ -71,12 +71,34 @@ def router(state):
         logger.warning(f"🛑 Router: Execution already stopped - ending")
         return "continue"
 
+    # ═══════════════════════════════════════════════════════════
+    # A2A COMPLETION CHECK: Stop after A2A tool result
+    # ═══════════════════════════════════════════════════════════
+    if len(state["messages"]) >= 2:
+        # Check if second-to-last message was an AI message with send_a2a tool call
+        second_last = state["messages"][-2]
+        if isinstance(second_last, AIMessage) and hasattr(second_last, "tool_calls"):
+            for tc in second_last.tool_calls:
+                if tc.get("name") in ["send_a2a", "discover_a2a"]:
+                    # Last message should be the tool result
+                    from langchain_core.messages import ToolMessage
+                    if isinstance(last_message, ToolMessage):
+                        logger.info("🛑 Router: A2A tool result received - ending execution")
+                        return "continue"  # Go to END
+
     # If LLM made tool calls, execute them first
     if isinstance(last_message, AIMessage):
         tool_calls = getattr(last_message, "tool_calls", [])
         if tool_calls and len(tool_calls) > 0:
             logger.debug(f"🎯 Router: Found {len(tool_calls)} tool calls - routing to TOOLS")
             return "tools"
+
+    # Detect tool result messages
+    if isinstance(last_message, AIMessage):
+        if hasattr(last_message, "tool_call_id"):
+            # This is a tool RESULT, not a tool call
+            logger.info("🛑 Router: Tool result detected - stopping")
+            return "continue"
 
     # Check if we just completed an ingest operation
     ingest_completed = state.get("ingest_completed", False)
@@ -91,6 +113,25 @@ def router(state):
     if user_message:
         content = user_message.content.lower()
         logger.debug(f"🎯 Router: Checking user's original message: {content[:100]}")
+
+        # A2A explicit routing - ONLY route TO tools if not already executed
+        if isinstance(user_message, HumanMessage):
+            if "send_a2a" in content or "discover_a2a" in content:
+                # Check if we already have a ToolMessage for send_a2a/discover_a2a
+                has_a2a_result = False
+                from langchain_core.messages import ToolMessage
+                for msg in reversed(state["messages"]):
+                    if isinstance(msg, ToolMessage) and hasattr(msg, 'name'):
+                        if msg.name in ["send_a2a", "discover_a2a"]:
+                            has_a2a_result = True
+                            logger.info("🛑 Router: A2A already executed - ending")
+                            break
+
+                if not has_a2a_result:
+                    logger.info("🎯 Router: Explicit A2A request detected - routing to tools")
+                    return "tools"
+                else:
+                    return "continue"
 
         # Check for ingestion request - but only if not already completed
         if "ingest" in content and not ingest_completed:
@@ -135,6 +176,13 @@ def router(state):
             logger.debug(f"🎯 Router: Routing to TOOLS")
             return "tools"
 
+    # Detect tool result messages
+    if isinstance(last_message, AIMessage):
+        if hasattr(last_message, "tool_call_id"):
+            # This is a tool RESULT, not a tool call
+            logger.info("🛑 Router: Tool result detected - stopping")
+            return "continue"
+
     # Check for RAG-style questions (knowledge base queries)
     if isinstance(last_message, HumanMessage):
         content = last_message.content.lower()
@@ -146,7 +194,6 @@ def router(state):
     # Default: continue with normal agent completion
     logger.debug(f"🎯 Router: Continuing to END (normal completion)")
     return "continue"
-
 
 async def rag_node(state):
     """
@@ -408,7 +455,29 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
     user_message_lower = user_message.lower()
     logger = logging.getLogger("mcp_client")
 
-    # Todo/task keywords - COMPREHENSIVE LIST
+    # Developer override: explicit tool name
+    if "send_a2a" in user_message_lower:
+        logger.info("🎯 Explicit A2A override: send_a2a")
+        return [t for t in all_tools if t.name == "send_a2a"]
+
+    if "discover_a2a" in user_message_lower:
+        logger.info("🎯 Explicit A2A override: discover_a2a")
+        return [t for t in all_tools if t.name == "discover_a2a"]
+
+    a2a_keywords = [
+        "send to remote",
+        "ask the remote agent",
+        "use a2a",
+        "using a2a",
+        "call the remote agent",
+        "ask the other agent"
+    ]
+
+    if any(keyword in user_message_lower for keyword in a2a_keywords):
+        logger.info("🎯 Detected A2A intent")
+        return [t for t in all_tools if t.name in ["send_a2a", "discover_a2a"]]
+
+    # To-do/task keywords - COMPREHENSIVE LIST
     todo_keywords = [
         # Adding
         "add to my todo", "add to my tasks", "remind me to", "i need to", "don't forget",
@@ -562,6 +631,10 @@ def create_langgraph_agent(llm_with_tools, tools):
             llm_to_use = base_llm.bind_tools(filtered_tools)
         else:
             # No user message, use all tools
+            llm_to_use = llm_with_tools
+
+        # If the last message is a tool result, do NOT filter tools again
+        if isinstance(messages[-1], AIMessage) and hasattr(messages[-1], "tool_call_id"):
             llm_to_use = llm_with_tools
 
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
