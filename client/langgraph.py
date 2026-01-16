@@ -475,6 +475,10 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
     # ═══════════════════════════════════════════════════════════
 
     # Developer override: explicit A2A tool names
+    if "discover_a2a" in user_message_lower:
+        logger.info("🎯 Explicit A2A override: discover_a2a")
+        return [t for t in all_tools if t.name == "discover_a2a"]
+
     if "send_a2a_streaming" in user_message_lower:
         logger.info("🎯 Explicit A2A override: send_a2a_streaming")
         return [t for t in all_tools if t.name == "send_a2a_streaming"]
@@ -487,10 +491,6 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
         logger.info("🎯 Explicit A2A override: all A2A tools")
         # Return ALL A2A tools so LLM can choose
         return [t for t in all_tools if t.name in ["send_a2a", "send_a2a_streaming", "send_a2a_batch"]]
-
-    if "discover_a2a" in user_message_lower:
-        logger.info("🎯 Explicit A2A override: discover_a2a")
-        return [t for t in all_tools if t.name == "discover_a2a"]
 
     # General A2A keywords
     a2a_keywords = [
