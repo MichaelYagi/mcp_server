@@ -24,3 +24,4 @@ knowledge/
 /tools/rag/ingested_items.json
 /test_stop_signal.py
 /debug_stop.py
+/mock_a2a_server.py

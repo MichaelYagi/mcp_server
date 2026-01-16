@@ -15,12 +15,10 @@ from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
 
 # Import client modules
-from client import logging_handler
-from client import langgraph
-from client import models
-from client import websocket
-from client import cli
-from client import utils
+from client import logging_handler, langgraph, models, websocket, cli, utils
+
+from client.a2a_client import A2AClient
+from client.a2a_mcp_bridge import make_a2a_tool
 
 # Import multi-agent system
 try:
@@ -88,6 +86,26 @@ GLOBAL_CONVERSATION_STATE = {
     "loop_count": 0
 }
 
+# Attaches A2A tools directly to the MCPAgent’s tool list.
+async def register_a2a_tools(mcp_agent, base_url: str, logger):
+    """
+    Discover remote A2A tools and register them as MCP tools.
+    Handles connection failures gracefully.
+    """
+    try:
+        a2a = A2AClient(base_url)
+        capabilities = await a2a.discover()
+
+    except Exception as e:
+        logger.error(f"⚠️ A2A connection failed: {e}")
+        logger.error("   → Skipping A2A integration and continuing normally")
+        return  # Do NOT crash the client
+
+    # If discovery succeeded, register tools
+    for tool_def in capabilities.get("tools", []):
+        tool = make_a2a_tool(a2a, tool_def)
+        mcp_agent._tools.append(tool)
+        logger.info(f"🔌 Registered A2A tool: {tool.name}")
 
 async def main():
     global SYSTEM_PROMPT
@@ -162,6 +180,18 @@ async def main():
     await mcp_agent.initialize()
 
     tools = mcp_agent._tools
+
+    # Discover and register remote A2A tools
+    A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+
+    if A2A_ENDPOINT:
+        logger.info(f"🌐 Loading A2A tools from {A2A_ENDPOINT}")
+        await register_a2a_tools(mcp_agent, A2A_ENDPOINT, logger)
+        tools = mcp_agent._tools
+        logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
+    else:
+        logger.info("ℹ️ No A2A endpoint configured. Skipping A2A integration.")
+
     llm_with_tools = llm.bind_tools(tools)
 
     # Test tool binding
