@@ -1830,6 +1830,190 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
+
+@mcp.tool()
+async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
+    """
+    Call a tool on the remote A2A agent with STREAMING support.
+
+    This is useful for long-running operations or large responses where you want
+    to see progress in real-time.
+
+    Args:
+        tool (str, required): Name of the remote MCP tool to call
+            Examples: 'plex_ingest_batch', 'rag_search_tool'
+        arguments (dict, optional): Arguments to pass to the remote tool
+
+    Returns:
+        JSON string with:
+        - success: Boolean indicating success
+        - result: The complete result from streaming
+        - chunks_received: Number of chunks received
+        - total_bytes: Total bytes received
+
+    Use for long-running A2A operations where you want real-time progress.
+    """
+    logger.info(f"🛠 [server] send_a2a_streaming called with tool: {tool}, arguments: {arguments}")
+
+    try:
+        # 1. Fetch agent card
+        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+        if not A2A_ENDPOINT:
+            return json.dumps({"error": "A2A_ENDPOINT not configured"})
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            card_resp = await client.get(A2A_ENDPOINT)
+            card_resp.raise_for_status()
+            card = card_resp.json()
+
+        # 2. Extract RPC endpoint
+        rpc_url = card.get("endpoints", {}).get("a2a")
+        if not rpc_url:
+            return json.dumps({"error": "No A2A endpoint in agent card"})
+
+        # 3. Build JSON-RPC payload
+        payload = {
+            "jsonrpc": "2.0",
+            "id": str(uuid.uuid4()),
+            "method": "a2a.call",
+            "params": {
+                "tool": tool,
+                "arguments": arguments or {}
+            }
+        }
+
+        logger.info(f"📤 Streaming call to remote tool '{tool}' via A2A at {rpc_url}")
+
+        # 4. Stream the response
+        chunks = []
+        chunk_count = 0
+        total_bytes = 0
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream("POST", rpc_url, json=payload) as response:
+                response.raise_for_status()
+
+                async for chunk in response.aiter_bytes():
+                    if chunk:
+                        chunk_str = chunk.decode('utf-8')
+                        chunks.append(chunk_str)
+                        chunk_count += 1
+                        total_bytes += len(chunk)
+
+                        # Log progress every 10 chunks
+                        if chunk_count % 10 == 0:
+                            logger.info(f"📊 Streaming progress: {chunk_count} chunks, {total_bytes} bytes")
+
+        # 5. Combine and parse response
+        full_response = ''.join(chunks)
+
+        logger.info(f"✅ Streaming complete: {chunk_count} chunks, {total_bytes} bytes")
+
+        try:
+            data = json.loads(full_response)
+
+            # Handle JSON-RPC error
+            if "error" in data:
+                error_msg = data["error"]
+                logger.error(f"❌ A2A error: {error_msg}")
+                return json.dumps({"error": f"Remote agent error: {error_msg}"})
+
+            result = data.get("result")
+
+            return json.dumps({
+                "success": True,
+                "result": result,
+                "chunks_received": chunk_count,
+                "total_bytes": total_bytes
+            }, indent=2)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Failed to parse streaming response as JSON: {e}")
+            return json.dumps({
+                "error": "Invalid JSON response",
+                "raw_preview": full_response[:500]
+            })
+
+    except httpx.TimeoutException as e:
+        logger.error(f"❌ A2A streaming timeout: {e}")
+        return json.dumps({"error": "Request timed out"})
+    except httpx.HTTPError as e:
+        logger.error(f"❌ A2A streaming HTTP error: {e}")
+        return json.dumps({"error": f"HTTP error: {str(e)}"})
+    except Exception as e:
+        logger.error(f"❌ A2A streaming failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": str(e)})
+
+@mcp.tool()
+async def send_a2a_batch(calls: list) -> str:
+    """
+    Execute multiple A2A tool calls concurrently.
+
+    Args:
+        calls (list, required): List of dicts with 'tool' and 'arguments' keys
+            Example: [
+                {"tool": "list_todo_items", "arguments": {}},
+                {"tool": "get_weather_tool", "arguments": {"city": "Vancouver"}}
+            ]
+
+    Returns:
+        JSON string with array of results, one per call
+
+    Use when you need to call multiple remote tools at once for efficiency.
+    """
+    logger.info(f"🛠 [server] send_a2a_batch called with {len(calls)} calls")
+
+    if not isinstance(calls, list):
+        return json.dumps({"error": "calls must be a list"})
+
+    # Validate calls
+    for i, call in enumerate(calls):
+        if not isinstance(call, dict) or "tool" not in call:
+            return json.dumps({"error": f"Call {i} missing 'tool' key"})
+
+    try:
+        # Execute all calls concurrently
+        async def execute_call(call):
+            tool = call["tool"]
+            args = call.get("arguments", {})
+
+            try:
+                # Use the non-streaming version for batch
+                result_json = send_a2a(tool, args)
+                result = json.loads(result_json)
+                return {
+                    "tool": tool,
+                    "success": result.get("success", False),
+                    "result": result.get("result"),
+                    "error": result.get("error")
+                }
+            except Exception as e:
+                logger.error(f"❌ Batch call to {tool} failed: {e}")
+                return {
+                    "tool": tool,
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # Run all calls concurrently
+        results = await asyncio.gather(*[execute_call(call) for call in calls])
+
+        logger.info(f"✅ Batch A2A complete: {len(results)} results")
+
+        return json.dumps({
+            "success": True,
+            "results": results,
+            "total_calls": len(calls)
+        }, indent=2)
+
+    except Exception as e:
+        logger.error(f"❌ Batch A2A failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": str(e)})
+
 if __name__ == "__main__":
     logger.info(f"🛠 [server] mcp server running with stdio enabled")
     mcp.run(transport="stdio")

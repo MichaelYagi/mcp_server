@@ -628,7 +628,7 @@ def create_langgraph_agent(llm_with_tools, tools):
         from langchain_core.messages import ToolMessage
         for msg in reversed(messages):
             if isinstance(msg, ToolMessage) and hasattr(msg, 'name'):
-                if msg.name in ["send_a2a", "discover_a2a"]:
+                if msg.name in ["send_a2a", "discover_a2a", "send_a2a_streaming", "send_a2a_batch"]:
                     has_executed_a2a = True
                     logger.info(f"🎯 Detected A2A tool execution: {msg.name}")
                     break

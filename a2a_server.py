@@ -65,7 +65,7 @@ app = FastAPI(lifespan=lifespan)
 # A2A RPC Handler
 # -----------------------------
 @app.get("/.well-known/agent.json")
-async def agent_card():
+async def agent_card(request: Request):
     # If A2A_ENDPOINT is the card URL, derive the RPC URL
     rpc_url = None
     if A2A_ENDPOINT:
@@ -73,9 +73,35 @@ async def agent_card():
         base = A2A_ENDPOINT.rsplit("/", 2)[0]  # http://localhost:8010/.well-known
         rpc_url = urljoin(base + "/", "a2a")
 
+    # Get the session to list available tools
+    session = request.app.state.session
+
+    # Fetch available tools
+    try:
+        limit = 200
+        tools = await session.list_tools()
+        tool_list = [f"• {t.name}" for t in tools[:limit]]
+        total_tools = len(tools)
+
+        if total_tools > limit:
+            tool_summary = "\n".join(tool_list) + f"\n... and {total_tools - 20} more tools"
+        else:
+            tool_summary = "\n".join(tool_list)
+
+        description = f"""Your MCP tools exposed over A2A protocol.
+
+Available Tools ({total_tools} total):
+{tool_summary}
+
+Use the 'a2a.discover' method to get full tool descriptions and schemas."""
+
+    except Exception as e:
+        print(f"⚠️ Error listing tools for agent card: {e}")
+        description = "Your MCP tools exposed over A2A (error listing tools)"
+
     card = {
         "name": "Local A2A Agent",
-        "description": "Your MCP tools exposed over A2A",
+        "description": description,
         "version": "1.0.0",
         "capabilities": {"streaming": False},
         "defaultInputModes": ["text"],
@@ -87,7 +113,6 @@ async def agent_card():
         card["endpoints"] = {"a2a": rpc_url}
 
     return card
-
 @app.post("/a2a")
 async def a2a_handler(req: RPCRequest, request: Request):
     session = request.app.state.session
