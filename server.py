@@ -1723,13 +1723,86 @@ def plex_get_stats() -> str:
 
 
 # ─────────────────────────────────────────────
-# A2A tools
+# A2A tools (with validation)
 # ─────────────────────────────────────────────
 def get_a2a_endpoint():
     endpoint = os.getenv("A2A_ENDPOINT")
     if not endpoint:
         raise ValueError("A2A_ENDPOINT environment variable is not set")
     return endpoint
+
+
+def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
+    """
+    Validate that the A2A endpoint is reachable and returns a valid agent card.
+
+    Args:
+        endpoint: The A2A endpoint URL
+        timeout: Request timeout in seconds
+
+    Returns:
+        dict with:
+        - valid: Boolean indicating if endpoint is valid
+        - card: Agent card if valid
+        - error: Error message if invalid
+    """
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(endpoint)
+            resp.raise_for_status()
+            card = resp.json()
+
+            # Validate card has required fields
+            if not isinstance(card, dict):
+                return {
+                    "valid": False,
+                    "error": "Agent card is not a valid JSON object"
+                }
+
+            # Check for required fields
+            required_fields = ["name", "description", "version"]
+            missing_fields = [f for f in required_fields if f not in card]
+
+            if missing_fields:
+                return {
+                    "valid": False,
+                    "error": f"Agent card missing required fields: {', '.join(missing_fields)}"
+                }
+
+            # Check for A2A endpoint
+            endpoints = card.get("endpoints", {})
+            if "a2a" not in endpoints:
+                return {
+                    "valid": False,
+                    "error": "Agent card does not advertise an A2A endpoint"
+                }
+
+            return {
+                "valid": True,
+                "card": card,
+                "error": None
+            }
+
+    except httpx.TimeoutException:
+        return {
+            "valid": False,
+            "error": f"Connection timeout - A2A server not responding at {endpoint}"
+        }
+    except httpx.HTTPError as e:
+        return {
+            "valid": False,
+            "error": f"HTTP error connecting to A2A server: {str(e)}"
+        }
+    except json.JSONDecodeError:
+        return {
+            "valid": False,
+            "error": "A2A server returned invalid JSON"
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "error": f"Failed to validate A2A endpoint: {str(e)}"
+        }
 
 
 @mcp.tool()
@@ -1740,18 +1813,43 @@ def discover_a2a() -> str:
     Returns:
         JSON string with agent card containing:
         - name: Agent name
-        - description: Agent description
+        - description: Agent description (includes available tools)
         - version: Agent version
         - capabilities: Available capabilities
         - endpoints: Available A2A endpoints
 
     Use to discover what tools are available on the remote A2A agent.
     """
-    endpoint = get_a2a_endpoint()
-    with httpx.Client(timeout=10) as client:
-        resp = client.get(endpoint)
-        resp.raise_for_status()
-        return json.dumps(resp.json(), indent=2)
+    logger.info(f"🛠 [server] discover_a2a called")
+
+    try:
+        endpoint = get_a2a_endpoint()
+
+        # Validate endpoint before proceeding
+        validation = validate_a2a_endpoint(endpoint)
+
+        if not validation["valid"]:
+            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+            return json.dumps({
+                "error": validation["error"],
+                "endpoint": endpoint,
+                "suggestion": "Check if the A2A server is running and A2A_ENDPOINT is correct"
+            }, indent=2)
+
+        logger.info(f"✅ A2A endpoint validated: {endpoint}")
+        return json.dumps(validation["card"], indent=2)
+
+    except ValueError as e:
+        logger.error(f"❌ Configuration error: {e}")
+        return json.dumps({
+            "error": str(e),
+            "suggestion": "Set A2A_ENDPOINT environment variable to your A2A server URL"
+        }, indent=2)
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in discover_a2a: {e}")
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": str(e)}, indent=2)
 
 
 @mcp.tool()
@@ -1773,14 +1871,26 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
     logger.info(f"🛠 [server] send_a2a called with tool: {tool}, arguments: {arguments}")
 
     try:
-        # 1. Fetch agent card
+        # 1. Get and validate endpoint
         A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
         if not A2A_ENDPOINT:
-            return json.dumps({"error": "A2A_ENDPOINT not configured"})
+            return json.dumps({
+                "error": "A2A_ENDPOINT not configured",
+                "suggestion": "Set A2A_ENDPOINT environment variable"
+            })
 
-        card_resp = httpx.get(A2A_ENDPOINT, timeout=10)
-        card_resp.raise_for_status()
-        card = card_resp.json()
+        validation = validate_a2a_endpoint(A2A_ENDPOINT)
+
+        if not validation["valid"]:
+            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+            return json.dumps({
+                "error": validation["error"],
+                "endpoint": A2A_ENDPOINT,
+                "suggestion": "Check if the A2A server is running"
+            }, indent=2)
+
+        card = validation["card"]
+        logger.info(f"✅ A2A endpoint validated")
 
         # 2. Extract RPC endpoint
         rpc_url = card.get("endpoints", {}).get("a2a")
@@ -1820,10 +1930,16 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
 
     except httpx.TimeoutException as e:
         logger.error(f"❌ A2A timeout: {e}")
-        return json.dumps({"error": "Request timed out"})
+        return json.dumps({
+            "error": "Request timed out",
+            "suggestion": "A2A server may be overloaded or not responding"
+        })
     except httpx.HTTPError as e:
         logger.error(f"❌ A2A HTTP error: {e}")
-        return json.dumps({"error": f"HTTP error: {str(e)}"})
+        return json.dumps({
+            "error": f"HTTP error: {str(e)}",
+            "suggestion": "Check A2A server logs for details"
+        })
     except Exception as e:
         logger.error(f"❌ A2A call failed: {e}")
         import traceback
@@ -1856,20 +1972,52 @@ async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
     logger.info(f"🛠 [server] send_a2a_streaming called with tool: {tool}, arguments: {arguments}")
 
     try:
-        # 1. Fetch agent card
+        # 1. Get and validate endpoint
         A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
         if not A2A_ENDPOINT:
-            return json.dumps({"error": "A2A_ENDPOINT not configured"})
+            return json.dumps({
+                "error": "A2A_ENDPOINT not configured",
+                "suggestion": "Set A2A_ENDPOINT environment variable"
+            })
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            card_resp = await client.get(A2A_ENDPOINT)
-            card_resp.raise_for_status()
-            card = card_resp.json()
+        # Use async validation for streaming context
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                card_resp = await client.get(A2A_ENDPOINT)
+                card_resp.raise_for_status()
+                card = card_resp.json()
+
+                # Quick validation
+                if not isinstance(card, dict) or "endpoints" not in card:
+                    return json.dumps({
+                        "error": "Invalid agent card received",
+                        "endpoint": A2A_ENDPOINT,
+                        "suggestion": "Check if A2A server is running"
+                    })
+
+                if "a2a" not in card.get("endpoints", {}):
+                    return json.dumps({
+                        "error": "Agent card does not advertise an A2A endpoint",
+                        "suggestion": "Verify A2A server configuration"
+                    })
+
+                logger.info(f"✅ A2A endpoint validated")
+
+            except httpx.TimeoutException:
+                return json.dumps({
+                    "error": "Connection timeout - A2A server not responding",
+                    "endpoint": A2A_ENDPOINT,
+                    "suggestion": "Check if A2A server is running"
+                })
+            except Exception as e:
+                logger.error(f"❌ Endpoint validation failed: {e}")
+                return json.dumps({
+                    "error": f"Failed to validate endpoint: {str(e)}",
+                    "suggestion": "Check if A2A server is running"
+                })
 
         # 2. Extract RPC endpoint
         rpc_url = card.get("endpoints", {}).get("a2a")
-        if not rpc_url:
-            return json.dumps({"error": "No A2A endpoint in agent card"})
 
         # 3. Build JSON-RPC payload
         payload = {
@@ -1936,15 +2084,22 @@ async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
 
     except httpx.TimeoutException as e:
         logger.error(f"❌ A2A streaming timeout: {e}")
-        return json.dumps({"error": "Request timed out"})
+        return json.dumps({
+            "error": "Request timed out",
+            "suggestion": "Increase timeout or check server performance"
+        })
     except httpx.HTTPError as e:
         logger.error(f"❌ A2A streaming HTTP error: {e}")
-        return json.dumps({"error": f"HTTP error: {str(e)}"})
+        return json.dumps({
+            "error": f"HTTP error: {str(e)}",
+            "suggestion": "Check A2A server logs"
+        })
     except Exception as e:
         logger.error(f"❌ A2A streaming failed: {e}")
         import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})
+
 
 @mcp.tool()
 async def send_a2a_batch(calls: list) -> str:
@@ -1972,6 +2127,29 @@ async def send_a2a_batch(calls: list) -> str:
     for i, call in enumerate(calls):
         if not isinstance(call, dict) or "tool" not in call:
             return json.dumps({"error": f"Call {i} missing 'tool' key"})
+
+    # Validate endpoint once for all calls
+    try:
+        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+        if not A2A_ENDPOINT:
+            return json.dumps({
+                "error": "A2A_ENDPOINT not configured",
+                "suggestion": "Set A2A_ENDPOINT environment variable"
+            })
+
+        validation = validate_a2a_endpoint(A2A_ENDPOINT)
+
+        if not validation["valid"]:
+            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+            return json.dumps({
+                "error": validation["error"],
+                "suggestion": "Check if A2A server is running"
+            })
+
+        logger.info(f"✅ A2A endpoint validated for batch operation")
+
+    except Exception as e:
+        return json.dumps({"error": f"Endpoint validation failed: {str(e)}"})
 
     try:
         # Execute all calls concurrently
