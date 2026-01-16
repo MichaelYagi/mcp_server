@@ -17,3 +17,4 @@ pandas
 lancedb
 sentence-transformers
 tzdata
+a2a-sdk

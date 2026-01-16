@@ -1,6 +1,6 @@
-# MCP and A2A Server & Client with Multi-Agent System
+# MCP Server & Client with Multi-Agent System
 
-A Model Context Protocol (MCP) architecture for exposing Python‑based tools to AI agents through a JSON‑RPC interface, with multi‑agent orchestration and an A2A (Agent‑to‑Agent) bridge for remote tool execution and cross‑agent coordination.
+A Model Context Protocol (MCP) architecture for exposing Python-based tools to AI agents through a JSON-RPC interface, with multi-agent orchestration for complex task execution.
 
 ## Installation
 
@@ -19,13 +19,13 @@ curl -fsSL https://ollama.com/install.sh | sh
 python -m venv .venv
 ```
 
-Linux:
+Linux
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Windows PowerShell:
+Windows PowerShell
 ```powershell
 .venv\Scripts\activate
 .venv\Scripts\pip.exe install -r .\requirements.txt
@@ -34,7 +34,6 @@ Windows PowerShell:
 **2. Configure environment (optional)**
 
 Create `.env` file with any optional settings:
-
 ```bash
 WEATHER_API_KEY=<your_key>        # For weather tool
 PLEX_BASE_URL=http://<ip>:32400   # For Plex integration
@@ -62,57 +61,55 @@ Access web UI at: `http://localhost:9000`
 
 ## Features
 
-* Multi-Agent Orchestration: Automatic task decomposition with parallel execution  
-* Bidirectional Architecture: Server exposes tools, Client uses LLMs  
-* RAG System: Vector-based retrieval with semantic search  
-* Plex Media Integration: Automated subtitle and metadata ingestion  
-* Real-Time Log Streaming: WebSocket-based live log viewer  
-* System Monitor: Real-time CPU, GPU, and memory monitoring  
-* Web UI: Responsive interface with chat, logs, and system monitor  
+* Multi-Agent Orchestration: Automatic task decomposition with parallel execution
+* Bidirectional Architecture: Server exposes tools, Client uses LLMs
+* RAG System: Vector-based retrieval with semantic search
+* Plex Media Integration: Automated subtitle and metadata ingestion
+* Real-Time Log Streaming: WebSocket-based live log viewer
+* System Monitor: Real-time CPU, GPU, and memory monitoring
+* Web UI: Responsive interface with chat, logs, and system monitor
 
 ## Multi-Agent System
 
 ### Agents
 
-* Orchestrator – Plans task decomposition and coordinates execution  
-* Researcher – Gathers information using RAG, web search, and Plex media  
-* Coder – Generates code with best practices  
-* Analyst – Analyzes data and identifies patterns  
-* Writer – Creates structured content  
-* Planner – Manages tasks and creates roadmaps  
+* Orchestrator - Plans task decomposition and coordinates execution
+* Researcher - Gathers information using RAG, web search, and Plex media
+* Coder - Generates code with best practices
+* Analyst - Analyzes data and identifies patterns
+* Writer - Creates structured content
+* Planner - Manages tasks and creates roadmaps
 
 ### Automatic Mode Selection
 
 **Multi-Agent triggers:**
-
-* Sequential indicators: "then", "after that", "and then"  
-* Multi-step patterns: "research AND analyze", "find AND compare"  
-* Complex queries (30+ words)  
+* Sequential indicators: "then", "after that", "and then"
+* Multi-step patterns: "research AND analyze", "find AND compare"
+* Complex queries (30+ words)
 
 **Single-Agent triggers:**
-
-* Simple questions  
-* Direct tool calls  
-* Quick lookups  
+* Simple questions
+* Direct tool calls
+* Quick lookups
 
 ## Usage
 
 ### Web UI
 
-* Port 8765: WebSocket chat  
-* Port 8766: WebSocket logs  
-* Port 9000: HTTP server  
+* Port 8765: WebSocket chat
+* Port 8766: WebSocket logs
+* Port 9000: HTTP server
 
 Features:
-
-* Multi-agent toggle switch in header  
-* Model switcher  
-* Real-time logs with filtering  
-* System monitor  
-* Performance dashboard  
+* Multi-agent toggle switch in header
+* Model switcher
+* Real-time logs with filtering
+* System monitor
+* Performance dashboard
 
 ### CLI Commands
 
+**General:**
 ```
 :commands       List available commands
 :tools          List MCP tools
@@ -128,19 +125,16 @@ Features:
 ### Multi-Agent Examples
 
 **Research + Analysis + Writing:**
-
 ```
 Research the top 5 Python frameworks, analyze their performance, and create a comparison
 ```
 
 **Code + Documentation:**
-
 ```
 Write a Fibonacci function, analyze its complexity, and document it
 ```
 
 **Data + Planning:**
-
 ```
 Find Docker learning resources and create a 30-day study plan
 ```
@@ -150,20 +144,17 @@ Find Docker learning resources and create a 30-day study plan
 To access from other devices on your network:
 
 1. Find your IP:
-
 ```bash
 hostname -I | awk '{print $1}'  # Linux/WSL
 ipconfig                         # Windows
 ```
 
 2. Access from other devices:
-
 ```
 http://[your-ip]:9000/index.html
 ```
 
 3. Configure firewall (Windows with WSL2):
-
 ```powershell
 New-NetFirewallRule -DisplayName "MCP WebSocket Chat" -Direction Inbound -LocalPort 8765 -Protocol TCP -Action Allow
 New-NetFirewallRule -DisplayName "MCP WebSocket Logs" -Direction Inbound -LocalPort 8766 -Protocol TCP -Action Allow
@@ -171,7 +162,6 @@ New-NetFirewallRule -DisplayName "MCP HTTP Server" -Direction Inbound -LocalPort
 ```
 
 Linux:
-
 ```bash
 sudo ufw allow 8765/tcp
 sudo ufw allow 8766/tcp
@@ -181,25 +171,21 @@ sudo ufw allow 9000/tcp
 ## Troubleshooting
 
 **Multi-agent not activating:**
-
-* Run `:multi status` to check if enabled  
-* Run `:multi on` to enable  
+* Run `:multi status` to check if enabled
+* Run `:multi on` to enable
 
 **Multi-agent poor quality:**
-
-* Switch to better model: `:model qwen2.5:14b`  
-* Be more specific in queries  
+* Switch to better model: `:model qwen2.5:14b`
+* Be more specific in queries
 
 **Web UI won't load:**
-
-* Check all three ports are available  
-* Verify firewall rules  
-* Try `http://localhost:9000/index.html` directly  
+* Check all three ports are available
+* Verify firewall rules
+* Try `http://localhost:9000/index.html` directly
 
 **Chat not responding:**
-
-* Check Ollama is running: `ollama list`  
-* Try switching models: `:model llama3.1:8b`  
+* Check Ollama is running: `ollama list`
+* Try switching models: `:model llama3.1:8b`
 
 ## Directory Structure
 
@@ -225,10 +211,10 @@ mcp_a2a/
 
 ### Adding Tools
 
-1. Add Python script to `tools/<domain>/`  
-2. Register in `server.py` with `@mcp.tool()`  
+1. Add Python script to `tools/<domain>/`
+2. Register in `server.py` with `@mcp.tool()`
 
-### Customizing Agent Flows
+### Customizing Agents Flows
 
 Edit `client/multi_agent.py`:
 
@@ -236,8 +222,10 @@ Edit `client/multi_agent.py`:
 class AgentRole(Enum):
     CUSTOM_AGENT = "custom_agent"
 
+# Add system prompt
 custom_prompt = """You are a Custom Agent..."""
 
+# Map tools to agent
 role_tools = {
     AgentRole.CUSTOM_AGENT: ["tool1", "tool2"],
 }
@@ -245,111 +233,8 @@ role_tools = {
 
 ## Browser Compatibility
 
-* Chrome 90+  
-* Firefox 88+  
-* Safari 14+  
-* Edge 90+  
-* Mobile browsers with WebSocket support  
-
----
-
-# A2A (Agent-to-Agent) Bridge
-
-The A2A bridge allows **remote agents** to call your MCP tools over HTTP using JSON-RPC 2.0.
-
-This is useful for:
-
-* Multi-machine orchestration  
-* Remote tool execution  
-* Connecting multiple MCP servers  
-* Allowing external agents to call your tools  
-
-## A2A Server
-
-Start the A2A server:
-
-```bash
-python a2a_server.py
-```
-
-It exposes:
-
-```
-POST /a2a
-```
-
-### Discover tools
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "1",
-  "method": "a2a.discover",
-  "params": {}
-}
-```
-
-### Call a tool
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "2",
-  "method": "a2a.call",
-  "params": {
-    "tool": "add_entry",
-    "arguments": {
-      "text": "hello world"
-    }
-  }
-}
-```
-
-## A2A Client Integration
-
-Enable A2A:
-
-```bash
-export A2A_ENDPOINT="http://localhost:8010"
-```
-
-Then run:
-
-```bash
-python client.py
-```
-
-If reachable:
-
-```
-🌐 Loading A2A tools from http://localhost:8010
-🔌 Registered A2A tool: a2a_add_entry
-```
-
-If unreachable:
-
-```
-⚠️ A2A connection failed → Skipping A2A integration
-```
-
-## A2A Troubleshooting
-
-**No response from A2A server:**
-
-```bash
-curl -v -X POST http://localhost:8010/a2a \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"a2a.discover","params":{}}'
-```
-
-**500 errors:**
-
-* Check MCP server logs  
-* Ensure tools are registered and not blocking  
-
-**A2A tools not visible:**
-
-* Confirm `A2A_ENDPOINT` is set  
-* Look for A2A registration logs  
-
-
+* Chrome 90+
+* Firefox 88+
+* Safari 14+
+* Edge 90+
+* Mobile browsers with WebSocket support
