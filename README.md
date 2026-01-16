@@ -1,6 +1,6 @@
 # MCP and A2A Server & Client with Multi-Agent System
 
-A Model Context Protocol (MCP) architecture for exposing Python-based tools to AI agents through a JSON-RPC interface, with multi-agent orchestration for complex task execution.
+A Model Context Protocol (MCP) architecture for exposing Python‑based tools to AI agents through a JSON‑RPC interface, with multi‑agent orchestration and an A2A (Agent‑to‑Agent) bridge for remote tool execution and cross‑agent coordination.
 
 ## Installation
 
@@ -351,4 +351,5 @@ curl -v -X POST http://localhost:8010/a2a \
 
 * Confirm `A2A_ENDPOINT` is set  
 * Look for A2A registration logs  
+
 
