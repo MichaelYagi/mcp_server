@@ -1867,9 +1867,11 @@
             text = text.replace(/<br>(<h[1-6]>)/g, '$1');
             text = text.replace(/(<\/h[1-6]>)<br>/g, '$1');
             text = text.replace(/<br><br>(<ul)/g, '<br>$1'); // Only one <br> before lists
-            text = text.replace(/(<\/ul>)<br><br>/g, '$1<br>'); // Only one <br> after lists
+            text = text.replace(/(<\/ul>)<br><br>/g, '$1'); // No <br> after lists
+            text = text.replace(/(<\/ul>)<br>/g, '$1'); // No <br> after lists
             text = text.replace(/<br><br>(<ol)/g, '<br>$1'); // Only one <br> before lists
-            text = text.replace(/(<\/ol>)<br><br>/g, '$1<br>'); // Only one <br> after lists
+            text = text.replace(/(<\/ol>)<br><br>/g, '$1'); // No <br> after lists
+            text = text.replace(/(<\/ol>)<br>/g, '$1'); // No <br> after lists
             text = text.replace(/<br>(<pre>)/g, '$1');
             text = text.replace(/(<\/pre>)<br>/g, '$1');
             text = text.replace(/<br>(<blockquote>)/g, '$1');
