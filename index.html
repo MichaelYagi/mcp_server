@@ -1762,13 +1762,12 @@
                 .replace(/>/g, '&gt;');
 
             // Headers (must be done before other formatting)
-            // Add <br> before headings for spacing
-            text = text.replace(/^######\s+(.+)$/gm, '<br><h6>$1</h6>');
-            text = text.replace(/^#####\s+(.+)$/gm, '<br><h5>$1</h5>');
-            text = text.replace(/^####\s+(.+)$/gm, '<br><h4>$1</h4>');
-            text = text.replace(/^###\s+(.+)$/gm, '<br><h3>$1</h3>');
-            text = text.replace(/^##\s+(.+)$/gm, '<br><h2>$1</h2>');
-            text = text.replace(/^#\s+(.+)$/gm, '<br><h1>$1</h1>');
+            text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+            text = text.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+            text = text.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+            text = text.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+            text = text.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+            text = text.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
 
             // Code blocks (before inline code)
             text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
@@ -1852,7 +1851,9 @@
             }
 
             // Join lines but remove line breaks between list items
-            text = result.join('\n');
+            // text = result.join('\n');
+            text = text.replace(/- /g, '&bull; ');
+            text = text.replace(/\* /g, '&bull; ');
 
             // Remove line breaks between consecutive <li> tags
             text = text.replace(/<\/li>\n<li>/g, '</li><li>');
@@ -1864,20 +1865,18 @@
             text = text.replace(/\n/g, '<br>');
 
             // Clean up: remove extra <br> around block elements
-            text = text.replace(/<br>(<h[1-6]>)/g, '$1');
-            text = text.replace(/(<\/h[1-6]>)<br>/g, '$1');
-            text = text.replace(/<br><br>(<ul)/g, '<br>$1'); // Only one <br> before lists
-            text = text.replace(/(<\/ul>)<br><br>/g, '$1'); // No <br> after lists
-            text = text.replace(/(<\/ul>)<br>/g, '$1'); // No <br> after lists
-            text = text.replace(/<br><br>(<ol)/g, '<br>$1'); // Only one <br> before lists
-            text = text.replace(/(<\/ol>)<br><br>/g, '$1'); // No <br> after lists
-            text = text.replace(/(<\/ol>)<br>/g, '$1'); // No <br> after lists
             text = text.replace(/<br>(<pre>)/g, '$1');
             text = text.replace(/(<\/pre>)<br>/g, '$1');
             text = text.replace(/<br>(<blockquote>)/g, '$1');
             text = text.replace(/(<\/blockquote>)<br>/g, '$1');
             text = text.replace(/<br>(<hr>)/g, '$1');
             text = text.replace(/(<hr>)<br>/g, '$1');
+            text = text.replace(/<br><br>(<ul)/g, '$1');
+            text = text.replace(/(<\/ul>)<br><br>/g, '$1');
+            text = text.replace(/(<\/ul>)<br>/g, '$1');
+            text = text.replace(/<br><br>(<ol)/g, '$1');
+            text = text.replace(/(<\/ol>)<br><br>/g, '$1');
+            text = text.replace(/(<\/ol>)<br>/g, '$1');
 
             return text;
         }
