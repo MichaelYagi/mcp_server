@@ -36,7 +36,7 @@ Windows PowerShell
 Create `.env` file with any optional settings:
 ```bash
 WEATHER_API_KEY=<your_key>        # For weather tool
-PLEX_BASE_URL=http://<ip>:32400   # For Plex integration
+PLEX_URL=http://<ip>:32400   # For Plex integration
 PLEX_TOKEN=<your_token>           # For Plex integration
 ```
 

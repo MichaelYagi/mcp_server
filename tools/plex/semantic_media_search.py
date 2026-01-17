@@ -6,11 +6,11 @@ import requests
 from collections import Counter
 from typing import Dict, List, Any
 
-PLEX_BASE_URL = os.getenv("PLEX_BASE_URL")
+PLEX_URL = os.getenv("PLEX_URL")
 PLEX_TOKEN = os.getenv("PLEX_TOKEN")
 
-if not PLEX_BASE_URL or not PLEX_TOKEN:
-    raise RuntimeError("PLEX_BASE_URL and PLEX_TOKEN must be set in environment variables.")
+if not PLEX_URL or not PLEX_TOKEN:
+    raise RuntimeError("PLEX_URL and PLEX_TOKEN must be set in environment variables.")
 
 _INDEX_CACHE_LOCK = threading.Lock()
 _INDEX_CACHE = {
@@ -27,7 +27,7 @@ def _plex_get(path: str) -> Dict[str, Any]:
     """
     Fetch JSON from Plex, forcing JSON output and pagination.
     """
-    url = f"{PLEX_BASE_URL}{path}"
+    url = f"{PLEX_URL}{path}"
 
     params = {
         "X-Plex-Token": PLEX_TOKEN,

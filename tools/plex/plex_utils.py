@@ -7,11 +7,11 @@ from pathlib import Path
 logger = logging.getLogger("mcp_server")
 
 # Plex connection - using existing env var
-BASE_URL = os.getenv("PLEX_BASE_URL")
+BASE_URL = os.getenv("PLEX_URL")
 TOKEN = os.getenv("PLEX_TOKEN")
 
 if not TOKEN or not BASE_URL:
-    logger.warning("⚠️ PLEX_BASE_URL and PLEX_TOKEN must be set in environment")
+    logger.warning("⚠️ PLEX_URL and PLEX_TOKEN must be set in environment")
 
 _plex = None
 
