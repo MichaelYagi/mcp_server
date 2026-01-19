@@ -119,6 +119,11 @@ from tools.plex.ingest import ingest_next_batch, ingest_batch_parallel_conservat
 
 mcp = FastMCP("MCP server")
 
+def register_a2a_tools(mcp):
+    mcp.add_tool(discover_a2a)
+    mcp.add_tool(send_a2a)
+    mcp.add_tool(send_a2a_streaming)
+    mcp.add_tool(send_a2a_batch)
 
 # ─────────────────────────────────────────────
 # Knowledge Base Tools
@@ -1882,8 +1887,6 @@ def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
             "error": f"Failed to validate A2A endpoint: {str(e)}"
         }
 
-
-@mcp.tool()
 def discover_a2a() -> str:
     """
     Fetch the remote agent's Agent Card from A2A_ENDPOINT.
@@ -1929,8 +1932,6 @@ def discover_a2a() -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)}, indent=2)
 
-
-@mcp.tool()
 def send_a2a(tool: str, arguments: dict = None) -> str:
     """
     Call a tool on the remote A2A agent.
@@ -2024,8 +2025,6 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
-
-@mcp.tool()
 async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
     """
     Call a tool on the remote A2A agent with STREAMING support.
@@ -2178,8 +2177,6 @@ async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
-
-@mcp.tool()
 async def send_a2a_batch(calls: list) -> str:
     """
     Execute multiple A2A tool calls concurrently.
@@ -2269,6 +2266,11 @@ async def send_a2a_batch(calls: list) -> str:
         import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})
+
+@mcp.tool()
+async def enable_a2a():
+    register_a2a_tools(mcp)
+    return "A2A tools enabled"
 
 if __name__ == "__main__":
     logger.info(f"🛠 [server] mcp server running with stdio enabled")

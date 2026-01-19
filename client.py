@@ -200,6 +200,13 @@ async def main():
         success = await register_a2a_tools(mcp_agent, A2A_ENDPOINT, logger)
 
         if success:
+            try:
+                await client.call_tool("enable_a2a")
+                logger.info("🔌 Server-side A2A tools enabled")
+            except Exception as e:
+                logger.error(f"❌ Failed to enable A2A tools on server: {e}")
+                A2A_STATE["enabled"] = False
+
             tools = mcp_agent._tools
             logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
             A2A_STATE["enabled"] = True
