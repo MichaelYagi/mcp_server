@@ -471,6 +471,37 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
     logger = logging.getLogger("mcp_client")
 
     # ═══════════════════════════════════════════════════════════
+    # NO TOOLS NEEDED - General knowledge questions
+    # ═══════════════════════════════════════════════════════════
+
+    # Explicit "without tools" instruction
+    if "without using tools" in user_message_lower or "don't use tools" in user_message_lower:
+        logger.info("🎯 Explicit NO TOOLS request - returning empty tool list")
+        return []
+
+    # General knowledge questions that don't need tools
+    general_knowledge_patterns = [
+        "who is", "what is", "what are", "what was", "who was",
+        "explain", "tell me about", "describe", "define"
+    ]
+
+    # Check if it's a general knowledge question WITHOUT any tool-specific keywords
+    is_general_knowledge = any(pattern in user_message_lower for pattern in general_knowledge_patterns)
+
+    # Keywords that indicate tools ARE needed
+    tool_keywords = [
+        "my", "search", "find", "list", "show me", "get",
+        "plex", "movie", "todo", "task", "note", "entry",
+        "weather", "system", "code", "ingest", "rag"
+    ]
+
+    needs_tools = any(keyword in user_message_lower for keyword in tool_keywords)
+
+    if is_general_knowledge and not needs_tools:
+        logger.info("🎯 General knowledge question - no tools needed")
+        return []
+
+    # ═══════════════════════════════════════════════════════════
     # A2A TOOLS - High Priority
     # ═══════════════════════════════════════════════════════════
 
@@ -742,15 +773,31 @@ def create_langgraph_agent(llm_with_tools, tools):
                 break
 
         # Filter tools based on user intent
-        if user_message and not has_executed_a2a:  # Only filter BEFORE A2A execution
-            # Get all available tools from state
+        if user_message and not has_executed_a2a:
             all_tools = list(state.get("tools", {}).values())
             filtered_tools = filter_tools_by_intent(user_message, all_tools)
             tool_names = [t.name for t in filtered_tools]
             logger.info(f"🎯 Filtered to {len(filtered_tools)} relevant tools: {tool_names}")
 
-            # Bind the filtered tools to the BASE LLM
-            llm_to_use = base_llm.bind_tools(filtered_tools)
+            if len(filtered_tools) > 0:
+                llm_to_use = base_llm.bind_tools(filtered_tools)
+            else:
+                # NO tools available - use base LLM without any tool binding
+                logger.info("🎯 No tools needed - using base LLM without tool binding")
+
+                # Override the system message to remove tool instructions
+                messages_for_llm = []
+                for msg in messages:
+                    if isinstance(msg, SystemMessage):
+                        # Replace system message with a simpler one
+                        messages_for_llm.append(SystemMessage(
+                            content="You are a helpful AI assistant. Answer questions directly and concisely based on your knowledge. Do not suggest using tools or functions."
+                        ))
+                    else:
+                        messages_for_llm.append(msg)
+
+                messages = messages_for_llm
+                llm_to_use = base_llm
         elif has_executed_a2a:
             # After A2A execution THIS TURN, bind NO tools to force text response
             logger.info("🎯 A2A executed THIS TURN - removing tools to force final text response")
@@ -788,6 +835,7 @@ def create_langgraph_agent(llm_with_tools, tools):
                 await asyncio.sleep(0.05)
 
             response = await llm_task
+            logger.info(f"🔍 DEBUG: response.content = '{response.content}'")
             duration = time.time() - start_time
 
             # Track LLM metrics
@@ -804,48 +852,43 @@ def create_langgraph_agent(llm_with_tools, tools):
 
                 content = response.content.strip()
 
-                try:
-                    parsed = json_module.loads(content)
-                    if isinstance(parsed, dict) and parsed.get("name"):
-                        tool_name = parsed["name"]
-                        args = parsed.get("arguments", {})
-                        if isinstance(args, str):
-                            try:
-                                args = json_module.loads(args)
-                            except:
-                                args = {}
+                # Only try to parse if it looks like ACTUAL JSON or function syntax
+                # Don't parse if it's just natural text that happens to have parentheses
+                looks_like_json = content.startswith('{') and content.endswith('}')
+                looks_like_code = content.startswith('```') or '```json' in content
 
-                        logger.info(f"🔧 Parsed JSON tool call: {tool_name}({args})")
-                        response.tool_calls = [{
-                            "name": tool_name,
-                            "args": args,
-                            "id": "manual_call_1",
-                            "type": "tool_call"
-                        }]
-                except (json_module.JSONDecodeError, ValueError):
-                    match = re.search(r'(\w+)\((.*?)\)', content.replace('\n', '').replace('`', ''))
-                    if match:
-                        tool_name = match.group(1)
-                        args_str = match.group(2).strip()
+                if looks_like_json or looks_like_code:
+                    try:
+                        parsed = json_module.loads(content)
+                        if isinstance(parsed, dict) and parsed.get("name"):
+                            tool_name = parsed["name"]
 
-                        args = {}
-                        if args_str:
-                            for arg_match in re.finditer(r'(\w+)\s*=\s*(["\']?)([^,\)]+)\2', args_str):
-                                key = arg_match.group(1)
-                                value = arg_match.group(3).strip().strip('"\'')
-                                try:
-                                    value = int(value)
-                                except:
-                                    pass
-                                args[key] = value
+                            # VERIFY THE TOOL ACTUALLY EXISTS before creating a tool call
+                            tools_dict = state.get("tools", {})
+                            if tool_name not in tools_dict:
+                                logger.warning(f"⚠️ LLM tried to call non-existent tool '{tool_name}' - ignoring")
+                                # Don't create a tool call for non-existent tools
+                            else:
+                                args = parsed.get("arguments", {})
+                                if isinstance(args, str):
+                                    try:
+                                        args = json_module.loads(args)
+                                    except:
+                                        args = {}
 
-                        logger.info(f"🔧 Parsed function call: {tool_name}({args})")
-                        response.tool_calls = [{
-                            "name": tool_name,
-                            "args": args,
-                            "id": "manual_call_1",
-                            "type": "tool_call"
-                        }]
+                                logger.info(f"🔧 Parsed JSON tool call: {tool_name}({args})")
+                                response.tool_calls = [{
+                                    "name": tool_name,
+                                    "args": args,
+                                    "id": "manual_call_1",
+                                    "type": "tool_call"
+                                }]
+                    except (json_module.JSONDecodeError, ValueError):
+                        # Not valid JSON, don't try to parse as tool call
+                        pass
+                else:
+                    # It's just normal text, don't parse it as a function call
+                    logger.debug("🔧 Response is normal text, not a tool call")
 
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 for tc in response.tool_calls:
@@ -857,6 +900,29 @@ def create_langgraph_agent(llm_with_tools, tools):
             if hasattr(response, 'content'):
                 if not response.content or not response.content.strip():
                     logger.info("⚠️ LLM returned empty content (may have tool_calls)")
+
+            has_tool_calls = hasattr(response, 'tool_calls') and response.tool_calls
+            has_content = hasattr(response, 'content') and response.content and response.content.strip()
+
+            if not has_tool_calls and not has_content:
+                logger.warning("⚠️ LLM returned empty response - forcing retry without tools")
+
+                # Retry WITHOUT tools to force text response
+                retry_messages = messages + [
+                    HumanMessage(content="Please provide a direct text answer to the previous question.")
+                ]
+
+                retry_response = await base_llm.ainvoke(retry_messages)
+
+                if retry_response.content and retry_response.content.strip():
+                    logger.info("✅ Retry successful - got text response")
+                    response = retry_response
+                else:
+                    # Last resort fallback
+                    logger.error("❌ Retry failed - using fallback message")
+                    response = AIMessage(
+                        content="I apologize, but I'm having trouble generating a response. Could you please rephrase your question?"
+                    )
 
             return {
                 "messages": messages + [response],
