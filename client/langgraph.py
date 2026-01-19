@@ -812,6 +812,9 @@ def create_langgraph_agent(llm_with_tools, tools):
         try:
             llm_task = asyncio.create_task(llm_to_use.ainvoke(messages))
 
+            timeout_seconds = 120  # 2 minutes max
+            elapsed = 0
+
             # Poll for completion or stop signal
             while not llm_task.done():
                 if is_stop_requested():
@@ -831,8 +834,29 @@ def create_langgraph_agent(llm_with_tools, tools):
                         "stopped": True
                     }
 
+                # Check for timeout
+                if elapsed >= timeout_seconds:
+                    logger.error(f"❌ LLM call timeout after {timeout_seconds}s - cancelling")
+                    llm_task.cancel()
+                    try:
+                        await llm_task
+                    except asyncio.CancelledError:
+                        pass
+
+                    timeout_response = AIMessage(
+                        content="⏱️ The request took too long to process and was cancelled. Please try a simpler query or restart Ollama."
+                    )
+                    return {
+                        "messages": state["messages"] + [timeout_response],
+                        "tools": state.get("tools", {}),
+                        "llm": state.get("llm"),
+                        "ingest_completed": state.get("ingest_completed", False),
+                        "stopped": True
+                    }
+
                 # Check every 50ms for responsiveness
                 await asyncio.sleep(0.05)
+                elapsed += 0.05
 
             response = await llm_task
             logger.info(f"🔍 DEBUG: response.content = '{response.content}'")
