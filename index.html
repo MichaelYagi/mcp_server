@@ -1182,6 +1182,7 @@
         let thinkingIndicator = null;
         let multiAgentEnabled = loadMultiAgentSetting();
         let lastResponseWasMultiAgent = false;
+        let lastSentMessage = null; // Track our own sent messages
 
         // Initialize toggle state
         multiAgentToggle.checked = multiAgentEnabled;
@@ -1250,48 +1251,7 @@
         // Stop Processing Function
         // -------------------------
         function stopProcessing() {
-            // // 1. Immediate Visual Feedback
-            // stopBtn.disabled = true;
-            // stopBtn.style.opacity = '0.5';
-            // stopBtn.innerHTML = "Stopping...";
-            //
-            // // 2. Send the command immediately
-            // if (ws && ws.readyState === WebSocket.OPEN) {
-            //     console.log("🛑 Priority Stop: Sending :stop command");
-            //     ws.send(JSON.stringify({
-            //         type: "user",
-            //         text: ":stop"
-            //     }));
-            //
-            //     ws.send(JSON.stringify({
-            //         type: "user",
-            //         text: ":stop"
-            //     }));
-            // }
-            //
-            // // 3. Local UI Override
-            // // We don't wait for the server to tell us to stop UI-wise
-            // hideThinking();
-            //
-            // const stopMsg = document.createElement("div");
-            // stopMsg.className = "msg assistant";
-            // stopMsg.style.borderLeft = "4px solid #e74c3c";
-            // stopMsg.innerHTML = `🛑 <strong>Interrupt sent</strong>. Halting process...`;
-            // chat.appendChild(stopMsg);
-            // chat.scrollTop = chat.scrollHeight;
-
-            // // 4. Force Reset UI after a short delay (Safety Net)
-            // // This handles cases where the server is too busy to send a confirmation
-            // setTimeout(() => {
-            //     isProcessing = false;
-            //     stopBtn.style.display = 'none';
-            //     stopBtn.disabled = false;
-            //     stopBtn.style.opacity = '1';
-            //     stopBtn.innerHTML = "Stop"; // Reset text for next time
-            //     sendBtn.style.display = 'flex';
-            //     sendBtn.disabled = false;
-            //     updateStatusWithMode();
-            // }, 1000);
+            // Functionality handled by :stop command
         }
 
         // -------------------------
@@ -1532,8 +1492,6 @@
             isProcessing = false;
 
             // 2. Toggle Button Visibility
-            // Use 'flex' for the stop button because your CSS uses flex for centering
-            // stopBtn.style.display = 'none';
             sendBtn.style.display = 'flex';
 
             // 3. Re-enable the Send Button
@@ -1541,13 +1499,7 @@
             sendBtn.style.opacity = '1';
             sendBtn.style.cursor = 'pointer';
 
-            // // 4. Cleanup the Stop Button for its next use
-            // stopBtn.disabled = false;
-            // stopBtn.style.opacity = '1';
-            // stopBtn.style.cursor = 'pointer';
-            // stopBtn.innerHTML = "Stop";
-
-            // 5. Update the UI Status text
+            // 4. Update the UI Status text
             updateStatusWithMode();
         }
 
@@ -1615,21 +1567,32 @@
             }
 
             // ═══════════════════════════════════════════════════════════
-            // SKIP user_message echoes from server (we already showed them locally)
+            // Handle user messages - Only skip our own echoes
             // ═══════════════════════════════════════════════════════════
-            if (data.type === "cli_user_message" || data.type === "user_message") {
-                // Skip - we already added this message locally in send()
-                // But still update UI state for processing
-                if (!data.text.startsWith(":")) {
-                    showThinking();
-                    isProcessing = true;
-                    sendBtn.disabled = true;
-                    status.textContent = "Processing…";
+            if (data.type === "user_message") {
+                // If we just sent this message, skip the echo
+                if (data.text === lastSentMessage) {
+                    lastSentMessage = null; // Clear it
+                    // But still update processing state
+                    if (!data.text.startsWith(":")) {
+                        showThinking();
+                        isProcessing = true;
+                        sendBtn.disabled = true;
+                        status.textContent = "Processing…";
+                    }
+                    return;
                 }
+
+                // This is from CLI - show it!
+                addMessage(data.text, "user");
+                showThinking();
+                isProcessing = true;
+                sendBtn.disabled = true;
+                status.textContent = "Processing…";
                 return;
             }
 
-            if (data.type === "cli_assistant_message" || data.type === "assistant_message") {
+            if (data.type === "assistant_message") {
                 if (data.text.includes("🛑") || data.text.toLowerCase().includes("interrupted")) {
                     isProcessing = false;
                     hideThinking();
@@ -1963,6 +1926,11 @@
 
             // Clear input immediately
             input.value = "";
+
+            // ═══════════════════════════════════════════════════════════
+            // Track what we sent to avoid showing echo
+            // ═══════════════════════════════════════════════════════════
+            lastSentMessage = text;
 
             // ═══════════════════════════════════════════════════════════
             // Special handling for :stop command

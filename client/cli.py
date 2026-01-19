@@ -29,7 +29,6 @@ def input_thread(input_queue, stop_event):
         except (EOFError, KeyboardInterrupt):
             break
 
-
 async def cli_input_loop(agent, logger, tools, model_name, conversation_state, run_agent_fn, models_module,
                          system_prompt, create_agent_fn, orchestrator=None, multi_agent_state=None, a2a_state=None):
     """Handle CLI input using a separate thread (with multi-agent + A2A support + REAL-TIME STOP)"""
@@ -39,23 +38,37 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
     thread = threading.Thread(target=input_thread, args=(input_queue, stop_event), daemon=True)
     thread.start()
 
+    # Track current running agent task
+    current_agent_task = None
+
     try:
         while True:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)  # Fast polling
 
             if not input_queue.empty():
                 query = input_queue.get().strip()
 
+                # ═══════════════════════════════════════════════════════════
+                # PRIORITY: Handle :stop IMMEDIATELY - even during execution
+                # ═══════════════════════════════════════════════════════════
                 if query == ":stop":
                     request_stop()
                     print("\n🛑 Stop requested - operation will halt at next checkpoint")
                     print("   This may take a few seconds for the current step to complete.")
                     print("   Watch for '🛑 Stopped' messages below.\n")
                     sys.stdout.flush()
-                    await broadcast_message("cli_stop_message", {"text": "🛑 Stop requested"})
+                    await broadcast_message("assistant_message", {"text": "🛑 Stop requested"})
+
+                    # If there's a running task, don't wait for it - just continue
+                    # The stop signal will be picked up by the agent
                     continue
 
                 if not query:
+                    continue
+
+                # Don't accept new queries while one is running
+                if current_agent_task and not current_agent_task.done():
+                    print("⚠️  Please wait for current operation to complete or type :stop")
                     continue
 
                 # Handle A2A commands first
@@ -63,7 +76,7 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                     result = await handle_a2a_commands(query, orchestrator)
                     if result:
                         print(result)
-                        await broadcast_message("cli_assistant_message", {"text": result})
+                        await broadcast_message("assistant_message", {"text": result})
                     continue
 
                 # Handle multi-agent commands
@@ -71,7 +84,7 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                     result = await handle_multi_agent_commands(query, orchestrator, multi_agent_state)
                     if result:
                         print(result)
-                        await broadcast_message("cli_assistant_message", {"text": result})
+                        await broadcast_message("assistant_message", {"text": result})
                     continue
 
                 # Handle other commands
@@ -94,7 +107,7 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                     if handled:
                         if response:
                             print(response)
-                            await broadcast_message("cli_assistant_message", {"text": response})
+                            await broadcast_message("assistant_message", {"text": response})
                         if new_agent:
                             agent = new_agent
                         if new_model:
@@ -105,21 +118,34 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
 
                 print(f"\n> {query}")
 
-                await broadcast_message("cli_user_message", {"text": query})
+                await broadcast_message("user_message", {"text": query})
 
-                result = await run_agent_fn(agent, conversation_state, query, logger, tools)
+                # ═══════════════════════════════════════════════════════════
+                # RUN AGENT AS BACKGROUND TASK (non-blocking)
+                # This allows the CLI loop to continue and process :stop
+                # ═══════════════════════════════════════════════════════════
+                async def run_and_display():
+                    try:
+                        result = await run_agent_fn(agent, conversation_state, query, logger, tools)
 
-                final_message = result["messages"][-1]
-                assistant_text = final_message.content
+                        final_message = result["messages"][-1]
+                        assistant_text = final_message.content
 
-                print("\n" + assistant_text + "\n")
-                logger.info("✅ Query completed successfully")
+                        print("\n" + assistant_text + "\n")
+                        logger.info("✅ Query completed successfully")
 
-                await broadcast_message("cli_assistant_message", {
-                    "text": assistant_text,
-                    "multi_agent": result.get("multi_agent", False),
-                    "a2a": result.get("a2a", False)
-                })
+                        await broadcast_message("assistant_message", {
+                            "text": assistant_text,
+                            "multi_agent": result.get("multi_agent", False),
+                            "a2a": result.get("a2a", False)
+                        })
+                    except Exception as e:
+                        logger.error(f"❌ Error in agent execution: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                # Start the task but DON'T await it - let it run in background
+                current_agent_task = asyncio.create_task(run_and_display())
 
     except KeyboardInterrupt:
         print("\n👋 Exiting.")

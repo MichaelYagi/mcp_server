@@ -2,7 +2,7 @@
 LangGraph Module with Metrics Tracking AND STOP SIGNAL HANDLING
 Handles LangGraph agent creation, routing, and execution with performance metrics
 """
-
+import asyncio
 import json
 import logging
 import operator
@@ -698,7 +698,7 @@ def create_langgraph_agent(llm_with_tools, tools):
     async def call_model(state: AgentState):
         # Check stop signal first
         if is_stop_requested():
-            logger.warning("🛑 call_model: Stop requested - returning empty response")
+            logger.warning("🛑 call_model: Stop requested BEFORE calling LLM")
             empty_response = AIMessage(content="Operation cancelled by user.")
             return {
                 "messages": state["messages"] + [empty_response],
@@ -763,7 +763,31 @@ def create_langgraph_agent(llm_with_tools, tools):
 
         start_time = time.time()
         try:
-            response = await llm_to_use.ainvoke(messages)
+            llm_task = asyncio.create_task(llm_to_use.ainvoke(messages))
+
+            # Poll for completion or stop signal
+            while not llm_task.done():
+                if is_stop_requested():
+                    logger.warning("🛑 call_model: Stop requested DURING LLM call - cancelling")
+                    llm_task.cancel()
+                    try:
+                        await llm_task
+                    except asyncio.CancelledError:
+                        pass
+
+                    empty_response = AIMessage(content="🛑 Operation stopped during LLM processing.")
+                    return {
+                        "messages": state["messages"] + [empty_response],
+                        "tools": state.get("tools", {}),
+                        "llm": state.get("llm"),
+                        "ingest_completed": state.get("ingest_completed", False),
+                        "stopped": True
+                    }
+
+                # Check every 50ms for responsiveness
+                await asyncio.sleep(0.05)
+
+            response = await llm_task
             duration = time.time() - start_time
 
             # Track LLM metrics
