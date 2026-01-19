@@ -91,10 +91,13 @@ GLOBAL_CONVERSATION_STATE = {
 }
 
 # Attaches A2A tools directly to the MCPAgent’s tool list.
-async def register_a2a_tools(mcp_agent, base_url: str, logger):
+async def register_a2a_tools(mcp_agent, base_url: str, logger) -> bool:
     """
     Discover remote A2A tools and register them as MCP tools.
     Handles connection failures gracefully.
+
+    Returns:
+        bool: True if tools were successfully registered, False otherwise
     """
     try:
         a2a = A2AClient(base_url)
@@ -103,13 +106,17 @@ async def register_a2a_tools(mcp_agent, base_url: str, logger):
     except Exception as e:
         logger.error(f"⚠️ A2A connection failed: {e}")
         logger.error("   → Skipping A2A integration and continuing normally")
-        return  # Do NOT crash the client
+        return False  # Return failure status
 
     # If discovery succeeded, register tools
+    tool_count = 0
     for tool_def in capabilities.get("tools", []):
         tool = make_a2a_tool(a2a, tool_def)
         mcp_agent._tools.append(tool)
         logger.info(f"🔌 Registered A2A tool: {tool.name}")
+        tool_count += 1
+
+    return tool_count > 0  # Return success if at least one tool was registered
 
 async def main():
     global SYSTEM_PROMPT
@@ -189,12 +196,19 @@ async def main():
     A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
 
     if A2A_ENDPOINT:
-        logger.info(f"🌐 Loading A2A tools from {A2A_ENDPOINT}")
-        await register_a2a_tools(mcp_agent, A2A_ENDPOINT, logger)
-        tools = mcp_agent._tools
-        logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
+        logger.info(f"🌐 Attempting A2A connection to {A2A_ENDPOINT}")
+        success = await register_a2a_tools(mcp_agent, A2A_ENDPOINT, logger)
+
+        if success:
+            tools = mcp_agent._tools
+            logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
+            A2A_STATE["enabled"] = True
+        else:
+            logger.warning("⚠️ A2A registration failed - continuing with local tools only")
+            A2A_STATE["enabled"] = False
     else:
         logger.info("ℹ️ No A2A endpoint configured. Skipping A2A integration.")
+        A2A_STATE["enabled"] = False
 
     llm_with_tools = llm.bind_tools(tools)
 
