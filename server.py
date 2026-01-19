@@ -48,6 +48,9 @@ logging.getLogger("mcp_server").setLevel(logging.INFO)
 logger = logging.getLogger("mcp_server")
 logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 
+A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+A2A_AVAILABLE = False
+
 # ─────────────────────────────────────────────
 # Stop Signal Support
 # ─────────────────────────────────────────────
@@ -1883,384 +1886,396 @@ def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
             "error": f"Failed to validate A2A endpoint: {str(e)}"
         }
 
-@mcp.tool()
-def discover_a2a() -> str:
-    """
-    Fetch the remote agent's Agent Card from A2A_ENDPOINT.
+if A2A_ENDPOINT:
+    logger.info(f"🔍 Validating A2A endpoint: {A2A_ENDPOINT}")
+    validation = validate_a2a_endpoint(A2A_ENDPOINT)
 
-    Returns:
-        JSON string with agent card containing:
-        - name: Agent name
-        - description: Agent description (includes available tools)
-        - version: Agent version
-        - capabilities: Available capabilities
-        - endpoints: Available A2A endpoints
+    if validation["valid"]:
+        A2A_AVAILABLE = True
+        logger.info(f"✅ A2A endpoint validated: {validation['card'].get('name', 'Unknown')}")
+    else:
+        logger.warning(f"⚠️ A2A endpoint validation failed: {validation['error']}")
+        logger.warning(f"   A2A tools will not be registered")
 
-    Use to discover what tools are available on the remote A2A agent.
-    """
-    logger.info(f"🛠 [server] discover_a2a called")
+if A2A_AVAILABLE:
+    @mcp.tool()
+    def discover_a2a() -> str:
+        """
+        Fetch the remote agent's Agent Card from A2A_ENDPOINT.
 
-    try:
-        endpoint = get_a2a_endpoint()
+        Returns:
+            JSON string with agent card containing:
+            - name: Agent name
+            - description: Agent description (includes available tools)
+            - version: Agent version
+            - capabilities: Available capabilities
+            - endpoints: Available A2A endpoints
 
-        # Validate endpoint before proceeding
-        validation = validate_a2a_endpoint(endpoint)
-
-        if not validation["valid"]:
-            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
-            return json.dumps({
-                "error": validation["error"],
-                "endpoint": endpoint,
-                "suggestion": "Check if the A2A server is running and A2A_ENDPOINT is correct"
-            }, indent=2)
-
-        logger.info(f"✅ A2A endpoint validated: {endpoint}")
-        return json.dumps(validation["card"], indent=2)
-
-    except ValueError as e:
-        logger.error(f"❌ Configuration error: {e}")
-        return json.dumps({
-            "error": str(e),
-            "suggestion": "Set A2A_ENDPOINT environment variable to your A2A server URL"
-        }, indent=2)
-    except Exception as e:
-        logger.error(f"❌ Unexpected error in discover_a2a: {e}")
-        import traceback
-        traceback.print_exc()
-        return json.dumps({"error": str(e)}, indent=2)
-
-
-@mcp.tool()
-def send_a2a(tool: str, arguments: dict = None) -> str:
-    """
-    Call a tool on the remote A2A agent.
-    ...
-    """
-    logger.info(f"🛠 [server] send_a2a called with tool: {tool}, arguments: {arguments}")
-
-    try:
-        # 1. Get and validate endpoint
-        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
-        if not A2A_ENDPOINT:
-            return json.dumps({
-                "error": "A2A_ENDPOINT not configured",
-                "suggestion": "Set A2A_ENDPOINT environment variable"
-            })
-
-        validation = validate_a2a_endpoint(A2A_ENDPOINT)
-
-        if not validation["valid"]:
-            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
-            return json.dumps({
-                "error": validation["error"],
-                "endpoint": A2A_ENDPOINT,
-                "suggestion": "Check if the A2A server is running"
-            }, indent=2)
-
-        card = validation["card"]
-        logger.info(f"✅ A2A endpoint validated")
-
-        # 2. Extract RPC endpoint and handle relative URLs
-        rpc_url = card.get("endpoints", {}).get("a2a")
-        if not rpc_url:
-            return json.dumps({"error": "No A2A endpoint in agent card"})
-
-        # Handle relative URLs by joining with base URL
-        from urllib.parse import urljoin
-        rpc_url = urljoin(A2A_ENDPOINT.rstrip('/') + '/', rpc_url)
-
-        # 3. Build JSON-RPC payload for tool call
-        payload = {
-            "jsonrpc": "2.0",
-            "id": str(uuid.uuid4()),
-            "method": "a2a.call",
-            "params": {
-                "tool": tool,
-                "arguments": arguments or {}
-            }
-        }
-
-        logger.info(f"📤 Calling remote tool '{tool}' via A2A at {rpc_url}")
-        logger.debug(f"📤 Payload: {json.dumps(payload, indent=2)}")
-
-        # 4. Send RPC request
-        resp = httpx.post(rpc_url, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-
-        # 5. Handle response
-        if "error" in data:
-            error_msg = data["error"]
-            logger.error(f"❌ A2A error: {error_msg}")
-            return json.dumps({"error": f"Remote agent error: {error_msg}"})
-
-        result = data.get("result")
-        logger.info(f"✅ A2A call successful, result: {str(result)[:200]}...")
-
-        # Return the result as JSON string
-        return json.dumps({"success": True, "result": result}, indent=2)
-
-    except httpx.TimeoutException as e:
-        logger.error(f"❌ A2A timeout: {e}")
-        return json.dumps({
-            "error": "Request timed out",
-            "suggestion": "A2A server may be overloaded or not responding"
-        })
-    except httpx.HTTPError as e:
-        logger.error(f"❌ A2A HTTP error: {e}")
-        return json.dumps({
-            "error": f"HTTP error: {str(e)}",
-            "suggestion": "Check A2A server logs for details"
-        })
-    except Exception as e:
-        logger.error(f"❌ A2A call failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return json.dumps({"error": str(e)})
-
-@mcp.tool()
-async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
-    """
-    Call a tool on the remote A2A agent with STREAMING support.
-
-    This is useful for long-running operations or large responses where you want
-    to see progress in real-time.
-
-    Args:
-        tool (str, required): Name of the remote MCP tool to call
-            Examples: 'plex_ingest_batch', 'rag_search_tool'
-        arguments (dict, optional): Arguments to pass to the remote tool
-
-    Returns:
-        JSON string with:
-        - success: Boolean indicating success
-        - result: The complete result from streaming
-        - chunks_received: Number of chunks received
-        - total_bytes: Total bytes received
-
-    Use for long-running A2A operations where you want real-time progress.
-    """
-    logger.info(f"🛠 [server] send_a2a_streaming called with tool: {tool}, arguments: {arguments}")
-
-    try:
-        # 1. Get and validate endpoint
-        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
-        if not A2A_ENDPOINT:
-            return json.dumps({
-                "error": "A2A_ENDPOINT not configured",
-                "suggestion": "Set A2A_ENDPOINT environment variable"
-            })
-
-        # Use async validation for streaming context
-        async with httpx.AsyncClient(timeout=10) as client:
-            try:
-                card_resp = await client.get(A2A_ENDPOINT)
-                card_resp.raise_for_status()
-                card = card_resp.json()
-
-                # Quick validation
-                if not isinstance(card, dict) or "endpoints" not in card:
-                    return json.dumps({
-                        "error": "Invalid agent card received",
-                        "endpoint": A2A_ENDPOINT,
-                        "suggestion": "Check if A2A server is running"
-                    })
-
-                if "a2a" not in card.get("endpoints", {}):
-                    return json.dumps({
-                        "error": "Agent card does not advertise an A2A endpoint",
-                        "suggestion": "Verify A2A server configuration"
-                    })
-
-                logger.info(f"✅ A2A endpoint validated")
-
-            except httpx.TimeoutException:
-                return json.dumps({
-                    "error": "Connection timeout - A2A server not responding",
-                    "endpoint": A2A_ENDPOINT,
-                    "suggestion": "Check if A2A server is running"
-                })
-            except Exception as e:
-                logger.error(f"❌ Endpoint validation failed: {e}")
-                return json.dumps({
-                    "error": f"Failed to validate endpoint: {str(e)}",
-                    "suggestion": "Check if A2A server is running"
-                })
-
-        # 2. Extract RPC endpoint
-        rpc_url = card.get("endpoints", {}).get("a2a")
-
-        # 3. Build JSON-RPC payload
-        payload = {
-            "jsonrpc": "2.0",
-            "id": str(uuid.uuid4()),
-            "method": "a2a.call",
-            "params": {
-                "tool": tool,
-                "arguments": arguments or {}
-            }
-        }
-
-        logger.info(f"📤 Streaming call to remote tool '{tool}' via A2A at {rpc_url}")
-
-        # 4. Stream the response
-        chunks = []
-        chunk_count = 0
-        total_bytes = 0
-
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("POST", rpc_url, json=payload) as response:
-                response.raise_for_status()
-
-                async for chunk in response.aiter_bytes():
-                    if chunk:
-                        chunk_str = chunk.decode('utf-8')
-                        chunks.append(chunk_str)
-                        chunk_count += 1
-                        total_bytes += len(chunk)
-
-                        # Log progress every 10 chunks
-                        if chunk_count % 10 == 0:
-                            logger.info(f"📊 Streaming progress: {chunk_count} chunks, {total_bytes} bytes")
-
-        # 5. Combine and parse response
-        full_response = ''.join(chunks)
-
-        logger.info(f"✅ Streaming complete: {chunk_count} chunks, {total_bytes} bytes")
+        Use to discover what tools are available on the remote A2A agent.
+        """
+        logger.info(f"🛠 [server] discover_a2a called")
 
         try:
-            data = json.loads(full_response)
+            endpoint = get_a2a_endpoint()
 
-            # Handle JSON-RPC error
+            # Validate endpoint before proceeding
+            validation = validate_a2a_endpoint(endpoint)
+
+            if not validation["valid"]:
+                logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+                return json.dumps({
+                    "error": validation["error"],
+                    "endpoint": endpoint,
+                    "suggestion": "Check if the A2A server is running and A2A_ENDPOINT is correct"
+                }, indent=2)
+
+            logger.info(f"✅ A2A endpoint validated: {endpoint}")
+            return json.dumps(validation["card"], indent=2)
+
+        except ValueError as e:
+            logger.error(f"❌ Configuration error: {e}")
+            return json.dumps({
+                "error": str(e),
+                "suggestion": "Set A2A_ENDPOINT environment variable to your A2A server URL"
+            }, indent=2)
+        except Exception as e:
+            logger.error(f"❌ Unexpected error in discover_a2a: {e}")
+            import traceback
+            traceback.print_exc()
+            return json.dumps({"error": str(e)}, indent=2)
+
+
+    @mcp.tool()
+    def send_a2a(tool: str, arguments: dict = None) -> str:
+        """
+        Call a tool on the remote A2A agent.
+        ...
+        """
+        logger.info(f"🛠 [server] send_a2a called with tool: {tool}, arguments: {arguments}")
+
+        try:
+            # 1. Get and validate endpoint
+            A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+            if not A2A_ENDPOINT:
+                return json.dumps({
+                    "error": "A2A_ENDPOINT not configured",
+                    "suggestion": "Set A2A_ENDPOINT environment variable"
+                })
+
+            validation = validate_a2a_endpoint(A2A_ENDPOINT)
+
+            if not validation["valid"]:
+                logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+                return json.dumps({
+                    "error": validation["error"],
+                    "endpoint": A2A_ENDPOINT,
+                    "suggestion": "Check if the A2A server is running"
+                }, indent=2)
+
+            card = validation["card"]
+            logger.info(f"✅ A2A endpoint validated")
+
+            # 2. Extract RPC endpoint and handle relative URLs
+            rpc_url = card.get("endpoints", {}).get("a2a")
+            if not rpc_url:
+                return json.dumps({"error": "No A2A endpoint in agent card"})
+
+            # Handle relative URLs by joining with base URL
+            from urllib.parse import urljoin
+            rpc_url = urljoin(A2A_ENDPOINT.rstrip('/') + '/', rpc_url)
+
+            # 3. Build JSON-RPC payload for tool call
+            payload = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "a2a.call",
+                "params": {
+                    "tool": tool,
+                    "arguments": arguments or {}
+                }
+            }
+
+            logger.info(f"📤 Calling remote tool '{tool}' via A2A at {rpc_url}")
+            logger.debug(f"📤 Payload: {json.dumps(payload, indent=2)}")
+
+            # 4. Send RPC request
+            resp = httpx.post(rpc_url, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+
+            # 5. Handle response
             if "error" in data:
                 error_msg = data["error"]
                 logger.error(f"❌ A2A error: {error_msg}")
                 return json.dumps({"error": f"Remote agent error: {error_msg}"})
 
             result = data.get("result")
+            logger.info(f"✅ A2A call successful, result: {str(result)[:200]}...")
+
+            # Return the result as JSON string
+            return json.dumps({"success": True, "result": result}, indent=2)
+
+        except httpx.TimeoutException as e:
+            logger.error(f"❌ A2A timeout: {e}")
+            return json.dumps({
+                "error": "Request timed out",
+                "suggestion": "A2A server may be overloaded or not responding"
+            })
+        except httpx.HTTPError as e:
+            logger.error(f"❌ A2A HTTP error: {e}")
+            return json.dumps({
+                "error": f"HTTP error: {str(e)}",
+                "suggestion": "Check A2A server logs for details"
+            })
+        except Exception as e:
+            logger.error(f"❌ A2A call failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return json.dumps({"error": str(e)})
+
+    @mcp.tool()
+    async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
+        """
+        Call a tool on the remote A2A agent with STREAMING support.
+
+        This is useful for long-running operations or large responses where you want
+        to see progress in real-time.
+
+        Args:
+            tool (str, required): Name of the remote MCP tool to call
+                Examples: 'plex_ingest_batch', 'rag_search_tool'
+            arguments (dict, optional): Arguments to pass to the remote tool
+
+        Returns:
+            JSON string with:
+            - success: Boolean indicating success
+            - result: The complete result from streaming
+            - chunks_received: Number of chunks received
+            - total_bytes: Total bytes received
+
+        Use for long-running A2A operations where you want real-time progress.
+        """
+        logger.info(f"🛠 [server] send_a2a_streaming called with tool: {tool}, arguments: {arguments}")
+
+        try:
+            # 1. Get and validate endpoint
+            A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+            if not A2A_ENDPOINT:
+                return json.dumps({
+                    "error": "A2A_ENDPOINT not configured",
+                    "suggestion": "Set A2A_ENDPOINT environment variable"
+                })
+
+            # Use async validation for streaming context
+            async with httpx.AsyncClient(timeout=10) as client:
+                try:
+                    card_resp = await client.get(A2A_ENDPOINT)
+                    card_resp.raise_for_status()
+                    card = card_resp.json()
+
+                    # Quick validation
+                    if not isinstance(card, dict) or "endpoints" not in card:
+                        return json.dumps({
+                            "error": "Invalid agent card received",
+                            "endpoint": A2A_ENDPOINT,
+                            "suggestion": "Check if A2A server is running"
+                        })
+
+                    if "a2a" not in card.get("endpoints", {}):
+                        return json.dumps({
+                            "error": "Agent card does not advertise an A2A endpoint",
+                            "suggestion": "Verify A2A server configuration"
+                        })
+
+                    logger.info(f"✅ A2A endpoint validated")
+
+                except httpx.TimeoutException:
+                    return json.dumps({
+                        "error": "Connection timeout - A2A server not responding",
+                        "endpoint": A2A_ENDPOINT,
+                        "suggestion": "Check if A2A server is running"
+                    })
+                except Exception as e:
+                    logger.error(f"❌ Endpoint validation failed: {e}")
+                    return json.dumps({
+                        "error": f"Failed to validate endpoint: {str(e)}",
+                        "suggestion": "Check if A2A server is running"
+                    })
+
+            # 2. Extract RPC endpoint
+            rpc_url = card.get("endpoints", {}).get("a2a")
+
+            # 3. Build JSON-RPC payload
+            payload = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "a2a.call",
+                "params": {
+                    "tool": tool,
+                    "arguments": arguments or {}
+                }
+            }
+
+            logger.info(f"📤 Streaming call to remote tool '{tool}' via A2A at {rpc_url}")
+
+            # 4. Stream the response
+            chunks = []
+            chunk_count = 0
+            total_bytes = 0
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", rpc_url, json=payload) as response:
+                    response.raise_for_status()
+
+                    async for chunk in response.aiter_bytes():
+                        if chunk:
+                            chunk_str = chunk.decode('utf-8')
+                            chunks.append(chunk_str)
+                            chunk_count += 1
+                            total_bytes += len(chunk)
+
+                            # Log progress every 10 chunks
+                            if chunk_count % 10 == 0:
+                                logger.info(f"📊 Streaming progress: {chunk_count} chunks, {total_bytes} bytes")
+
+            # 5. Combine and parse response
+            full_response = ''.join(chunks)
+
+            logger.info(f"✅ Streaming complete: {chunk_count} chunks, {total_bytes} bytes")
+
+            try:
+                data = json.loads(full_response)
+
+                # Handle JSON-RPC error
+                if "error" in data:
+                    error_msg = data["error"]
+                    logger.error(f"❌ A2A error: {error_msg}")
+                    return json.dumps({"error": f"Remote agent error: {error_msg}"})
+
+                result = data.get("result")
+
+                return json.dumps({
+                    "success": True,
+                    "result": result,
+                    "chunks_received": chunk_count,
+                    "total_bytes": total_bytes
+                }, indent=2)
+
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Failed to parse streaming response as JSON: {e}")
+                return json.dumps({
+                    "error": "Invalid JSON response",
+                    "raw_preview": full_response[:500]
+                })
+
+        except httpx.TimeoutException as e:
+            logger.error(f"❌ A2A streaming timeout: {e}")
+            return json.dumps({
+                "error": "Request timed out",
+                "suggestion": "Increase timeout or check server performance"
+            })
+        except httpx.HTTPError as e:
+            logger.error(f"❌ A2A streaming HTTP error: {e}")
+            return json.dumps({
+                "error": f"HTTP error: {str(e)}",
+                "suggestion": "Check A2A server logs"
+            })
+        except Exception as e:
+            logger.error(f"❌ A2A streaming failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return json.dumps({"error": str(e)})
+
+    @mcp.tool()
+    async def send_a2a_batch(calls: list) -> str:
+        """
+        Execute multiple A2A tool calls concurrently.
+
+        Args:
+            calls (list, required): List of dicts with 'tool' and 'arguments' keys
+                Example: [
+                    {"tool": "list_todo_items", "arguments": {}},
+                    {"tool": "get_weather_tool", "arguments": {"city": "Vancouver"}}
+                ]
+
+        Returns:
+            JSON string with array of results, one per call
+
+        Use when you need to call multiple remote tools at once for efficiency.
+        """
+        logger.info(f"🛠 [server] send_a2a_batch called with {len(calls)} calls")
+
+        if not isinstance(calls, list):
+            return json.dumps({"error": "calls must be a list"})
+
+        # Validate calls
+        for i, call in enumerate(calls):
+            if not isinstance(call, dict) or "tool" not in call:
+                return json.dumps({"error": f"Call {i} missing 'tool' key"})
+
+        # Validate endpoint once for all calls
+        try:
+            A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+            if not A2A_ENDPOINT:
+                return json.dumps({
+                    "error": "A2A_ENDPOINT not configured",
+                    "suggestion": "Set A2A_ENDPOINT environment variable"
+                })
+
+            validation = validate_a2a_endpoint(A2A_ENDPOINT)
+
+            if not validation["valid"]:
+                logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
+                return json.dumps({
+                    "error": validation["error"],
+                    "suggestion": "Check if A2A server is running"
+                })
+
+            logger.info(f"✅ A2A endpoint validated for batch operation")
+
+        except Exception as e:
+            return json.dumps({"error": f"Endpoint validation failed: {str(e)}"})
+
+        try:
+            # Execute all calls concurrently
+            async def execute_call(call):
+                tool = call["tool"]
+                args = call.get("arguments", {})
+
+                try:
+                    # Use the non-streaming version for batch
+                    result_json = send_a2a(tool, args)
+                    result = json.loads(result_json)
+                    return {
+                        "tool": tool,
+                        "success": result.get("success", False),
+                        "result": result.get("result"),
+                        "error": result.get("error")
+                    }
+                except Exception as e:
+                    logger.error(f"❌ Batch call to {tool} failed: {e}")
+                    return {
+                        "tool": tool,
+                        "success": False,
+                        "error": str(e)
+                    }
+
+            # Run all calls concurrently
+            results = await asyncio.gather(*[execute_call(call) for call in calls])
+
+            logger.info(f"✅ Batch A2A complete: {len(results)} results")
 
             return json.dumps({
                 "success": True,
-                "result": result,
-                "chunks_received": chunk_count,
-                "total_bytes": total_bytes
+                "results": results,
+                "total_calls": len(calls)
             }, indent=2)
 
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ Failed to parse streaming response as JSON: {e}")
-            return json.dumps({
-                "error": "Invalid JSON response",
-                "raw_preview": full_response[:500]
-            })
-
-    except httpx.TimeoutException as e:
-        logger.error(f"❌ A2A streaming timeout: {e}")
-        return json.dumps({
-            "error": "Request timed out",
-            "suggestion": "Increase timeout or check server performance"
-        })
-    except httpx.HTTPError as e:
-        logger.error(f"❌ A2A streaming HTTP error: {e}")
-        return json.dumps({
-            "error": f"HTTP error: {str(e)}",
-            "suggestion": "Check A2A server logs"
-        })
-    except Exception as e:
-        logger.error(f"❌ A2A streaming failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return json.dumps({"error": str(e)})
-
-@mcp.tool()
-async def send_a2a_batch(calls: list) -> str:
-    """
-    Execute multiple A2A tool calls concurrently.
-
-    Args:
-        calls (list, required): List of dicts with 'tool' and 'arguments' keys
-            Example: [
-                {"tool": "list_todo_items", "arguments": {}},
-                {"tool": "get_weather_tool", "arguments": {"city": "Vancouver"}}
-            ]
-
-    Returns:
-        JSON string with array of results, one per call
-
-    Use when you need to call multiple remote tools at once for efficiency.
-    """
-    logger.info(f"🛠 [server] send_a2a_batch called with {len(calls)} calls")
-
-    if not isinstance(calls, list):
-        return json.dumps({"error": "calls must be a list"})
-
-    # Validate calls
-    for i, call in enumerate(calls):
-        if not isinstance(call, dict) or "tool" not in call:
-            return json.dumps({"error": f"Call {i} missing 'tool' key"})
-
-    # Validate endpoint once for all calls
-    try:
-        A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
-        if not A2A_ENDPOINT:
-            return json.dumps({
-                "error": "A2A_ENDPOINT not configured",
-                "suggestion": "Set A2A_ENDPOINT environment variable"
-            })
-
-        validation = validate_a2a_endpoint(A2A_ENDPOINT)
-
-        if not validation["valid"]:
-            logger.error(f"❌ A2A endpoint validation failed: {validation['error']}")
-            return json.dumps({
-                "error": validation["error"],
-                "suggestion": "Check if A2A server is running"
-            })
-
-        logger.info(f"✅ A2A endpoint validated for batch operation")
-
-    except Exception as e:
-        return json.dumps({"error": f"Endpoint validation failed: {str(e)}"})
-
-    try:
-        # Execute all calls concurrently
-        async def execute_call(call):
-            tool = call["tool"]
-            args = call.get("arguments", {})
-
-            try:
-                # Use the non-streaming version for batch
-                result_json = send_a2a(tool, args)
-                result = json.loads(result_json)
-                return {
-                    "tool": tool,
-                    "success": result.get("success", False),
-                    "result": result.get("result"),
-                    "error": result.get("error")
-                }
-            except Exception as e:
-                logger.error(f"❌ Batch call to {tool} failed: {e}")
-                return {
-                    "tool": tool,
-                    "success": False,
-                    "error": str(e)
-                }
-
-        # Run all calls concurrently
-        results = await asyncio.gather(*[execute_call(call) for call in calls])
-
-        logger.info(f"✅ Batch A2A complete: {len(results)} results")
-
-        return json.dumps({
-            "success": True,
-            "results": results,
-            "total_calls": len(calls)
-        }, indent=2)
-
-    except Exception as e:
-        logger.error(f"❌ Batch A2A failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return json.dumps({"error": str(e)})
+        except Exception as e:
+            logger.error(f"❌ Batch A2A failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return json.dumps({"error": str(e)})
 
 if __name__ == "__main__":
     logger.info(f"🛠 [server] mcp server running with stdio enabled")
