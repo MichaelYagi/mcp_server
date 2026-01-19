@@ -1593,9 +1593,13 @@
             }
 
             if (data.type === "assistant_message") {
-                if (data.text.includes("🛑") || data.text.toLowerCase().includes("interrupted")) {
-                    isProcessing = false;
+                if (data.text.includes("🛑") || data.text.toLowerCase().includes("interrupted") || data.text.toLowerCase().includes("stopped")) {
                     hideThinking();
+
+                    // stop message
+                    addMessage(data.text, "assistant", false);
+
+                    isProcessing = false;
                     resetControlButtons();
                     return;
                 }
