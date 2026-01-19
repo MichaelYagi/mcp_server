@@ -119,12 +119,6 @@ from tools.plex.ingest import ingest_next_batch, ingest_batch_parallel_conservat
 
 mcp = FastMCP("MCP server")
 
-def register_a2a_tools(mcp):
-    mcp.add_tool(discover_a2a)
-    mcp.add_tool(send_a2a)
-    mcp.add_tool(send_a2a_streaming)
-    mcp.add_tool(send_a2a_batch)
-
 # ─────────────────────────────────────────────
 # Knowledge Base Tools
 # ─────────────────────────────────────────────
@@ -1814,13 +1808,12 @@ def get_a2a_endpoint():
         raise ValueError("A2A_ENDPOINT environment variable is not set")
     return endpoint
 
-
 def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
     """
     Validate that the A2A endpoint is reachable and returns a valid agent card.
 
     Args:
-        endpoint: The A2A endpoint URL
+        endpoint: The A2A base URL (e.g., "http://localhost:8010")
         timeout: Request timeout in seconds
 
     Returns:
@@ -1830,8 +1823,11 @@ def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
         - error: Error message if invalid
     """
     try:
+        # Construct the well-known agent card URL
+        agent_card_url = f"{endpoint.rstrip('/')}/.well-known/agent.json"
+
         with httpx.Client(timeout=timeout) as client:
-            resp = client.get(endpoint)
+            resp = client.get(agent_card_url)
             resp.raise_for_status()
             card = resp.json()
 
@@ -1887,6 +1883,7 @@ def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
             "error": f"Failed to validate A2A endpoint: {str(e)}"
         }
 
+@mcp.tool()
 def discover_a2a() -> str:
     """
     Fetch the remote agent's Agent Card from A2A_ENDPOINT.
@@ -1932,20 +1929,12 @@ def discover_a2a() -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)}, indent=2)
 
+
+@mcp.tool()
 def send_a2a(tool: str, arguments: dict = None) -> str:
     """
     Call a tool on the remote A2A agent.
-
-    Args:
-        tool (str, required): Name of the remote MCP tool to call
-            Examples: 'list_todo_items', 'add_todo_item', 'get_weather_tool'
-        arguments (dict, optional): Arguments to pass to the remote tool
-            Example: {"title": "Buy milk", "description": "From store"}
-
-    Returns:
-        JSON string containing the tool's result from the remote agent
-
-    Use when you need to access tools on another agent/server via A2A protocol.
+    ...
     """
     logger.info(f"🛠 [server] send_a2a called with tool: {tool}, arguments: {arguments}")
 
@@ -1971,10 +1960,14 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
         card = validation["card"]
         logger.info(f"✅ A2A endpoint validated")
 
-        # 2. Extract RPC endpoint
+        # 2. Extract RPC endpoint and handle relative URLs
         rpc_url = card.get("endpoints", {}).get("a2a")
         if not rpc_url:
             return json.dumps({"error": "No A2A endpoint in agent card"})
+
+        # Handle relative URLs by joining with base URL
+        from urllib.parse import urljoin
+        rpc_url = urljoin(A2A_ENDPOINT.rstrip('/') + '/', rpc_url)
 
         # 3. Build JSON-RPC payload for tool call
         payload = {
@@ -2025,6 +2018,7 @@ def send_a2a(tool: str, arguments: dict = None) -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
+@mcp.tool()
 async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
     """
     Call a tool on the remote A2A agent with STREAMING support.
@@ -2177,6 +2171,7 @@ async def send_a2a_streaming(tool: str, arguments: dict = None) -> str:
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
+@mcp.tool()
 async def send_a2a_batch(calls: list) -> str:
     """
     Execute multiple A2A tool calls concurrently.
@@ -2266,11 +2261,6 @@ async def send_a2a_batch(calls: list) -> str:
         import traceback
         traceback.print_exc()
         return json.dumps({"error": str(e)})
-
-@mcp.tool()
-async def enable_a2a():
-    register_a2a_tools(mcp)
-    return "A2A tools enabled"
 
 if __name__ == "__main__":
     logger.info(f"🛠 [server] mcp server running with stdio enabled")
