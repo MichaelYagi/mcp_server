@@ -480,14 +480,30 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
         logger.info("🎯 Explicit NO TOOLS request - returning empty tool list")
         return []
 
+    # Expand contractions for better matching
+    expanded_message = user_message_lower
+    contractions = {
+        "who's": "who is",
+        "what's": "what is",
+        "where's": "where is",
+        "when's": "when is",
+        "how's": "how is",
+        "that's": "that is",
+        "there's": "there is",
+        "it's": "it is"
+    }
+    for contraction, expansion in contractions.items():
+        expanded_message = expanded_message.replace(contraction, expansion)
+
     # General knowledge questions that don't need tools
     general_knowledge_patterns = [
         "who is", "what is", "what are", "what was", "who was",
-        "explain", "tell me about", "describe", "define"
+        "explain", "tell me about", "describe", "define",
+        "where is", "when is", "how is"
     ]
 
     # Check if it's a general knowledge question WITHOUT any tool-specific keywords
-    is_general_knowledge = any(pattern in user_message_lower for pattern in general_knowledge_patterns)
+    is_general_knowledge = any(pattern in expanded_message for pattern in general_knowledge_patterns)
 
     # Keywords that indicate tools ARE needed
     tool_keywords = [
