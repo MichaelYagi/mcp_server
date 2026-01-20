@@ -759,120 +759,189 @@ def create_langgraph_agent(llm_with_tools, tools):
         messages = state["messages"]
 
         # ═══════════════════════════════════════════════════════════
-        # Check if we just executed an A2A tool IN THIS TURN
-        # Only check messages AFTER the most recent HumanMessage
+        # Check if we're formatting tool results
         # ═══════════════════════════════════════════════════════════
-        has_executed_a2a = False
         from langchain_core.messages import ToolMessage
 
-        # Find the most recent HumanMessage (current turn)
+        last_message = messages[-1] if messages else None
+
+        if isinstance(last_message, ToolMessage):
+            logger.info("🎯 Formatting tool results")
+
+            logger.info(f"🧠 Calling LLM with {len(messages)} messages")
+
+            start_time = time.time()
+            try:
+                response = await base_llm.ainvoke(messages)
+                duration = time.time() - start_time
+
+                if METRICS_AVAILABLE:
+                    metrics["llm_calls"] += 1
+                    metrics["llm_times"].append((time.time(), duration))
+
+                return {
+                    "messages": messages + [response],
+                    "tools": state.get("tools", {}),
+                    "llm": state.get("llm"),
+                    "ingest_completed": state.get("ingest_completed", False),
+                    "stopped": state.get("stopped", False)
+                }
+
+            except Exception as e:
+                duration = time.time() - start_time
+                if METRICS_AVAILABLE:
+                    metrics["llm_errors"] += 1
+                    metrics["llm_times"].append((time.time(), duration))
+                logger.error(f"❌ Model call failed: {e}")
+                raise
+
+        # ═══════════════════════════════════════════════════════════
+        # Check A2A execution
+        # ═══════════════════════════════════════════════════════════
+        has_executed_a2a = False
+
         last_human_idx = -1
         for i in range(len(messages) - 1, -1, -1):
             if isinstance(messages[i], HumanMessage):
                 last_human_idx = i
                 break
 
-        # Only check messages AFTER the last HumanMessage
         if last_human_idx >= 0:
             messages_this_turn = messages[last_human_idx + 1:]
             for msg in messages_this_turn:
                 if isinstance(msg, ToolMessage) and hasattr(msg, 'name'):
                     if msg.name in ["send_a2a", "discover_a2a", "send_a2a_streaming", "send_a2a_batch"]:
                         has_executed_a2a = True
-                        logger.info(f"🎯 Detected A2A tool execution THIS TURN: {msg.name}")
+                        logger.info(f"🎯 A2A execution: {msg.name}")
                         break
 
-        # Get user's original message for tool filtering
+        # Get user message
         user_message = None
         for msg in reversed(messages):
             if isinstance(msg, HumanMessage):
                 user_message = msg.content
                 break
 
-        # Filter tools based on user intent
-        # Filter tools based on user intent
+        # ═══════════════════════════════════════════════════════════
+        # MINIMAL KEYWORD ROUTING (3 patterns only)
+        # ═══════════════════════════════════════════════════════════
         if user_message and not has_executed_a2a:
             all_tools = list(state.get("tools", {}).values())
-            filtered_tools = filter_tools_by_intent(user_message, all_tools)
-            tool_names = [t.name for t in filtered_tools]
-            logger.info(f"🎯 Filtered to {len(filtered_tools)} relevant tools: {tool_names}")
+            user_lower = user_message.lower()
 
-            if len(filtered_tools) > 0:
-                # Case 1: We have relevant tools - use them
-                llm_to_use = base_llm.bind_tools(filtered_tools)
+            # Pattern 1: Location queries
+            if "my location" in user_lower or "what's my location" in user_lower or "where am i" in user_lower:
+                logger.info("🎯 Location → get_location_tool")
+                filtered_tools = [t for t in all_tools if t.name == "get_location_tool"]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            else:
-                # Case 2: No relevant tools - try LangSearch web search first
-                logger.info("🎯 No tools needed - trying LangSearch web search")
+            # Pattern 2: Weather queries (BEFORE "current" pattern)
+            elif "weather" in user_lower or "temperature" in user_lower or "forecast" in user_lower:
+                logger.info("🎯 Weather → location + weather tools")
+                filtered_tools = [t for t in all_tools if t.name in ["get_location_tool", "get_weather_tool"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 3: Time queries
+            elif "what time" in user_lower or "current time" in user_lower:
+                logger.info("🎯 Time → get_time_tool")
+                filtered_tools = [t for t in all_tools if t.name == "get_time_tool"]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 4: Todo/task management
+            elif any(kw in user_lower for kw in ["todo", "task", "remind me"]) and not "find" in user_lower:
+                logger.info("🎯 Todo → todo tools")
+                filtered_tools = [t for t in all_tools if "todo" in t.name.lower()]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 5: Plex library searches
+            elif ("find" in user_lower or "search" in user_lower) and (
+                    "plex" in user_lower or "library" in user_lower or "my library" in user_lower):
+                logger.info("🎯 Plex library → RAG + scene tools")
+                filtered_tools = [t for t in all_tools if
+                                  t.name in ["rag_search_tool", "semantic_media_search_text", "scene_locator_tool",
+                                             "find_scene_by_title"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 6: System info queries
+            elif any(kw in user_lower for kw in ["system info", "hardware", "cpu", "gpu", "ram", "specs", "processes"]):
+                logger.info("🎯 System → system info tools")
+                filtered_tools = [t for t in all_tools if
+                                  t.name in ["get_hardware_specs_tool", "get_system_info", "list_system_processes"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 7: Code-related queries
+            elif any(kw in user_lower for kw in ["code", "scan code", "debug", "review code", "summarize code"]):
+                logger.info("🎯 Code → code tools")
+                filtered_tools = [t for t in all_tools if
+                                  t.name in ["summarize_code_file", "search_code_in_directory", "scan_code_directory",
+                                             "summarize_code", "debug_fix"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 8: Text summarization
+            elif any(kw in user_lower for kw in ["summarize", "summary", "explain"]) and not "code" in user_lower:
+                logger.info("🎯 Text → text/summarization tools")
+                filtered_tools = [t for t in all_tools if
+                                  t.name in ["summarize_text_tool", "summarize_direct_tool", "explain_simplified_tool",
+                                             "concept_contextualizer_tool"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 9: Plex ingestion
+            elif "ingest" in user_lower:
+                logger.info("🎯 Ingest → plex ingest tools")
+                filtered_tools = [t for t in all_tools if
+                                  "ingest" in t.name.lower() or t.name in ["plex_find_unprocessed", "plex_get_stats",
+                                                                           "rag_status_tool", "rag_diagnose_tool"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 10: A2A/remote agent queries
+            elif "a2a" in user_lower or "remote" in user_lower or "discover" in user_lower:
+                logger.info("🎯 A2A → a2a tools")
+                filtered_tools = [t for t in all_tools if "a2a" in t.name.lower()]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern 11: Current events / general knowledge (AFTER all specific patterns)
+            elif "current" in user_lower or "who is" in user_lower or "what is" in user_lower:
+                logger.info("🎯 Current/general knowledge → LangSearch")
 
                 langsearch = get_langsearch_client()
 
                 if langsearch.is_available():
-                    # Try LangSearch web search
                     search_result = await langsearch.search(user_message)
 
                     if search_result["success"]:
-                        # LangSearch succeeded - augment messages with search results
-                        logger.info("✅ LangSearch search successful - augmenting context")
-
+                        logger.info("✅ LangSearch successful")
                         search_context = search_result["results"]
 
-                        # REPLACE system message (don't augment existing one)
                         augmented_messages = []
                         for msg in messages:
                             if isinstance(msg, SystemMessage):
-                                # Create NEW system message with search results
-                                augmented_messages.append(SystemMessage(content=f"""You are a helpful, knowledgeable AI assistant. Answer the user's question directly and accurately based on the web search results provided below.
+                                augmented_messages.append(SystemMessage(content=f"""You are a helpful AI assistant.
 
-                    CURRENT WEB SEARCH RESULTS:
-                    The following information was found from a web search:
+        WEB SEARCH RESULTS:
+        {search_context}
 
-                    {search_context}
-
-                    Use this information to answer the user's question. Cite sources when relevant. Provide factual, accurate information based on these search results."""))
+        Use these results to answer accurately."""))
                             else:
                                 augmented_messages.append(msg)
 
                         messages = augmented_messages
                         llm_to_use = base_llm
                     else:
-                        # LangSearch failed - fall back to base LLM
-                        logger.warning(f"⚠️ LangSearch failed: {search_result.get('error')} - using base LLM")
-
-                        # COMPLETELY REPLACE system message
-                        fallback_messages = []
-                        for msg in messages:
-                            if isinstance(msg, SystemMessage):
-                                fallback_messages.append(SystemMessage(
-                                    content="You are a helpful, knowledgeable AI assistant. Answer the user's question directly and concisely based on your training knowledge. Provide factual, accurate information."
-                                ))
-                            else:
-                                fallback_messages.append(msg)
-
-                        messages = fallback_messages
+                        logger.warning(f"⚠️ LangSearch failed - using base LLM")
                         llm_to_use = base_llm
                 else:
-                    # LangSearch not configured - use base LLM directly
-                    logger.info("🎯 LangSearch not configured - using base LLM without tools")
-
-                    # COMPLETELY REPLACE system message
-                    fallback_messages = []
-                    for msg in messages:
-                        if isinstance(msg, SystemMessage):
-                            fallback_messages.append(SystemMessage(
-                                content="You are a helpful, knowledgeable AI assistant. Answer the user's question directly and concisely based on your training knowledge. Provide factual, accurate information."
-                            ))
-                        else:
-                            fallback_messages.append(msg)
-
-                    messages = fallback_messages
+                    logger.warning("⚠️ LangSearch not available - using base LLM")
                     llm_to_use = base_llm
+
+            # Everything else: Use all tools
+            else:
+                logger.info(f"🎯 General query → all {len(all_tools)} tools")
+                llm_to_use = base_llm.bind_tools(all_tools)
+
         elif has_executed_a2a:
-            # After A2A execution THIS TURN, bind NO tools to force text response
-            logger.info("🎯 A2A executed THIS TURN - removing tools to force final text response")
-            llm_to_use = base_llm  # No tools bound = must respond with text
+            logger.info("🎯 A2A executed - no tools")
+            llm_to_use = base_llm
         else:
-            # No user message, use all tools
             llm_to_use = llm_with_tools
 
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
@@ -881,20 +950,19 @@ def create_langgraph_agent(llm_with_tools, tools):
         try:
             llm_task = asyncio.create_task(llm_to_use.ainvoke(messages))
 
-            timeout_seconds = 120  # 2 minutes max
+            timeout_seconds = 120
             elapsed = 0
 
-            # Poll for completion or stop signal
             while not llm_task.done():
                 if is_stop_requested():
-                    logger.warning("🛑 call_model: Stop requested DURING LLM call - cancelling")
+                    logger.warning("🛑 Stop during LLM call")
                     llm_task.cancel()
                     try:
                         await llm_task
                     except asyncio.CancelledError:
                         pass
 
-                    empty_response = AIMessage(content="🛑 Operation stopped during LLM processing.")
+                    empty_response = AIMessage(content="🛑 Operation stopped.")
                     return {
                         "messages": state["messages"] + [empty_response],
                         "tools": state.get("tools", {}),
@@ -903,18 +971,15 @@ def create_langgraph_agent(llm_with_tools, tools):
                         "stopped": True
                     }
 
-                # Check for timeout
                 if elapsed >= timeout_seconds:
-                    logger.error(f"❌ LLM call timeout after {timeout_seconds}s - cancelling")
+                    logger.error(f"❌ LLM timeout")
                     llm_task.cancel()
                     try:
                         await llm_task
                     except asyncio.CancelledError:
                         pass
 
-                    timeout_response = AIMessage(
-                        content="⏱️ The request took too long to process and was cancelled. Please try a simpler query or restart Ollama."
-                    )
+                    timeout_response = AIMessage(content="⏱️ Request timeout.")
                     return {
                         "messages": state["messages"] + [timeout_response],
                         "tools": state.get("tools", {}),
@@ -923,99 +988,30 @@ def create_langgraph_agent(llm_with_tools, tools):
                         "stopped": True
                     }
 
-                # Check every 50ms for responsiveness
                 await asyncio.sleep(0.05)
                 elapsed += 0.05
 
             response = await llm_task
-            logger.info(f"🔍 DEBUG: response.content = '{response.content}'")
             duration = time.time() - start_time
 
-            # Track LLM metrics
             if METRICS_AVAILABLE:
                 metrics["llm_calls"] += 1
                 metrics["llm_times"].append((time.time(), duration))
 
-            tool_calls = getattr(response, "tool_calls", [])
-            logger.info(f"🔧 LLM returned {len(tool_calls)} tool calls")
-
-            if len(tool_calls) == 0 and response.content:
-                import re
-                import json as json_module
-
-                content = response.content.strip()
-
-                # Only try to parse if it looks like ACTUAL JSON or function syntax
-                # Don't parse if it's just natural text that happens to have parentheses
-                looks_like_json = content.startswith('{') and content.endswith('}')
-                looks_like_code = content.startswith('```') or '```json' in content
-
-                if looks_like_json or looks_like_code:
-                    try:
-                        parsed = json_module.loads(content)
-                        if isinstance(parsed, dict) and parsed.get("name"):
-                            tool_name = parsed["name"]
-
-                            # VERIFY THE TOOL ACTUALLY EXISTS before creating a tool call
-                            tools_dict = state.get("tools", {})
-                            if tool_name not in tools_dict:
-                                logger.warning(f"⚠️ LLM tried to call non-existent tool '{tool_name}' - ignoring")
-                                # Don't create a tool call for non-existent tools
-                            else:
-                                args = parsed.get("arguments", {})
-                                if isinstance(args, str):
-                                    try:
-                                        args = json_module.loads(args)
-                                    except:
-                                        args = {}
-
-                                logger.info(f"🔧 Parsed JSON tool call: {tool_name}({args})")
-                                response.tool_calls = [{
-                                    "name": tool_name,
-                                    "args": args,
-                                    "id": "manual_call_1",
-                                    "type": "tool_call"
-                                }]
-                    except (json_module.JSONDecodeError, ValueError):
-                        # Not valid JSON, don't try to parse as tool call
-                        pass
-                else:
-                    # It's just normal text, don't parse it as a function call
-                    logger.debug("🔧 Response is normal text, not a tool call")
-
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                for tc in response.tool_calls:
-                    logger.info(f"🔧   Tool: {tc.get('name', 'unknown')}, Args: {tc.get('args', {})}")
-            else:
-                content = response.content if hasattr(response, 'content') else str(response)
-                logger.debug(f"🔧 No tool calls. Full response: {content}")
-
-            if hasattr(response, 'content'):
-                if not response.content or not response.content.strip():
-                    logger.info("⚠️ LLM returned empty content (may have tool_calls)")
-
+            # Handle empty responses
             has_tool_calls = hasattr(response, 'tool_calls') and response.tool_calls
             has_content = hasattr(response, 'content') and response.content and response.content.strip()
 
             if not has_tool_calls and not has_content:
-                logger.warning("⚠️ LLM returned empty response - forcing retry without tools")
-
-                # Retry WITHOUT tools to force text response
-                retry_messages = messages + [
-                    HumanMessage(content="Please provide a direct text answer to the previous question.")
-                ]
-
+                logger.warning("⚠️ Empty response - retrying without tools")
+                retry_messages = messages + [HumanMessage(content="Please provide a direct answer.")]
                 retry_response = await base_llm.ainvoke(retry_messages)
 
                 if retry_response.content and retry_response.content.strip():
-                    logger.info("✅ Retry successful - got text response")
                     response = retry_response
                 else:
-                    # Last resort fallback
-                    logger.error("❌ Retry failed - using fallback message")
                     response = AIMessage(
-                        content="I apologize, but I'm having trouble generating a response. Could you please rephrase your question?"
-                    )
+                        content="I'm having trouble generating a response. Please rephrase your question.")
 
             return {
                 "messages": messages + [response],
@@ -1024,12 +1020,13 @@ def create_langgraph_agent(llm_with_tools, tools):
                 "ingest_completed": state.get("ingest_completed", False),
                 "stopped": state.get("stopped", False)
             }
+
         except Exception as e:
             duration = time.time() - start_time
             if METRICS_AVAILABLE:
                 metrics["llm_errors"] += 1
                 metrics["llm_times"].append((time.time(), duration))
-            logger.error(f"❌ Model call failed after {duration:.2f}s: {e}")
+            logger.error(f"❌ Model call failed: {e}")
             raise
 
     async def ingest_node(state: AgentState):
