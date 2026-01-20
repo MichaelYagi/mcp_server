@@ -829,31 +829,25 @@ def create_langgraph_agent(llm_with_tools, tools):
             all_tools = list(state.get("tools", {}).values())
             user_lower = user_message.lower()
 
-            # Pattern 1: Location queries
+            # Pattern: Location queries
             if "my location" in user_lower or "what's my location" in user_lower or "where am i" in user_lower:
                 logger.info("🎯 Location → get_location_tool")
                 filtered_tools = [t for t in all_tools if t.name == "get_location_tool"]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 2: Weather queries (BEFORE "current" pattern)
+            # Pattern: Weather queries (BEFORE "current" pattern)
             elif "weather" in user_lower or "temperature" in user_lower or "forecast" in user_lower:
                 logger.info("🎯 Weather → location + weather tools")
                 filtered_tools = [t for t in all_tools if t.name in ["get_location_tool", "get_weather_tool"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 3: Time queries
+            # Pattern: Time queries
             elif "what time" in user_lower or "current time" in user_lower:
                 logger.info("🎯 Time → get_time_tool")
                 filtered_tools = [t for t in all_tools if t.name == "get_time_tool"]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 4: Todo/task management
-            elif any(kw in user_lower for kw in ["todo", "task", "remind me"]) and not "find" in user_lower:
-                logger.info("🎯 Todo → todo tools")
-                filtered_tools = [t for t in all_tools if "todo" in t.name.lower()]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
-
-            # Pattern 5: Plex library searches
+            # Pattern: Plex library searches
             elif ("find" in user_lower or "search" in user_lower) and (
                     "plex" in user_lower or "library" in user_lower or "my library" in user_lower):
                 logger.info("🎯 Plex library → RAG + scene tools")
@@ -862,14 +856,14 @@ def create_langgraph_agent(llm_with_tools, tools):
                                              "find_scene_by_title"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 6: System info queries
+            # Pattern: System info queries
             elif any(kw in user_lower for kw in ["system info", "hardware", "cpu", "gpu", "ram", "specs", "processes"]):
                 logger.info("🎯 System → system info tools")
                 filtered_tools = [t for t in all_tools if
                                   t.name in ["get_hardware_specs_tool", "get_system_info", "list_system_processes"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 7: Code-related queries
+            # Pattern: Code-related queries
             elif any(kw in user_lower for kw in ["code", "scan code", "debug", "review code", "summarize code"]):
                 logger.info("🎯 Code → code tools")
                 filtered_tools = [t for t in all_tools if
@@ -877,7 +871,7 @@ def create_langgraph_agent(llm_with_tools, tools):
                                              "summarize_code", "debug_fix"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 8: Text summarization
+            # Pattern: Text summarization
             elif any(kw in user_lower for kw in ["summarize", "summary", "explain"]) and not "code" in user_lower:
                 logger.info("🎯 Text → text/summarization tools")
                 filtered_tools = [t for t in all_tools if
@@ -885,15 +879,16 @@ def create_langgraph_agent(llm_with_tools, tools):
                                              "concept_contextualizer_tool"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 9: Plex ingestion
-            elif "ingest" in user_lower:
-                logger.info("🎯 Ingest → plex ingest tools")
+            # Pattern: Ingestion (Plex + documents)
+            elif "ingest" in user_lower or "add to rag" in user_lower or "add to knowledge" in user_lower:
+                logger.info("🎯 Ingest → RAG + plex ingest tools")
                 filtered_tools = [t for t in all_tools if
-                                  "ingest" in t.name.lower() or t.name in ["plex_find_unprocessed", "plex_get_stats",
-                                                                           "rag_status_tool", "rag_diagnose_tool"]]
+                                  "ingest" in t.name.lower() or
+                                  t.name in ["rag_add_tool", "plex_find_unprocessed", "plex_get_stats",
+                                             "rag_status_tool", "rag_diagnose_tool"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 10: A2A/remote agent queries
+            # Pattern: A2A/remote agent queries
             elif "a2a" in user_lower or "remote" in user_lower or "discover" in user_lower:
                 logger.info("🎯 A2A → a2a tools")
                 filtered_tools = [t for t in all_tools if "a2a" in t.name.lower()]
