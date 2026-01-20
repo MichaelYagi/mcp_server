@@ -33,7 +33,7 @@ class A2AClient:
 
     async def discover(self):
         # 1. Fetch the agent card from the well-known location
-        agent_card_url = f"{self.base_url}/.well-known/agent-card.json"
+        agent_card_url = f"{self.base_url}/.well-known/agent.json"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(agent_card_url)

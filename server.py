@@ -1827,7 +1827,7 @@ def validate_a2a_endpoint(endpoint: str, timeout: float = 5.0) -> dict:
     """
     try:
         # Construct the well-known agent card URL
-        agent_card_url = f"{endpoint.rstrip('/')}/.well-known/agent-card.json"
+        agent_card_url = f"{endpoint.rstrip('/')}/.well-known/agent.json"
 
         with httpx.Client(timeout=timeout) as client:
             resp = client.get(agent_card_url)
