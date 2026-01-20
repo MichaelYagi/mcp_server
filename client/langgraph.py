@@ -9,6 +9,7 @@ import operator
 import time
 from typing import TypedDict, Annotated, Sequence
 from .stop_signal import is_stop_requested, clear_stop
+from .langsearch_client import get_langsearch_client
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
@@ -773,6 +774,7 @@ def create_langgraph_agent(llm_with_tools, tools):
                 break
 
         # Filter tools based on user intent
+        # Filter tools based on user intent
         if user_message and not has_executed_a2a:
             all_tools = list(state.get("tools", {}).values())
             filtered_tools = filter_tools_by_intent(user_message, all_tools)
@@ -780,24 +782,75 @@ def create_langgraph_agent(llm_with_tools, tools):
             logger.info(f"🎯 Filtered to {len(filtered_tools)} relevant tools: {tool_names}")
 
             if len(filtered_tools) > 0:
+                # Case 1: We have relevant tools - use them
                 llm_to_use = base_llm.bind_tools(filtered_tools)
+
             else:
-                # NO tools available - use base LLM without any tool binding
-                logger.info("🎯 No tools needed - using base LLM without tool binding")
+                # Case 2: No relevant tools - try LangSearch web search first
+                logger.info("🎯 No tools needed - trying LangSearch web search")
 
-                # Override the system message to remove tool instructions
-                messages_for_llm = []
-                for msg in messages:
-                    if isinstance(msg, SystemMessage):
-                        # Replace system message with a simpler one
-                        messages_for_llm.append(SystemMessage(
-                            content="You are a helpful AI assistant. Answer questions directly and concisely based on your knowledge. Do not suggest using tools or functions."
-                        ))
+                langsearch = get_langsearch_client()
+
+                if langsearch.is_available():
+                    # Try LangSearch web search
+                    search_result = await langsearch.search(user_message)
+
+                    if search_result["success"]:
+                        # LangSearch succeeded - augment messages with search results
+                        logger.info("✅ LangSearch search successful - augmenting context")
+
+                        search_context = search_result["results"]
+
+                        # REPLACE system message (don't augment existing one)
+                        augmented_messages = []
+                        for msg in messages:
+                            if isinstance(msg, SystemMessage):
+                                # Create NEW system message with search results
+                                augmented_messages.append(SystemMessage(content=f"""You are a helpful, knowledgeable AI assistant. Answer the user's question directly and accurately based on the web search results provided below.
+
+                    CURRENT WEB SEARCH RESULTS:
+                    The following information was found from a web search:
+
+                    {search_context}
+
+                    Use this information to answer the user's question. Cite sources when relevant. Provide factual, accurate information based on these search results."""))
+                            else:
+                                augmented_messages.append(msg)
+
+                        messages = augmented_messages
+                        llm_to_use = base_llm
                     else:
-                        messages_for_llm.append(msg)
+                        # LangSearch failed - fall back to base LLM
+                        logger.warning(f"⚠️ LangSearch failed: {search_result.get('error')} - using base LLM")
 
-                messages = messages_for_llm
-                llm_to_use = base_llm
+                        # COMPLETELY REPLACE system message
+                        fallback_messages = []
+                        for msg in messages:
+                            if isinstance(msg, SystemMessage):
+                                fallback_messages.append(SystemMessage(
+                                    content="You are a helpful, knowledgeable AI assistant. Answer the user's question directly and concisely based on your training knowledge. Provide factual, accurate information."
+                                ))
+                            else:
+                                fallback_messages.append(msg)
+
+                        messages = fallback_messages
+                        llm_to_use = base_llm
+                else:
+                    # LangSearch not configured - use base LLM directly
+                    logger.info("🎯 LangSearch not configured - using base LLM without tools")
+
+                    # COMPLETELY REPLACE system message
+                    fallback_messages = []
+                    for msg in messages:
+                        if isinstance(msg, SystemMessage):
+                            fallback_messages.append(SystemMessage(
+                                content="You are a helpful, knowledgeable AI assistant. Answer the user's question directly and concisely based on your training knowledge. Provide factual, accurate information."
+                            ))
+                        else:
+                            fallback_messages.append(msg)
+
+                    messages = fallback_messages
+                    llm_to_use = base_llm
         elif has_executed_a2a:
             # After A2A execution THIS TURN, bind NO tools to force text response
             logger.info("🎯 A2A executed THIS TURN - removing tools to force final text response")

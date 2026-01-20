@@ -19,11 +19,11 @@ def get_weather(city: Optional[str] = None, state: Optional[str] = None, country
     loc = resolve_location(city, state, country)
 
     load_dotenv()
-    api_key = os.getenv("WEATHER_API_KEY")
+    api_key = os.getenv("WEATHER_TOKEN")
     if not api_key:
         return json.dumps({
             "error": "missing_api_key",
-            "message": "Set WEATHER_API_KEY in your environment to enable real weather data.",
+            "message": "Set WEATHER_TOKENin your environment to enable real weather data.",
             "city": loc["city"],
             "state": loc["state"],
             "country": loc["country"]

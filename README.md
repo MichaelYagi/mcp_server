@@ -1,6 +1,6 @@
 # MCP Server & Client with Multi-Agent System and A2A Protocol
 
-A Model Context Protocol (MCP) architecture for exposing Python-based tools to AI agents through a JSON-RPC interface, with multi-agent orchestration and Agent-to-Agent (A2A) protocol support for distributed tool execution.
+A Model Context Protocol (MCP) architecture for exposing Python-based tools to AI agents through a JSON-RPC interface, with multi-agent orchestration, Agent-to-Agent (A2A) protocol support for distributed tool execution, and LangSearch web search fallback.
 
 ## Installation
 
@@ -38,8 +38,11 @@ Create `.env` file with any optional settings:
 # A2A Protocol Configuration
 A2A_ENDPOINT=http://localhost:8010  # A2A server endpoint (optional)
 
+# LangSearch Web Search API
+LANGSEARCH_TOKEN=your_langsearch_api_key  # Get from https://langsearch.com (optional)
+
 # Weather API (optional)
-WEATHER_API_KEY=<your_key>
+WEATHER_TOKEN=<your_key>
 
 # Plex Integration (optional)
 PLEX_URL=http://<ip>:32400
@@ -80,6 +83,7 @@ Access web UI at: `http://localhost:9000`
 
 ## Features
 
+* **LangSearch Web Search**: Automatic web search fallback when no appropriate tools are found
 * **A2A Protocol**: Agent-to-Agent communication for distributed tool execution
 * **Multi-Agent Orchestration**: Automatic task decomposition with parallel execution
 * **Bidirectional Architecture**: Server exposes tools, Client uses LLMs
@@ -88,6 +92,88 @@ Access web UI at: `http://localhost:9000`
 * **Real-Time Log Streaming**: WebSocket-based live log viewer
 * **System Monitor**: Real-time CPU, GPU, and memory monitoring
 * **Web UI**: Responsive interface with chat, logs, and system monitor
+
+## LangSearch Web Search Integration
+
+### Intelligent Fallback Chain
+
+The system uses a 3-tier fallback approach for answering queries:
+
+```
+User Query
+    ↓
+1. Check for appropriate tools
+    ↓
+   Tools Found? → YES → Use filtered tools
+    ↓ NO
+2. Try LangSearch web search
+    ↓
+   Search Success? → YES → Augment context with results
+    ↓ NO (API error/limit/missing key)
+3. Fall back to base LLM knowledge
+```
+
+### How It Works
+
+**Scenario 1: Tool-based query**
+```
+> What's the weather in Tokyo?
+```
+- Weather intent detected → Uses `get_weather_tool`
+- LangSearch is NOT triggered
+
+**Scenario 2: General knowledge query (LangSearch available)**
+```
+> Who won the 2024 NBA championship?
+```
+- No specific tool matches
+- LangSearch performs web search
+- Results added to context
+- LLM answers using search results
+
+**Scenario 3: LangSearch unavailable/fails**
+```
+> What is quantum computing?
+```
+- No specific tool matches
+- LangSearch not configured or fails
+- Falls back to LLM's training knowledge
+
+### Configuration
+
+Get a LangSearch API key from: https://langsearch.com
+
+Add to `.env`:
+```bash
+LANGSEARCH_TOKEN=your_api_key_here
+```
+
+### Monitoring LangSearch Activity
+
+Watch logs for LangSearch usage:
+```
+🎯 No tools needed - trying LangSearch web search
+🔍 Performing LangSearch web search: 'Who won the 2024 NBA championship?'
+✅ LangSearch returned results (112961 chars)
+✅ LangSearch search successful - augmenting context
+```
+
+Or graceful fallback:
+```
+🎯 No tools needed - trying LangSearch web search
+❌ LangSearch: Invalid API key
+⚠️ LangSearch failed: Invalid LangSearch API key - using base LLM
+```
+
+### Error Handling
+
+LangSearch errors are handled gracefully:
+- **401 Invalid API key** → Falls back to base LLM
+- **429 Rate limit exceeded** → Falls back to base LLM
+- **Network timeout** → Falls back to base LLM
+- **Token not configured** → Falls back to base LLM
+
+The system never blocks or fails due to LangSearch issues.
 
 ## A2A (Agent-to-Agent) Protocol
 
@@ -356,6 +442,13 @@ Features:
 
 ### Example Workflows
 
+**General knowledge with LangSearch:**
+```
+> Who won the 2024 NBA championship?
+> What are the latest developments in AI?
+> What's happening in the tech industry today?
+```
+
 **Weather queries via A2A:**
 ```
 > what's the weather in Vancouver?
@@ -440,6 +533,17 @@ sudo ufw allow 8010/tcp
 
 ## Troubleshooting
 
+**LangSearch not working:**
+* Check `LANGSEARCH_TOKEN` is set in `.env`
+* Verify API key is valid: Test at https://langsearch.com
+* Check logs for LangSearch activity
+* Ensure query doesn't match specific tool intents (LangSearch only triggers when no tools match)
+
+**LangSearch rate limits:**
+* System automatically falls back to base LLM
+* Check logs for "429 Rate limit exceeded"
+* Wait for rate limit reset or upgrade plan
+
 **A2A server not connecting:**
 * Verify A2A server is running: `curl http://localhost:8010/.well-known/agent.json`
 * Check `A2A_ENDPOINT` in `.env` is set to `http://localhost:8010`
@@ -487,8 +591,9 @@ mcp_a2a/
 ├── client/
 │   ├── a2a_client.py      # A2A client implementation
 │   ├── a2a_tools.py       # A2A tool registration
+│   ├── langsearch_client.py  # LangSearch web search client
 │   ├── multi_agent.py     # Multi-agent orchestration
-│   ├── langgraph.py       # Single-agent execution
+│   ├── langgraph.py       # Single-agent execution with LangSearch
 │   ├── commands.py        # CLI commands
 │   └── websocket.py       # WebSocket server
 └── tools/                 # Python tools
@@ -570,9 +675,28 @@ role_tools = {
 * Edge 90+
 * Mobile browsers with WebSocket support
 
-## A2A Protocol Specification
+## API Integration Details
 
-The A2A protocol follows these standards:
+### LangSearch API
+
+**Endpoint**: `https://api.langsearch.com/v1/web-search`
+
+**Authentication**: Bearer token in `Authorization` header
+
+**Request format**:
+```json
+{
+  "query": "user's search query"
+}
+```
+
+**Response handling**:
+- Success: Search results extracted and added to LLM context
+- 401: Invalid API key → Graceful fallback
+- 429: Rate limit → Graceful fallback
+- Network errors → Graceful fallback
+
+### A2A Protocol Specification
 
 **Agent Card** (`/.well-known/agent.json`):
 ```json
