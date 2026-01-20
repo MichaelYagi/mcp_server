@@ -64,7 +64,7 @@ app = FastAPI(lifespan=lifespan)
 # -----------------------------
 # A2A RPC Handler
 # -----------------------------
-@app.get("/.well-known/agent.json")
+@app.get("/.well-known/agent-card.json")
 async def agent_card(request: Request):
     # If A2A_ENDPOINT is the card URL, derive the RPC URL
     rpc_url = None
@@ -123,7 +123,7 @@ Use the 'a2a.discover' method to get full tool descriptions and schemas."""
 
     if rpc_url:
         card["endpoints"] = {"a2a": rpc_url}
-        card["url"] = urljoin(A2A_ENDPOINT, "/.well-known/agent.json")
+        card["url"] = urljoin(A2A_ENDPOINT, "/.well-known/agent-card.json")
 
     return card
 @app.post("/a2a")

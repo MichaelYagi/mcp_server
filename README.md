@@ -203,13 +203,13 @@ python a2a_server.py
 
 **Server details:**
 - **Listen address**: `http://localhost:8010`
-- **Agent card**: `http://localhost:8010/.well-known/agent.json`
+- **Agent card**: `http://localhost:8010/.well-known/agent-card.json`
 - **RPC endpoint**: `http://localhost:8010/a2a`
 - **Exposed tools**: 48+ tools including weather, todo, RAG, Plex, system info, and more
 
 **Verify server is running:**
 ```bash
-curl http://localhost:8010/.well-known/agent.json
+curl http://localhost:8010/.well-known/agent-card.json
 ```
 
 You should see a JSON response with agent information and available tools.
@@ -305,7 +305,7 @@ Returns a complete list of all tools exposed by the A2A server with their descri
    You should see:
    ```
    🌐 A2A Server listening on http://0.0.0.0:8010
-   Agent card available at: http://localhost:8010/.well-known/agent.json
+   Agent card available at: http://localhost:8010/.well-known/agent-card.json
    ```
 
 2. **Start the client** (Terminal 2):
@@ -545,7 +545,7 @@ sudo ufw allow 8010/tcp
 * Wait for rate limit reset or upgrade plan
 
 **A2A server not connecting:**
-* Verify A2A server is running: `curl http://localhost:8010/.well-known/agent.json`
+* Verify A2A server is running: `curl http://localhost:8010/.well-known/agent-card.json`
 * Check `A2A_ENDPOINT` in `.env` is set to `http://localhost:8010`
 * Check firewall rules allow port 8010
 * Review client startup logs for A2A registration messages
@@ -558,7 +558,7 @@ sudo ufw allow 8010/tcp
 
 **A2A calls failing:**
 * Check A2A server is still running
-* Verify network connectivity: `curl http://localhost:8010/.well-known/agent.json`
+* Verify network connectivity: `curl http://localhost:8010/.well-known/agent-card.json`
 * Review server logs for error messages
 * Try restarting both server and client
 
@@ -623,7 +623,7 @@ def custom_tool(param: str) -> str:
 
 When A2A server starts, this tool is automatically:
 - Exposed at `/a2a` endpoint
-- Listed in agent card at `/.well-known/agent.json`
+- Listed in agent card at `/.well-known/agent-card.json`
 - Discoverable by A2A clients
 - Available as `a2a_custom_tool` in connected clients
 
@@ -698,7 +698,7 @@ role_tools = {
 
 ### A2A Protocol Specification
 
-**Agent Card** (`/.well-known/agent.json`):
+**Agent Card** (`/.well-known/agent-card.json`):
 ```json
 {
   "name": "Local A2A Agent",
