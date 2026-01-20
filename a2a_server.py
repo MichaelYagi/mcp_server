@@ -122,7 +122,9 @@ Use the 'a2a.discover' method to get full tool descriptions and schemas."""
     }
 
     if rpc_url:
-        card["endpoints"] = {"a2a": rpc_url}
+        endpoint = dict()
+        endpoint["a2a"] = urljoin(A2A_ENDPOINT, "/a2a")
+        card["endpoints"] = endpoint
         card["url"] = urljoin(A2A_ENDPOINT, "/.well-known/agent-card.json")
 
     return card
