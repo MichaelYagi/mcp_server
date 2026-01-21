@@ -879,13 +879,22 @@ def create_langgraph_agent(llm_with_tools, tools):
                                              "concept_contextualizer_tool"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern: Ingestion (Plex + documents)
+            # Pattern: RAG Status (read-only) - MUST BE BEFORE INGEST PATTERN
+            elif any(phrase in user_lower for phrase in [
+                "what's in rag", "what has been ingested", "what's been ingested", "what was ingested",
+                "show rag", "list rag", "rag status", "rag contents", "check rag",
+                "what's in my rag", "show rag status", "display rag", "rag info"
+            ]):
+                logger.info("🎯 RAG Status → Read-only status tools")
+                filtered_tools = [t for t in all_tools if t.name in ["rag_status_tool", "rag_diagnose_tool"]]
+                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+
+            # Pattern: Ingestion (Plex + documents) - ACTION VERBS ONLY
             elif "ingest" in user_lower or "add to rag" in user_lower or "add to knowledge" in user_lower:
                 logger.info("🎯 Ingest → RAG + plex ingest tools")
                 filtered_tools = [t for t in all_tools if
                                   "ingest" in t.name.lower() or
-                                  t.name in ["rag_add_tool", "plex_find_unprocessed", "plex_get_stats",
-                                             "rag_status_tool", "rag_diagnose_tool"]]
+                                  t.name in ["rag_add_tool", "plex_find_unprocessed", "plex_get_stats"]]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
             # Pattern: A2A/remote agent queries
@@ -894,7 +903,7 @@ def create_langgraph_agent(llm_with_tools, tools):
                 filtered_tools = [t for t in all_tools if "a2a" in t.name.lower()]
                 llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
 
-            # Pattern 11: Current events / general knowledge (AFTER all specific patterns)
+            # Pattern: Current events / general knowledge (AFTER all specific patterns)
             elif "current" in user_lower or "who is" in user_lower or "what is" in user_lower:
                 logger.info("🎯 Current/general knowledge → LangSearch")
 
