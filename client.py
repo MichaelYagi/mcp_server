@@ -1,5 +1,5 @@
 """
-MCP Client - Main Entry Point (WITH MULTI-AGENT INTEGRATION - FIXED STATE)
+MCP Client - Main Entry Point (WITH MULTI-AGENT INTEGRATION + MULTI-A2A SUPPORT)
 """
 
 import asyncio
@@ -49,7 +49,8 @@ MULTI_AGENT_STATE = {
 }
 
 A2A_STATE = {
-    "enabled": False
+    "enabled": False,
+    "endpoints": []  # Track successfully registered endpoints
 }
 
 # Default system prompt - will be overridden if tool_usage_guide.md exists
@@ -90,7 +91,29 @@ GLOBAL_CONVERSATION_STATE = {
     "loop_count": 0
 }
 
-# Attaches A2A tools directly to the MCPAgent’s tool list.
+
+# ═════════════════════════════════════════════════════════════════════
+# A2A MULTI-ENDPOINT SUPPORT
+# ═════════════════════════════════════════════════════════════════════
+
+def parse_a2a_endpoints():
+    """Parse A2A endpoints from environment variables - supports both single and multiple"""
+    endpoints = []
+
+    # Check for multiple endpoints first (comma-separated)
+    endpoints_str = os.getenv("A2A_ENDPOINTS", "").strip()
+    if endpoints_str:
+        endpoints = [ep.strip() for ep in endpoints_str.split(",") if ep.strip()]
+
+    # Backward compatibility: single endpoint
+    if not endpoints:
+        single_endpoint = os.getenv("A2A_ENDPOINT", "").strip()
+        if single_endpoint:
+            endpoints = [single_endpoint]
+
+    return endpoints
+
+
 async def register_a2a_tools(mcp_agent, base_url: str, logger) -> bool:
     """
     Discover remote A2A tools and register them as MCP tools.
@@ -105,7 +128,6 @@ async def register_a2a_tools(mcp_agent, base_url: str, logger) -> bool:
 
     except Exception as e:
         logger.error(f"⚠️ A2A connection failed: {e}")
-        logger.error("   → Skipping A2A integration and continuing normally")
         return False  # Return failure status
 
     # If discovery succeeded, register tools
@@ -113,10 +135,111 @@ async def register_a2a_tools(mcp_agent, base_url: str, logger) -> bool:
     for tool_def in capabilities.get("tools", []):
         tool = make_a2a_tool(a2a, tool_def)
         mcp_agent._tools.append(tool)
-        logger.info(f"🔌 Registered A2A tool: {tool.name}")
         tool_count += 1
 
     return tool_count > 0  # Return success if at least one tool was registered
+
+async def register_all_a2a_endpoints(mcp_agent, logger):
+    """Register tools from all A2A endpoints"""
+    endpoints = parse_a2a_endpoints()
+
+    if not endpoints:
+        logger.info("ℹ️  No A2A endpoints configured")
+        return {
+            "endpoints": [],
+            "successful": [],
+            "failed": [],
+            "total_tools_added": 0
+        }
+
+    logger.info(f"🌐 Attempting to register {len(endpoints)} A2A endpoint(s)")
+
+    successful = []
+    failed = []
+    initial_tool_count = len(mcp_agent._tools)  # ← SAVE INITIAL COUNT (don't modify this)
+
+    for i, endpoint in enumerate(endpoints, 1):
+        logger.info(f"   [{i}/{len(endpoints)}] Connecting to: {endpoint}")
+
+        try:
+            tools_before_this = len(mcp_agent._tools)  # ← Track before THIS endpoint
+            success = await register_a2a_tools(mcp_agent, endpoint, logger)
+
+            if success:
+                successful.append(endpoint)
+                tools_after_this = len(mcp_agent._tools)
+                new_tools_this_endpoint = tools_after_this - tools_before_this
+                logger.info(f"   ✅ [{i}/{len(endpoints)}] Registered successfully (+{new_tools_this_endpoint} tools)")
+            else:
+                failed.append(endpoint)
+                logger.warning(f"   ❌ [{i}/{len(endpoints)}] Registration failed")
+
+        except Exception as e:
+            failed.append(endpoint)
+            logger.error(f"   ❌ [{i}/{len(endpoints)}] Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Calculate total new tools: current count - initial count
+    final_tool_count = len(mcp_agent._tools)
+    total_new_tools = final_tool_count - initial_tool_count
+
+    result = {
+        "endpoints": endpoints,
+        "successful": successful,
+        "failed": failed,
+        "total_tools_added": total_new_tools
+    }
+
+    # Summary
+    logger.info("=" * 60)
+    logger.info(f"🔌 A2A Registration Summary:")
+    logger.info(f"   Total endpoints configured: {len(endpoints)}")
+    logger.info(f"   Successfully registered: {len(successful)}")
+    logger.info(f"   Failed to register: {len(failed)}")
+    logger.info(f"   New A2A tools added: {total_new_tools}")
+    logger.info(f"   Total tools now available: {final_tool_count}")
+
+    if successful:
+        logger.info(f"   Active A2A endpoints:")
+        for endpoint in successful:
+            logger.info(f"      ✓ {endpoint}")
+
+    if failed:
+        logger.info(f"   Failed endpoints:")
+        for endpoint in failed:
+            logger.info(f"      ✗ {endpoint}")
+
+    logger.info("=" * 60)
+
+    return result
+
+# ═════════════════════════════════════════════════════════════════════
+# MCP SERVER AUTO-DISCOVERY
+# ═════════════════════════════════════════════════════════════════════
+
+def auto_discover_servers(servers_dir: Path):
+    """Auto-discover all servers by scanning servers/ directory"""
+    mcp_servers = {}
+
+    for server_dir in servers_dir.iterdir():
+        if server_dir.is_dir():
+            server_file = server_dir / "server.py"
+            if server_file.exists():
+                server_name = server_dir.name
+                mcp_servers[server_name] = {
+                    "command": utils.get_venv_python(PROJECT_ROOT),
+                    "args": [str(server_file)],
+                    "cwd": str(PROJECT_ROOT),
+                    "env": {"CLIENT_IP": utils.get_public_ip()}
+                }
+
+    return mcp_servers
+
+
+# ═════════════════════════════════════════════════════════════════════
+# MAIN
+# ═════════════════════════════════════════════════════════════════════
 
 async def main():
     global SYSTEM_PROMPT
@@ -134,19 +257,13 @@ async def main():
     # Set event loop for logging
     logging_handler.set_event_loop(asyncio.get_running_loop())
 
-    # Setup MCP client
+    # Setup MCP client with auto-discovered servers
+    mcp_servers = auto_discover_servers(PROJECT_ROOT / "servers")
     client = MCPClient.from_dict({
-        "mcpServers": {
-            "local": {
-                "command": utils.get_venv_python(PROJECT_ROOT),
-                "args": [str(PROJECT_ROOT / "server.py")],
-                "cwd": str(PROJECT_ROOT),
-                "env": {
-                    "CLIENT_IP": utils.get_public_ip()
-                }
-            }
-        }
+        "mcpServers": mcp_servers
     })
+
+    logger.info(f"🔌 Discovered {len(mcp_servers)} MCP servers: {list(mcp_servers.keys())}")
 
     # Load system prompt from file if it exists
     system_prompt_path = PROJECT_ROOT / "prompts/tool_usage_guide.md"
@@ -191,24 +308,29 @@ async def main():
     await mcp_agent.initialize()
 
     tools = mcp_agent._tools
+    logger.info(f"🛠️  Local MCP tools loaded: {len(tools)}")
 
-    # Discover and register remote A2A tools
-    A2A_ENDPOINT = os.getenv("A2A_ENDPOINT", "").strip()
+    # ═════════════════════════════════════════════════════════════════
+    # MULTI-A2A REGISTRATION (UPDATED)
+    # ═════════════════════════════════════════════════════════════════
 
-    if A2A_ENDPOINT:
-        logger.info(f"🌐 Attempting A2A connection to {A2A_ENDPOINT}")
-        success = await register_a2a_tools(mcp_agent, A2A_ENDPOINT, logger)
+    a2a_result = await register_all_a2a_endpoints(mcp_agent, logger)
 
-        if success:
-            tools = mcp_agent._tools
-            logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
-            A2A_STATE["enabled"] = True
-        else:
-            logger.warning("⚠️ A2A registration failed - continuing with local tools only")
-            A2A_STATE["enabled"] = False
+    if a2a_result["successful"]:
+        tools = mcp_agent._tools
+        logger.info(f"🔌 A2A integration complete. Total tools: {len(tools)}")
+        A2A_STATE["enabled"] = True
+        A2A_STATE["endpoints"] = a2a_result["successful"]  # Store successful endpoints
     else:
-        logger.info("ℹ️ No A2A endpoint configured. Skipping A2A integration.")
+        logger.warning("⚠️ No A2A endpoints registered - continuing with local tools only")
         A2A_STATE["enabled"] = False
+        A2A_STATE["endpoints"] = []
+
+    # Log any failures
+    if a2a_result["failed"]:
+        logger.warning(f"⚠️  {len(a2a_result['failed'])} endpoint(s) failed to register")
+
+    # ═════════════════════════════════════════════════════════════════
 
     llm_with_tools = llm.bind_tools(tools)
 
@@ -321,6 +443,13 @@ async def main():
 
     print("\n🚀 Starting MCP Agent with dual interface support")
     print("=" * 60)
+    print(f"🔌 Local MCP servers: {len(mcp_servers)}")
+    print(f"🛠️  Total tools available: {len(tools)}")
+
+    if A2A_STATE["enabled"]:
+        print(f"🔗 A2A endpoints: {len(A2A_STATE['endpoints'])} active")
+        for endpoint in A2A_STATE['endpoints']:
+            print(f"   ✓ {endpoint}")
 
     if MULTI_AGENT_AVAILABLE:
         if A2A_STATE["enabled"]:
@@ -358,7 +487,7 @@ async def main():
         SYSTEM_PROMPT,
         orchestrator=orchestrator,
         multi_agent_state=MULTI_AGENT_STATE,
-        a2a_state=A2A_STATE,  # ADD THIS LINE
+        a2a_state=A2A_STATE,
         host="0.0.0.0",
         port=8765
     )
