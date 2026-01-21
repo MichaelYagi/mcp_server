@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import operator
+import re
 import time
 from typing import TypedDict, Annotated, Sequence
 from .stop_signal import is_stop_requested, clear_stop
@@ -13,6 +14,166 @@ from .langsearch_client import get_langsearch_client
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+
+# Location queries
+PATTERN_LOCATION = re.compile(
+    r'\b(my|what\'?s?\s+my)\s+location\b'
+    r'|\bwhere\s+am\s+i\b',
+    re.IGNORECASE
+)
+
+# Weather queries
+PATTERN_WEATHER = re.compile(
+    r'\bweather\b'
+    r'|\btemperature\b'
+    r'|\bforecast\b',
+    re.IGNORECASE
+)
+
+# Time queries
+PATTERN_TIME = re.compile(
+    r'\bwhat\s+time\b'
+    r'|\bcurrent\s+time\b',
+    re.IGNORECASE
+)
+
+# Plex library searches
+PATTERN_PLEX_SEARCH = re.compile(
+    r'\b(find|search)\s+.*(plex|library|my\s+library)\b'
+    r'|\b(plex|library|my\s+library)\s+.*(find|search)\b',
+    re.IGNORECASE
+)
+
+# System info queries
+PATTERN_SYSTEM = re.compile(
+    r'\bsystem\s+info\b'
+    r'|\bhardware\b'
+    r'|\b(cpu|gpu|ram)\b'
+    r'|\bspecs?\b'
+    r'|\bprocesses?\b',
+    re.IGNORECASE
+)
+
+# Code-related queries
+PATTERN_CODE = re.compile(
+    r'\bcode\b'
+    r'|\bscan\s+code\b'
+    r'|\bdebug\b'
+    r'|\breview\s+code\b'
+    r'|\bsummarize\s+code\b',
+    re.IGNORECASE
+)
+
+# Text summarization (not code)
+PATTERN_TEXT = re.compile(
+    r'\b(summarize|summary|explain)\b',
+    re.IGNORECASE
+)
+
+# RAG Status (read-only) - MUST CHECK BEFORE INGEST
+PATTERN_RAG_STATUS = re.compile(
+    r'\bwhat\'?s?\s+(in\s+)?(my\s+)?rag\b'
+    r'|\b(show|list|display|check)\s+(the\s+)?(my\s+)?rag\b'
+    r'|\brag\s+(status|contents?|info)\b'
+    r'|\bhow\s+many\s+(items?|plex|movies?|documents?)\s+.*(ingested|in\s+rag)\b'
+    r'|\bcount\s+(items?|movies?|documents?)\s+(in\s+)?rag\b'
+    r'|\btotal\s+(items?|plex|movies?|documents?)\s+(in\s+)?rag\b'
+    r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
+    r'|\bitems?\s+(have\s+been|were)\s+ingested\b',
+    re.IGNORECASE
+)
+
+# Ingestion commands (action verbs, not past tense)
+PATTERN_INGEST = re.compile(
+    r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
+    r'|\bstart\s+ingesting\b'
+    r'|\badd\s+to\s+(rag|knowledge)\b'
+    r'|\bprocess\s+subtitles?\b'
+    r'|\bextract\s+subtitles?\b',
+    re.IGNORECASE
+)
+
+# A2A/remote agent queries
+PATTERN_A2A = re.compile(
+    r'\ba2a\b'
+    r'|\bremote\s+(agent|tools?)\b'
+    r'|\bdiscover\s+(agent|tools?)\b',
+    re.IGNORECASE
+)
+
+# Current events / general knowledge
+PATTERN_GENERAL_KNOWLEDGE = re.compile(
+    r'\bcurrent\b'
+    r'|\bwho\s+is\b'
+    r'|\bwhat\s+is\b',
+    re.IGNORECASE
+)
+
+# Router patterns
+ROUTER_INGEST_COMMAND = re.compile(
+    r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
+    r'|\bstart\s+ingesting\b'
+    r'|\badd\s+to\s+(rag|knowledge)\b'
+    r'|\bprocess\s+subtitles?\b',
+    re.IGNORECASE
+)
+
+ROUTER_STATUS_QUERY = re.compile(
+    r'\bhow\s+many\s+.*(ingested|in\s+rag)\b'
+    r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
+    r'|\bitems?\s+(have\s+been|were)\s+ingested\b'
+    r'|\bcount\s+.*(items?|in\s+rag)\b'
+    r'|\btotal\s+.*(items?|in\s+rag)\b'
+    r'|\b(show|list|display)\s+rag\b',
+    re.IGNORECASE
+)
+
+ROUTER_MULTI_STEP = re.compile(
+    r'\s+and\s+then\s+'
+    r'|\s+then\s+'
+    r'|\s+after\s+that\s+'
+    r'|\s+next\s+'
+    r'|\bfirst\b'
+    r'|\bresearch.*analyze\b'
+    r'|\bfind.*summarize\b',
+    re.IGNORECASE
+)
+
+ROUTER_ONE_TIME_INGEST = re.compile(
+    r'\bstop\b'
+    r'|\bthen\s+stop\b'
+    r'|\bdon\'?t\s+continue\b'
+    r'|\bdon\'?t\s+go\s+on\b',
+    re.IGNORECASE
+)
+
+ROUTER_EXPLICIT_RAG = re.compile(
+    r'\busing\s+rag\b'
+    r'|\buse\s+rag\b'
+    r'|\brag\s+tool\b'
+    r'|\bwith\s+rag\b'
+    r'|\bsearch\s+rag\b'
+    r'|\bquery\s+rag\b',
+    re.IGNORECASE
+)
+
+ROUTER_KNOWLEDGE_QUERY = re.compile(
+    r'\bwhat\s+is\b'
+    r'|\bwho\s+is\b'
+    r'|\bexplain\b'
+    r'|\btell\s+me\s+about\b',
+    re.IGNORECASE
+)
+
+ROUTER_EXCLUDE_MEDIA = re.compile(
+    r'\bmovie\b'
+    r'|\bplex\b'
+    r'|\bsearch\b'
+    r'|\bfind\b'
+    r'|\bshow\b'
+    r'|\bmedia\b',
+    re.IGNORECASE
+)
 
 # Try to import metrics, but don't fail if not available
 try:
@@ -115,7 +276,7 @@ def router(state):
             break
 
     if user_message:
-        content = user_message.content.lower()
+        content = user_message.content
         logger.debug(f"🎯 Router: Checking user's original message: {content[:100]}")
 
         # ═══════════════════════════════════════════════════════════
@@ -140,40 +301,37 @@ def router(state):
                     return "continue"  # A2A done, end execution
 
         # ═══════════════════════════════════════════════════════════
+        # STATUS QUERY CHECK
+        # ═══════════════════════════════════════════════════════════
+        if ROUTER_STATUS_QUERY.search(content):
+            logger.info(f"🎯 Router: Status query detected - continuing normally (no ingest)")
+            return "continue"
+
+        # ═══════════════════════════════════════════════════════════
         # INGEST ROUTING
         # ═══════════════════════════════════════════════════════════
-        if "ingest" in content and not ingest_completed:
+        if ROUTER_INGEST_COMMAND.search(content) and not ROUTER_STATUS_QUERY.search(content) and not ingest_completed:
             # Check if user wants to stop after one batch
-            if any(stop_word in content for stop_word in ["stop", "then stop", "don't continue", "don't go on"]):
+            if ROUTER_ONE_TIME_INGEST.search(content):
                 logger.info(f"🎯 Router: User requested ONE-TIME ingest - routing there")
                 return "ingest"
 
             # Check if this is a multi-step query
-            multi_step_indicators = [
-                " and then ", " then ", " after that ", " next ",
-                "first", "research.*analyze", "find.*summarize",
-                "analyze", "create", "summary", "report"
-            ]
-
-            import re
-            has_multiple_steps = any(re.search(indicator, content.lower()) for indicator in multi_step_indicators)
-
-            if has_multiple_steps:
+            if ROUTER_MULTI_STEP.search(content):
                 logger.info(f"🎯 Router: INGEST detected with multiple steps - using MULTI-AGENT")
-                return "continue"  # Let normal flow handle multi-agent
+                return "continue"
             else:
                 logger.info(f"🎯 Router: User requested INGEST (simple) - routing there")
-                return "ingest"  # Simple ingest, use single-agent
+                return "ingest"
 
-        elif "ingest" in content and ingest_completed:
+        elif ROUTER_INGEST_COMMAND.search(content) and ingest_completed:
             logger.info(f"🎯 Router: Ingest already completed - skipping to END")
             return "continue"
 
         # ═══════════════════════════════════════════════════════════
         # EXPLICIT RAG REQUESTS
         # ═══════════════════════════════════════════════════════════
-        if any(keyword in content for keyword in
-               ["using rag", "use rag", "rag tool", "with rag", "search rag", "query rag"]):
+        if ROUTER_EXPLICIT_RAG.search(content):
             logger.info(f"🎯 Router: User explicitly requested RAG - routing there")
             return "rag"
 
@@ -199,9 +357,9 @@ def router(state):
     # RAG-STYLE QUESTIONS (knowledge base queries)
     # ═══════════════════════════════════════════════════════════
     if isinstance(last_message, HumanMessage):
-        content = last_message.content.lower()
-        if not any(keyword in content for keyword in ["movie", "plex", "search", "find", "show", "media"]):
-            if any(keyword in content for keyword in ["what is", "who is", "explain", "tell me about"]):
+        content = last_message.content
+        if not ROUTER_EXCLUDE_MEDIA.search(content):
+            if ROUTER_KNOWLEDGE_QUERY.search(content):
                 logger.info(f"🎯 Router: Routing to RAG (knowledge query)")
                 return "rag"
 
@@ -825,88 +983,203 @@ def create_langgraph_agent(llm_with_tools, tools):
         # ═══════════════════════════════════════════════════════════
         # MINIMAL KEYWORD ROUTING (3 patterns only)
         # ═══════════════════════════════════════════════════════════
-        if user_message and not has_executed_a2a:
-            all_tools = list(state.get("tools", {}).values())
-            user_lower = user_message.lower()
+        # Location queries
+        PATTERN_LOCATION = re.compile(
+            r'\b(my|what\'?s?\s+my)\s+location\b'
+            r'|\bwhere\s+am\s+i\b',
+            re.IGNORECASE
+        )
+
+        # Weather queries
+        PATTERN_WEATHER = re.compile(
+            r'\bweather\b'
+            r'|\btemperature\b'
+            r'|\bforecast\b',
+            re.IGNORECASE
+        )
+
+        # Time queries
+        PATTERN_TIME = re.compile(
+            r'\bwhat\s+time\b'
+            r'|\bcurrent\s+time\b',
+            re.IGNORECASE
+        )
+
+        # Plex library searches
+        PATTERN_PLEX_SEARCH = re.compile(
+            r'\b(find|search)\s+.*(plex|library|my\s+library)\b'
+            r'|\b(plex|library|my\s+library)\s+.*(find|search)\b',
+            re.IGNORECASE
+        )
+
+        # System info queries
+        PATTERN_SYSTEM = re.compile(
+            r'\bsystem\s+info\b'
+            r'|\bhardware\b'
+            r'|\b(cpu|gpu|ram)\b'
+            r'|\bspecs?\b'
+            r'|\bprocesses?\b',
+            re.IGNORECASE
+        )
+
+        # Code-related queries
+        PATTERN_CODE = re.compile(
+            r'\bcode\b'
+            r'|\bscan\s+code\b'
+            r'|\bdebug\b'
+            r'|\breview\s+code\b'
+            r'|\bsummarize\s+code\b',
+            re.IGNORECASE
+        )
+
+        # Text summarization (not code)
+        PATTERN_TEXT = re.compile(
+            r'\b(summarize|summary|explain)\b',
+            re.IGNORECASE
+        )
+
+        # RAG Status (read-only) - MUST CHECK BEFORE INGEST
+        PATTERN_RAG_STATUS = re.compile(
+            r'\bwhat\'?s?\s+(in\s+)?(my\s+)?rag\b'
+            r'|\b(show|list|display|check)\s+(the\s+)?(my\s+)?rag\b'
+            r'|\brag\s+(status|contents?|info)\b'
+            r'|\bhow\s+many\s+(items?|plex|movies?|documents?)\s+.*(ingested|in\s+rag)\b'
+            r'|\bcount\s+(items?|movies?|documents?)\s+(in\s+)?rag\b'
+            r'|\btotal\s+(items?|plex|movies?|documents?)\s+(in\s+)?rag\b'
+            r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
+            r'|\bitems?\s+(have\s+been|were)\s+ingested\b',
+            re.IGNORECASE
+        )
+
+        # Ingestion commands (action verbs, not past tense)
+        PATTERN_INGEST = re.compile(
+            r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
+            r'|\bstart\s+ingesting\b'
+            r'|\badd\s+to\s+(rag|knowledge)\b'
+            r'|\bprocess\s+subtitles?\b'
+            r'|\bextract\s+subtitles?\b',
+            re.IGNORECASE
+        )
+
+        # A2A/remote agent queries
+        PATTERN_A2A = re.compile(
+            r'\ba2a\b'
+            r'|\bremote\s+(agent|tools?)\b'
+            r'|\bdiscover\s+(agent|tools?)\b',
+            re.IGNORECASE
+        )
+
+        # Current events / general knowledge
+        PATTERN_GENERAL_KNOWLEDGE = re.compile(
+            r'\bcurrent\b'
+            r'|\bwho\s+is\b'
+            r'|\bwhat\s+is\b',
+            re.IGNORECASE
+        )
+
+        # ============================================================================
+        # Pattern Matching Logic
+        # ============================================================================
+
+        def match_intent(user_message: str, all_tools: list, base_llm, logger):
+            """
+            Match user intent using regex patterns and return filtered tools + LLM
+
+            Priority:
+            1. Specific tool patterns (location, weather, RAG, etc.)
+            2. General query with all tools
+            3. LangSearch (only if explicitly needed)
+            """
 
             # Pattern: Location queries
-            if "my location" in user_lower or "what's my location" in user_lower or "where am i" in user_lower:
+            if PATTERN_LOCATION.search(user_message):
                 logger.info("🎯 Location → get_location_tool")
                 filtered_tools = [t for t in all_tools if t.name == "get_location_tool"]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "location"
 
-            # Pattern: Weather queries (BEFORE "current" pattern)
-            elif "weather" in user_lower or "temperature" in user_lower or "forecast" in user_lower:
+            # Pattern: Weather queries
+            elif PATTERN_WEATHER.search(user_message):
                 logger.info("🎯 Weather → location + weather tools")
                 filtered_tools = [t for t in all_tools if t.name in ["get_location_tool", "get_weather_tool"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "weather"
 
             # Pattern: Time queries
-            elif "what time" in user_lower or "current time" in user_lower:
+            elif PATTERN_TIME.search(user_message):
                 logger.info("🎯 Time → get_time_tool")
                 filtered_tools = [t for t in all_tools if t.name == "get_time_tool"]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "time"
 
             # Pattern: Plex library searches
-            elif ("find" in user_lower or "search" in user_lower) and (
-                    "plex" in user_lower or "library" in user_lower or "my library" in user_lower):
+            elif PATTERN_PLEX_SEARCH.search(user_message):
                 logger.info("🎯 Plex library → RAG + scene tools")
                 filtered_tools = [t for t in all_tools if
                                   t.name in ["rag_search_tool", "semantic_media_search_text", "scene_locator_tool",
                                              "find_scene_by_title"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "plex"
 
             # Pattern: System info queries
-            elif any(kw in user_lower for kw in ["system info", "hardware", "cpu", "gpu", "ram", "specs", "processes"]):
+            elif PATTERN_SYSTEM.search(user_message):
                 logger.info("🎯 System → system info tools")
                 filtered_tools = [t for t in all_tools if
                                   t.name in ["get_hardware_specs_tool", "get_system_info", "list_system_processes"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "system"
 
             # Pattern: Code-related queries
-            elif any(kw in user_lower for kw in ["code", "scan code", "debug", "review code", "summarize code"]):
+            elif PATTERN_CODE.search(user_message):
                 logger.info("🎯 Code → code tools")
                 filtered_tools = [t for t in all_tools if
                                   t.name in ["summarize_code_file", "search_code_in_directory", "scan_code_directory",
                                              "summarize_code", "debug_fix"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "code"
 
-            # Pattern: Text summarization
-            elif any(kw in user_lower for kw in ["summarize", "summary", "explain"]) and not "code" in user_lower:
+            # Pattern: Text summarization (not code)
+            elif PATTERN_TEXT.search(user_message) and not PATTERN_CODE.search(user_message):
                 logger.info("🎯 Text → text/summarization tools")
                 filtered_tools = [t for t in all_tools if
                                   t.name in ["summarize_text_tool", "summarize_direct_tool", "explain_simplified_tool",
                                              "concept_contextualizer_tool"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "text"
 
-            # Pattern: RAG Status (read-only) - MUST BE BEFORE INGEST PATTERN
-            elif any(phrase in user_lower for phrase in [
-                "what's in rag", "what has been ingested", "what's been ingested", "what was ingested",
-                "show rag", "list rag", "rag status", "rag contents", "check rag",
-                "what's in my rag", "show rag status", "display rag", "rag info"
-            ]):
+            # Pattern: RAG Status (read-only) - CHECK THIS BEFORE INGEST!
+            elif PATTERN_RAG_STATUS.search(user_message):
                 logger.info("🎯 RAG Status → Read-only status tools")
                 filtered_tools = [t for t in all_tools if t.name in ["rag_status_tool", "rag_diagnose_tool"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "rag_status"
 
             # Pattern: Ingestion (Plex + documents) - ACTION VERBS ONLY
-            elif "ingest" in user_lower or "add to rag" in user_lower or "add to knowledge" in user_lower:
+            elif PATTERN_INGEST.search(user_message):
                 logger.info("🎯 Ingest → RAG + plex ingest tools")
                 filtered_tools = [t for t in all_tools if
                                   "ingest" in t.name.lower() or
                                   t.name in ["rag_add_tool", "plex_find_unprocessed", "plex_get_stats"]]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "ingest"
 
             # Pattern: A2A/remote agent queries
-            elif "a2a" in user_lower or "remote" in user_lower or "discover" in user_lower:
+            elif PATTERN_A2A.search(user_message):
                 logger.info("🎯 A2A → a2a tools")
                 filtered_tools = [t for t in all_tools if "a2a" in t.name.lower()]
-                llm_to_use = base_llm.bind_tools(filtered_tools if filtered_tools else all_tools)
+                return base_llm.bind_tools(filtered_tools if filtered_tools else all_tools), "a2a"
 
-            # Pattern: Current events / general knowledge (AFTER all specific patterns)
-            elif "current" in user_lower or "who is" in user_lower or "what is" in user_lower:
-                logger.info("🎯 Current/general knowledge → LangSearch")
+            # ═══════════════════════════════════════════════════════════
+            # DEFAULT: Give LLM ALL tools (let it decide)
+            # ═══════════════════════════════════════════════════════════
+            else:
+                logger.info(f"🎯 General query → all {len(all_tools)} tools")
+                return base_llm.bind_tools(all_tools), "general"
 
+        # ============================================================================
+        # Example Usage in your agent code
+        # ============================================================================
+
+        # In your agent node:
+        if user_message and not has_executed_a2a:
+            all_tools = list(state.get("tools", {}).values())
+
+            # Match intent using regex
+            llm_to_use, pattern_name = match_intent(user_message, all_tools, base_llm, logger)
+
+            # Special handling for LangSearch
+            if pattern_name == "general_knowledge":
                 langsearch = get_langsearch_client()
 
                 if langsearch.is_available():
@@ -916,32 +1189,27 @@ def create_langgraph_agent(llm_with_tools, tools):
                         logger.info("✅ LangSearch successful")
                         search_context = search_result["results"]
 
+                        # Create fresh messages with search context
                         augmented_messages = []
                         for msg in messages:
                             if isinstance(msg, SystemMessage):
                                 augmented_messages.append(SystemMessage(content=f"""You are a helpful AI assistant.
 
-        WEB SEARCH RESULTS:
-        {search_context}
+            WEB SEARCH RESULTS:
+            {search_context}
 
-        Use these results to answer accurately."""))
+            Use these search results to answer the user's question accurately and concisely. DO NOT suggest using tools or searching - the search has already been done and the results are above."""))
                             else:
                                 augmented_messages.append(msg)
 
                         messages = augmented_messages
-                        llm_to_use = base_llm
+                        llm_to_use = base_llm  # ← IMPORTANT: No tools bound!
                     else:
                         logger.warning(f"⚠️ LangSearch failed - using base LLM")
-                        llm_to_use = base_llm
+                        llm_to_use = base_llm  # ← No tools
                 else:
                     logger.warning("⚠️ LangSearch not available - using base LLM")
                     llm_to_use = base_llm
-
-            # Everything else: Use all tools
-            else:
-                logger.info(f"🎯 General query → all {len(all_tools)} tools")
-                llm_to_use = base_llm.bind_tools(all_tools)
-
         elif has_executed_a2a:
             logger.info("🎯 A2A executed - no tools")
             llm_to_use = base_llm
@@ -1006,16 +1274,36 @@ def create_langgraph_agent(llm_with_tools, tools):
             has_tool_calls = hasattr(response, 'tool_calls') and response.tool_calls
             has_content = hasattr(response, 'content') and response.content and response.content.strip()
 
-            if not has_tool_calls and not has_content:
-                logger.warning("⚠️ Empty response - retrying without tools")
-                retry_messages = messages + [HumanMessage(content="Please provide a direct answer.")]
-                retry_response = await base_llm.ainvoke(retry_messages)
+            if not has_tool_calls and has_content:
+                # LLM responded without tools
+                # Check if this looks like a question that needs current info
+                user_message_lower = user_message.lower()
 
-                if retry_response.content and retry_response.content.strip():
-                    response = retry_response
-                else:
-                    response = AIMessage(
-                        content="I'm having trouble generating a response. Please rephrase your question.")
+                needs_current_info = any(word in user_message_lower for word in [
+                    "current", "who is", "latest", "recent", "today", "now"
+                ])
+
+                if needs_current_info:
+                    logger.info("🔍 LLM answered without tools - trying LangSearch as fallback")
+                    langsearch = get_langsearch_client()
+
+                    if langsearch.is_available():
+                        search_result = await langsearch.search(user_message)
+
+                        if search_result["success"]:
+                            logger.info("✅ LangSearch successful - augmenting response")
+                            search_context = search_result["results"]
+
+                            # Ask LLM again with search results
+                            augmented_prompt = f"""Previous answer: {response.content}
+
+            However, here are current web search results:
+            {search_context}
+
+            Please provide an updated answer using these search results."""
+
+                            retry_messages = messages + [response, HumanMessage(content=augmented_prompt)]
+                            response = await base_llm.ainvoke(retry_messages)
 
             return {
                 "messages": messages + [response],
@@ -1156,20 +1444,59 @@ def create_langgraph_agent(llm_with_tools, tools):
             else:
                 ingested = result.get('ingested', []) if isinstance(result, dict) else []
                 remaining = result.get('remaining', 0) if isinstance(result, dict) else 0
-                total_ingested = result.get('total_ingested', 0) if isinstance(result, dict) else 0
+
+                # Get actual RAG stats by calling rag_status_tool
+                rag_status_tool = None
+                for tool in state.get("tools", {}).values():
+                    if tool.name == "rag_status_tool":
+                        rag_status_tool = tool
+                        break
+
+                # Try to get current RAG stats
+                total_in_rag = "Unknown"
+                try:
+                    if rag_status_tool:
+                        logger.info("🔍 Querying RAG status for accurate count...")
+                        rag_status_result = await rag_status_tool.ainvoke({})
+
+                        # Parse the result to get total documents
+                        if isinstance(rag_status_result, list) and len(rag_status_result) > 0:
+                            if hasattr(rag_status_result[0], 'text'):
+                                rag_text = rag_status_result[0].text
+                            else:
+                                rag_text = str(rag_status_result[0])
+                        else:
+                            rag_text = str(rag_status_result)
+
+                        # Extract total documents from the status text
+                        import re
+                        match = re.search(r'Total Documents:\s*(\d+)', rag_text)
+                        if match:
+                            total_in_rag = int(match.group(1))
+                            logger.info(f"✅ Found {total_in_rag} total documents in RAG")
+                        else:
+                            # Try alternative format
+                            match = re.search(r'total_documents["\']?\s*:\s*(\d+)', rag_text)
+                            if match:
+                                total_in_rag = int(match.group(1))
+                                logger.info(f"✅ Found {total_in_rag} total documents in RAG")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not get RAG status: {e}")
+                    total_in_rag = "Unknown"
 
                 if ingested:
                     items_list = "\n".join(f"{i + 1}. {item}" for i, item in enumerate(ingested))
 
                     msg = AIMessage(
                         content=f"✅ **Successfully ingested {len(ingested)} items:**\n\n{items_list}\n\n"
-                                f"📊 **Total items in RAG:** {total_ingested}\n"
+                                f"📊 **Items in this batch:** {len(ingested)}\n"
+                                f"📊 **Total items in RAG:** {total_in_rag}\n"
                                 f"📊 **Remaining to ingest:** {remaining}\n\n"
                                 f"Ingestion complete. You can now search this content using the RAG tool."
                     )
                 else:
                     msg = AIMessage(
-                        content=f"✅ All items already ingested.\n\n📊 **Total items in RAG:** {total_ingested}"
+                        content=f"✅ All items already ingested.\n\n📊 **Total items in RAG:** {total_in_rag}"
                     )
 
             logger.info("✅ Ingest operation completed")
