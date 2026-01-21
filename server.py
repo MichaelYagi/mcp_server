@@ -57,6 +57,7 @@ A2A_AVAILABLE = False
 from client.stop_signal import is_stop_requested
 # ─────────────────────────────────────────────
 # Knowledge Base Tools
+# TODO: Break this out into a separate server and use a2a
 # ─────────────────────────────────────────────
 from tools.knowledge_base.kb_add import kb_add
 from tools.knowledge_base.kb_get import kb_get
@@ -76,6 +77,7 @@ from tools.system.system_info import get_system_stats
 from tools.system.processes import list_processes, kill_process
 # ─────────────────────────────────────────────
 # To-do Tools
+# TODO: Break this out into a separate server and use a2a
 # ─────────────────────────────────────────────
 from tools.todo.add_todo import add_todo
 from tools.todo.list_todos import list_todos
