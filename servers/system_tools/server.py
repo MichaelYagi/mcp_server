@@ -39,7 +39,7 @@ root_logger.handlers.clear()
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 # Create file handler
-file_handler = logging.FileHandler(LOG_DIR / "mcp_system_tools_server.log", encoding="utf-8")
+file_handler = logging.FileHandler(LOG_DIR / "mcp-server.log", encoding="utf-8")
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 
@@ -57,7 +57,7 @@ logging.getLogger("mcp").setLevel(logging.DEBUG)
 logging.getLogger("mcp_system_tools_server").setLevel(logging.INFO)
 
 logger = logging.getLogger("mcp_system_tools_server")
-logger.info("🚀 Server logging initialized - writing to logs/mcp_system_tools_server.log")
+logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 
 mcp = FastMCP("system-tools-server")
 
