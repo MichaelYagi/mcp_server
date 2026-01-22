@@ -2,15 +2,23 @@
 Code Review MCP Server
 Runs over stdio transport
 """
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from dotenv import load_dotenv
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+
+from servers.skills.skill_loader import SkillLoader
+
+import inspect
 import json
 import logging
 import sys
 from typing import Optional
 from pathlib import Path
-from dotenv import load_dotenv
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-load_dotenv(PROJECT_ROOT / ".env", override=True)
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from mcp.server.fastmcp import FastMCP
@@ -56,7 +64,6 @@ logger = logging.getLogger("mcp_code_review_server")
 logger.info("🚀 Server logging initialized - writing to logs/mcp_code_review_server.log")
 
 mcp = FastMCP("code-review-server")
-
 
 @mcp.tool()
 def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
@@ -252,6 +259,64 @@ def debug_fix(error_message: str,
     )
     return json.dumps(result, indent=2)
 
+skill_registry = None
+
+@mcp.tool()
+def list_skills() -> str:
+    """List all available skills for this server."""
+    logger.info(f"🛠  list_skills called")
+    if skill_registry is None:
+        return json.dumps({
+            "server": "code-review-server",
+            "skills": [],
+            "message": "Skills not loaded"
+        }, indent=2)
+
+    return json.dumps({
+        "server": "code-review-server",
+        "skills": skill_registry.list()
+    }, indent=2)
+
+
+@mcp.tool()
+def read_skill(skill_name: str) -> str:
+    """Read the full content of a skill."""
+    logger.info(f"🛠  read_skill called")
+
+    if skill_registry is None:
+        return json.dumps({"error": "Skills not loaded"}, indent=2)
+
+    content = skill_registry.get_skill_content(skill_name)
+    if content:
+        return content
+
+    available = [s.name for s in skill_registry.skills.values()]
+    return json.dumps({
+        "error": f"Skill '{skill_name}' not found",
+        "available_skills": available
+    }, indent=2)
+
+def get_tool_names_from_module():
+    """Extract all function names from current module (auto-discovers tools)"""
+    current_module = sys.modules[__name__]
+    tool_names = []
+
+    for name, obj in inspect.getmembers(current_module):
+        if inspect.isfunction(obj) and obj.__module__ == __name__:
+            if not name.startswith('_') and name != 'get_tool_names_from_module':
+                tool_names.append(name)
+
+    return tool_names
+
 if __name__ == "__main__":
-    logger.info(f"🛠 [server] code-review-server running with stdio enabled")
+    # Auto-extract tool names - NO manual list needed!
+    server_tools = get_tool_names_from_module()
+
+    # Load skills
+    skills_dir = Path(__file__).parent / "skills"
+    loader = SkillLoader(server_tools)
+    skill_registry = loader.load_all(skills_dir)
+
+    logger.info(f"🛠  {len(server_tools)} tools: {', '.join(server_tools)}")
+    logger.info(f"🛠  {len(skill_registry.skills)} skills loaded")
     mcp.run(transport="stdio")

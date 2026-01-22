@@ -15,164 +15,18 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-# Location queries
-PATTERN_LOCATION = re.compile(
-    r'\b(my|what\'?s?\s+my)\s+location\b'
-    r'|\bwhere\s+am\s+i\b',
-    re.IGNORECASE
-)
-
-# Weather queries
-PATTERN_WEATHER = re.compile(
-    r'\bweather\b'
-    r'|\btemperature\b'
-    r'|\bforecast\b',
-    re.IGNORECASE
-)
-
-# Time queries
-PATTERN_TIME = re.compile(
-    r'\bwhat\s+time\b'
-    r'|\bcurrent\s+time\b',
-    re.IGNORECASE
-)
-
-# Plex library searches
-PATTERN_PLEX_SEARCH = re.compile(
-    r'\b(find|search)\s+.*(plex|library|my\s+library)\b'
-    r'|\b(plex|library|my\s+library)\s+.*(find|search)\b',
-    re.IGNORECASE
-)
-
-# System info queries
-PATTERN_SYSTEM = re.compile(
-    r'\bsystem\s+info\b'
-    r'|\bhardware\b'
-    r'|\b(cpu|gpu|ram)\b'
-    r'|\bspecs?\b'
-    r'|\bprocesses?\b',
-    re.IGNORECASE
-)
-
-# Code-related queries
-PATTERN_CODE = re.compile(
-    r'\bcode\b'
-    r'|\bscan\s+code\b'
-    r'|\bdebug\b'
-    r'|\breview\s+code\b'
-    r'|\bsummarize\s+code\b',
-    re.IGNORECASE
-)
-
-# Text summarization (not code)
-PATTERN_TEXT = re.compile(
-    r'\b(summarize|summary|explain)\b',
-    re.IGNORECASE
-)
-
-# RAG Status (read-only) - MUST CHECK BEFORE INGEST
-PATTERN_RAG_STATUS = re.compile(
-    r'\bwhat\'?s?\s+(in\s+)?(my\s+)?rag\b'
-    r'|\b(show|list|display|check)\s+(the\s+)?(my\s+)?rag\b'
-    r'|\brag\s+(status|contents?|info)\b'
-    r'|\bhow\s+many\s+(items?|plex|movies?|documents?)\s+.*(ingested|in\s+rag)\b'
-    r'|\bcount\s+(items?|movies?|documents?)\s+(in\s+)?rag\b'
-    r'|\btotal\s+(items?|plex|movies?|documents?)\s+(in\s+)?rag\b'
-    r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
-    r'|\bitems?\s+(have\s+been|were)\s+ingested\b',
-    re.IGNORECASE
-)
-
-# Ingestion commands (action verbs, not past tense)
-PATTERN_INGEST = re.compile(
-    r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
-    r'|\bstart\s+ingesting\b'
-    r'|\badd\s+to\s+(rag|knowledge)\b'
-    r'|\bprocess\s+subtitles?\b'
-    r'|\bextract\s+subtitles?\b',
-    re.IGNORECASE
-)
-
-# A2A/remote agent queries
-PATTERN_A2A = re.compile(
-    r'\ba2a\b'
-    r'|\bremote\s+(agent|tools?)\b'
-    r'|\bdiscover\s+(agent|tools?)\b',
-    re.IGNORECASE
-)
-
-# Current events / general knowledge
-PATTERN_GENERAL_KNOWLEDGE = re.compile(
-    r'\bcurrent\b'
-    r'|\bwho\s+is\b'
-    r'|\bwhat\s+is\b',
-    re.IGNORECASE
-)
-
-# Router patterns
-ROUTER_INGEST_COMMAND = re.compile(
-    r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
-    r'|\bstart\s+ingesting\b'
-    r'|\badd\s+to\s+(rag|knowledge)\b'
-    r'|\bprocess\s+subtitles?\b',
-    re.IGNORECASE
-)
-
-ROUTER_STATUS_QUERY = re.compile(
-    r'\bhow\s+many\s+.*(ingested|in\s+rag)\b'
-    r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
-    r'|\bitems?\s+(have\s+been|were)\s+ingested\b'
-    r'|\bcount\s+.*(items?|in\s+rag)\b'
-    r'|\btotal\s+.*(items?|in\s+rag)\b'
-    r'|\b(show|list|display)\s+rag\b',
-    re.IGNORECASE
-)
-
-ROUTER_MULTI_STEP = re.compile(
-    r'\s+and\s+then\s+'
-    r'|\s+then\s+'
-    r'|\s+after\s+that\s+'
-    r'|\s+next\s+'
-    r'|\bfirst\b'
-    r'|\bresearch.*analyze\b'
-    r'|\bfind.*summarize\b',
-    re.IGNORECASE
-)
-
-ROUTER_ONE_TIME_INGEST = re.compile(
-    r'\bstop\b'
-    r'|\bthen\s+stop\b'
-    r'|\bdon\'?t\s+continue\b'
-    r'|\bdon\'?t\s+go\s+on\b',
-    re.IGNORECASE
-)
-
-ROUTER_EXPLICIT_RAG = re.compile(
-    r'\busing\s+rag\b'
-    r'|\buse\s+rag\b'
-    r'|\brag\s+tool\b'
-    r'|\bwith\s+rag\b'
-    r'|\bsearch\s+rag\b'
-    r'|\bquery\s+rag\b',
-    re.IGNORECASE
-)
-
-ROUTER_KNOWLEDGE_QUERY = re.compile(
-    r'\bwhat\s+is\b'
-    r'|\bwho\s+is\b'
-    r'|\bexplain\b'
-    r'|\btell\s+me\s+about\b',
-    re.IGNORECASE
-)
-
-ROUTER_EXCLUDE_MEDIA = re.compile(
-    r'\bmovie\b'
-    r'|\bplex\b'
-    r'|\bsearch\b'
-    r'|\bfind\b'
-    r'|\bshow\b'
-    r'|\bmedia\b',
-    re.IGNORECASE
+from client.query_patterns import (
+    # Regular patterns
+    PATTERN_LOCATION, PATTERN_WEATHER, PATTERN_TIME,
+    PATTERN_PLEX_SEARCH, PATTERN_SYSTEM, PATTERN_CODE,
+    PATTERN_TEXT, PATTERN_RAG_STATUS, PATTERN_INGEST,
+    PATTERN_A2A, PATTERN_GENERAL_KNOWLEDGE,
+    # Router patterns (for router() function)
+    ROUTER_INGEST_COMMAND, ROUTER_STATUS_QUERY, ROUTER_MULTI_STEP,
+    ROUTER_ONE_TIME_INGEST, ROUTER_EXPLICIT_RAG, ROUTER_KNOWLEDGE_QUERY,
+    ROUTER_EXCLUDE_MEDIA,
+    # Helper functions
+    needs_tools, is_general_knowledge
 )
 
 # Try to import metrics, but don't fail if not available
@@ -670,8 +524,6 @@ def filter_tools_by_intent(user_message: str, all_tools: list) -> list:
         "weather", "system", "code", "ingest", "rag"
     ]
 
-    needs_tools = any(keyword in user_message_lower for keyword in tool_keywords)
-
     if is_general_knowledge and not needs_tools:
         logger.info("🎯 General knowledge question - no tools needed")
         return []
@@ -979,103 +831,6 @@ def create_langgraph_agent(llm_with_tools, tools):
             if isinstance(msg, HumanMessage):
                 user_message = msg.content
                 break
-
-        # ═══════════════════════════════════════════════════════════
-        # MINIMAL KEYWORD ROUTING (3 patterns only)
-        # ═══════════════════════════════════════════════════════════
-        # Location queries
-        PATTERN_LOCATION = re.compile(
-            r'\b(my|what\'?s?\s+my)\s+location\b'
-            r'|\bwhere\s+am\s+i\b',
-            re.IGNORECASE
-        )
-
-        # Weather queries
-        PATTERN_WEATHER = re.compile(
-            r'\bweather\b'
-            r'|\btemperature\b'
-            r'|\bforecast\b',
-            re.IGNORECASE
-        )
-
-        # Time queries
-        PATTERN_TIME = re.compile(
-            r'\bwhat\s+time\b'
-            r'|\bcurrent\s+time\b',
-            re.IGNORECASE
-        )
-
-        # Plex library searches
-        PATTERN_PLEX_SEARCH = re.compile(
-            r'\b(find|search)\s+.*(plex|library|my\s+library)\b'
-            r'|\b(plex|library|my\s+library)\s+.*(find|search)\b',
-            re.IGNORECASE
-        )
-
-        # System info queries
-        PATTERN_SYSTEM = re.compile(
-            r'\bsystem\s+info\b'
-            r'|\bhardware\b'
-            r'|\b(cpu|gpu|ram)\b'
-            r'|\bspecs?\b'
-            r'|\bprocesses?\b',
-            re.IGNORECASE
-        )
-
-        # Code-related queries
-        PATTERN_CODE = re.compile(
-            r'\bcode\b'
-            r'|\bscan\s+code\b'
-            r'|\bdebug\b'
-            r'|\breview\s+code\b'
-            r'|\bsummarize\s+code\b',
-            re.IGNORECASE
-        )
-
-        # Text summarization (not code)
-        PATTERN_TEXT = re.compile(
-            r'\b(summarize|summary|explain)\b',
-            re.IGNORECASE
-        )
-
-        # RAG Status (read-only) - MUST CHECK BEFORE INGEST
-        PATTERN_RAG_STATUS = re.compile(
-            r'\bwhat\'?s?\s+(in\s+)?(my\s+)?rag\b'
-            r'|\b(show|list|display|check)\s+(the\s+)?(my\s+)?rag\b'
-            r'|\brag\s+(status|contents?|info)\b'
-            r'|\bhow\s+many\s+(items?|plex|movies?|documents?)\s+.*(ingested|in\s+rag)\b'
-            r'|\bcount\s+(items?|movies?|documents?)\s+(in\s+)?rag\b'
-            r'|\btotal\s+(items?|plex|movies?|documents?)\s+(in\s+)?rag\b'
-            r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
-            r'|\bitems?\s+(have\s+been|were)\s+ingested\b',
-            re.IGNORECASE
-        )
-
-        # Ingestion commands (action verbs, not past tense)
-        PATTERN_INGEST = re.compile(
-            r'\bingest\s+(now|movies?|items?|\d+|batch)\b'
-            r'|\bstart\s+ingesting\b'
-            r'|\badd\s+to\s+(rag|knowledge)\b'
-            r'|\bprocess\s+subtitles?\b'
-            r'|\bextract\s+subtitles?\b',
-            re.IGNORECASE
-        )
-
-        # A2A/remote agent queries
-        PATTERN_A2A = re.compile(
-            r'\ba2a\b'
-            r'|\bremote\s+(agent|tools?)\b'
-            r'|\bdiscover\s+(agent|tools?)\b',
-            re.IGNORECASE
-        )
-
-        # Current events / general knowledge
-        PATTERN_GENERAL_KNOWLEDGE = re.compile(
-            r'\bcurrent\b'
-            r'|\bwho\s+is\b'
-            r'|\bwhat\s+is\b',
-            re.IGNORECASE
-        )
 
         # ============================================================================
         # Pattern Matching Logic

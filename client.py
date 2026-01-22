@@ -13,6 +13,10 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from mcp_use.client.client import MCPClient
 from mcp_use.agents.mcpagent import MCPAgent
+from client.distributed_skills_manager import (
+    DistributedSkillsManager,
+    inject_relevant_skills_into_messages
+)
 
 # Import client modules
 from client import logging_handler, langgraph, models, websocket, cli, utils
@@ -310,6 +314,22 @@ async def main():
     tools = mcp_agent._tools
     logger.info(f"🛠️  Local MCP tools loaded: {len(tools)}")
 
+    # ═══════════════════════════════════════════════════════════════
+    # DISTRIBUTED SKILLS DISCOVERY
+    # ═══════════════════════════════════════════════════════════════
+
+    skills_manager = DistributedSkillsManager(client)
+    await skills_manager.discover_all_skills()
+
+    # Enhance system prompt with skills summary
+    if skills_manager.all_skills:
+        skills_summary = skills_manager.get_skills_summary()
+        SYSTEM_PROMPT = SYSTEM_PROMPT + "\n\n" + skills_summary
+        logger.info(f"📚 System prompt enhanced with {len(skills_manager.all_skills)} distributed skill(s)")
+    else:
+        logger.warning("⚠️  No skills discovered from servers")
+        skills_manager = None  # Disable if no skills found
+
     # ═════════════════════════════════════════════════════════════════
     # MULTI-A2A REGISTRATION (UPDATED)
     # ═════════════════════════════════════════════════════════════════
@@ -365,7 +385,15 @@ async def main():
 
     # Create enhanced agent runner with multi-agent support
     async def run_agent_wrapper(agent, conversation_state, user_message, logger, tools):
-        """Enhanced agent runner with multi-agent and A2A support"""
+        """Enhanced agent runner with multi-agent, A2A, and skills support"""
+
+        if skills_manager and skills_manager.all_skills:
+            conversation_state["messages"] = await inject_relevant_skills_into_messages(
+                skills_manager,
+                user_message,
+                conversation_state["messages"],
+                logger
+            )
 
         # Check if A2A should be used (highest priority)
         use_a2a = (
