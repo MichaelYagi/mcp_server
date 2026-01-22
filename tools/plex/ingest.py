@@ -1,7 +1,6 @@
 """
 Plex Ingestion Tool
-Ingests Plex media subtitles into RAG database with parallelization
-NOW WITH COMPREHENSIVE STOP SIGNAL HANDLING
+Batch embedding generation and database operations for improved performance
 """
 
 import json
@@ -11,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from tools.rag.rag_storage import check_if_ingested, mark_as_ingested, get_ingestion_stats
-from tools.rag.rag_add import rag_add
+from tools.rag.rag_vector_db import add_to_rag_batch, flush_batch, embeddings_model
 from client.stop_signal import is_stop_requested, clear_stop, get_stop_status
 from .plex_utils import stream_all_media, extract_metadata, stream_subtitles, chunk_stream
 
@@ -22,9 +21,13 @@ PROGRESS_FILE = PROJECT_ROOT / "data" / "plex_ingest_progress.json"
 PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 # Conservative concurrency limit (safe for most systems)
-# Set to 1 for maximum stop responsiveness (checks between each item)
-# Set to 3 for faster processing (checks every 3 items)
 CONCURRENT_LIMIT = 1  # Process 1 item at a time for quick stop response
+
+# NEW: Embedding batch size for parallel generation
+EMBEDDING_BATCH_SIZE = 10
+
+# NEW: Database flush batch size (chunks per flush)
+DB_FLUSH_BATCH_SIZE = 30
 
 
 def load_progress() -> Dict[str, bool]:
@@ -46,7 +49,62 @@ def save_progress(progress: Dict[str, bool]) -> None:
 
 
 # ============================================================================
-# PARALLELIZABLE FUNCTIONS
+# Batch Embedding Generation
+# ============================================================================
+
+async def generate_embeddings_batch(texts: List[str], batch_size: int = EMBEDDING_BATCH_SIZE) -> List[List[float]]:
+    """
+    Generate embeddings for multiple texts in parallel batches.
+
+    Args:
+        texts: List of text chunks to embed
+        batch_size: Number of parallel embedding requests (default: 10)
+
+    Returns:
+        List of embeddings in same order as input texts
+    """
+    loop = asyncio.get_event_loop()
+    embeddings = []
+
+    logger.info(f"🔮 Generating embeddings for {len(texts)} chunks in batches of {batch_size}...")
+
+    # Process in batches to avoid overwhelming Ollama
+    for i in range(0, len(texts), batch_size):
+        # Check stop signal between batches
+        if is_stop_requested():
+            logger.warning(f"🛑 Embedding generation stopped at batch {i//batch_size + 1}")
+            break
+
+        batch = texts[i:i + batch_size]
+
+        # Generate embeddings in parallel using thread pool
+        # Use return_exceptions=True to handle individual failures
+        tasks = [
+            loop.run_in_executor(None, embeddings_model.embed_query, text)
+            for text in batch
+        ]
+
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Check for errors and handle them
+        for idx, result in enumerate(batch_results):
+            if isinstance(result, Exception):
+                text_preview = batch[idx][:100] + "..." if len(batch[idx]) > 100 else batch[idx]
+                logger.error(f"❌ Failed to generate embedding for chunk {i+idx}: {result}")
+                logger.error(f"   Text preview: {text_preview}")
+                logger.error(f"   Text length: {len(batch[idx])} chars, ~{len(batch[idx].split())} words")
+                # Raise the exception to stop processing
+                raise Exception(f"Embedding failed for chunk {i+idx}: {result}")
+            else:
+                embeddings.append(result)
+
+        logger.debug(f"📊 Generated {len(batch_results)} embeddings (total: {len(embeddings)}/{len(texts)})")
+
+    return embeddings
+
+
+# ============================================================================
+# PARALLELIZABLE FUNCTIONS (UNCHANGED)
 # ============================================================================
 
 def find_unprocessed_items(limit: int, rescan_no_subtitles: bool = False) -> List[Dict[str, Any]]:
@@ -125,17 +183,18 @@ def extract_subtitles_for_item(media_item: Dict[str, Any]) -> Tuple[str, str, Li
     return media_id, title, subtitle_lines, metadata_text
 
 
-def ingest_item_to_rag(
+# ============================================================================
+# OPTIMIZED: NEW BATCHED INGESTION FUNCTION
+# ============================================================================
+
+async def ingest_item_to_rag(
     media_id: str,
     title: str,
     subtitle_lines: List[str],
     metadata_text: str
 ) -> Dict[str, Any]:
     """
-    STEP 3: Ingest a single item's subtitles into RAG (parallelizable)
-
-    NOTE: This function is BLOCKING and runs in a thread pool.
-    However, it checks stop signal before EACH CHUNK for responsiveness.
+    Ingest a single item's subtitles into RAG with batched operations.
 
     Args:
         media_id: Plex media ID
@@ -158,16 +217,106 @@ def ingest_item_to_rag(
         }
 
     logger.info(f"💾 Ingesting {title} to RAG...")
+    ingestion_start = time.time()
 
-    # Chunk and add to RAG
-    chunks_added = 0
-    word_count = 0
-    chunk_count = 0
+    # ═══════════════════════════════════════════════════════════
+    # Step 1: Chunk all text
+    # ═══════════════════════════════════════════════════════════
+    all_text_chunks = []
+    # BGE-large has 512 token limit
+    # For very dense subtitle content (HTML, metadata, etc), need aggressive limits
+    # Safe estimate: ~2 chars per token for worst case
+    # 512 tokens * 2 chars = 1024 chars max
+    # Use 1000 chars to be safe
+    max_chunk_chars = 1000
 
     for chunk in chunk_stream(iter(subtitle_lines), chunk_size=1600):
-        # CHECK STOP BEFORE EACH CHUNK (every ~3-5 seconds)
+        # Still check stop, but only between chunks (not for each line)
         if is_stop_requested():
-            logger.warning(f"🛑 Stopped during RAG ingestion of {title} after {chunk_count} chunks")
+            logger.warning(f"🛑 Stopped during chunking of {title}")
+            mark_as_ingested(media_id, status="partial")
+            return {
+                "title": title,
+                "id": media_id,
+                "subtitle_chunks": 0,
+                "subtitle_word_count": 0,
+                "status": "stopped",
+                "reason": "Stopped during chunking"
+            }
+
+        # Validate chunk size - if too large, split it further
+        if len(chunk) > max_chunk_chars:
+            logger.debug(f"📏 Chunk too large ({len(chunk)} chars), splitting to max {max_chunk_chars}...")
+            # Split into smaller chunks by words
+            words = chunk.split()
+            current_chunk = []
+            current_length = 0
+
+            for word in words:
+                word_length = len(word) + 1  # +1 for space
+                if current_length + word_length > max_chunk_chars:
+                    if current_chunk:
+                        all_text_chunks.append(" ".join(current_chunk))
+                        current_chunk = [word]
+                        current_length = word_length
+                else:
+                    current_chunk.append(word)
+                    current_length += word_length
+
+            if current_chunk:
+                all_text_chunks.append(" ".join(current_chunk))
+        else:
+            all_text_chunks.append(chunk)
+
+    logger.info(f"📦 Created {len(all_text_chunks)} text chunks (max {max_chunk_chars} chars each)")
+
+    # ═══════════════════════════════════════════════════════════
+    # Step 2: Generate embeddings in parallel
+    # ═══════════════════════════════════════════════════════════
+    # Final safety check: verify all chunks are within safe limits
+    max_safe_chars = 1000
+    validated_chunks = []
+    for i, chunk in enumerate(all_text_chunks):
+        if len(chunk) > max_safe_chars:
+            logger.error(f"❌ Chunk {i} still too large ({len(chunk)} chars)! Truncating...")
+            # Emergency truncation - should never happen but better than failing
+            validated_chunks.append(chunk[:max_safe_chars])
+        else:
+            validated_chunks.append(chunk)
+
+    if len(validated_chunks) != len(all_text_chunks):
+        logger.warning(f"⚠️  Chunk count mismatch after validation!")
+
+    logger.info(f"🔮 Generating embeddings for {len(validated_chunks)} chunks in batches of {EMBEDDING_BATCH_SIZE}...")
+    embeddings = await generate_embeddings_batch(validated_chunks, batch_size=EMBEDDING_BATCH_SIZE)
+
+    if is_stop_requested() or len(embeddings) != len(validated_chunks):
+        logger.warning(f"🛑 Stopped during embedding generation for {title}")
+        mark_as_ingested(media_id, status="partial")
+        return {
+            "title": title,
+            "id": media_id,
+            "subtitle_chunks": 0,
+            "subtitle_word_count": 0,
+            "status": "stopped",
+            "reason": f"Stopped during embedding generation ({len(embeddings)}/{len(validated_chunks)} completed)"
+        }
+
+    # ═══════════════════════════════════════════════════════════
+    # Step 3: Batch database writes
+    # ═══════════════════════════════════════════════════════════
+    chunks_added = 0
+    word_count = 0
+    source = f"plex:{media_id}:{title}"
+
+    logger.info(f"💾 Adding {len(validated_chunks)} chunks to RAG database...")
+
+    # Process chunks in batches for database flushing
+    for i in range(0, len(validated_chunks), DB_FLUSH_BATCH_SIZE):
+        if is_stop_requested():
+            logger.warning(f"🛑 Stopped during database write for {title} after {chunks_added} chunks")
+            # Flush what we have so far
+            flush_batch()
             mark_as_ingested(media_id, status="partial")
             return {
                 "title": title,
@@ -175,23 +324,47 @@ def ingest_item_to_rag(
                 "subtitle_chunks": chunks_added,
                 "subtitle_word_count": word_count,
                 "status": "stopped",
-                "reason": f"Stopped during ingestion after {chunks_added} chunks"
+                "reason": f"Stopped during database write after {chunks_added} chunks"
             }
 
-        chunk_count += 1
-        result = rag_add(
-            text=chunk,
-            source=f"plex:{media_id}:{title}",
-            chunk_size=200
-        )
-        if result.get("success"):
-            chunks_added += result.get("chunks_added", 0)
-            word_count += len(chunk.split())
+        # Get batch of chunks
+        batch_end = min(i + DB_FLUSH_BATCH_SIZE, len(validated_chunks))
+        batch_chunks = validated_chunks[i:batch_end]
+        batch_embeddings = embeddings[i:batch_end]
 
-    # Store metadata separately
+        # Add each chunk to the pending batch (fast, in-memory)
+        # We need to directly access the module's _pending_chunks list
+        import tools.rag.rag_vector_db as rag_db
+
+        for text_chunk, embedding in zip(batch_chunks, batch_embeddings):
+            # Manually add to pending batch with pre-computed embedding
+            import uuid
+            doc = {
+                "id": str(uuid.uuid4()),
+                "text": text_chunk,
+                "embedding": embedding,
+                "metadata": {
+                    "source": source,
+                    "length": len(text_chunk),
+                    "word_count": len(text_chunk.split())
+                }
+            }
+
+            rag_db._pending_chunks.append(doc)
+
+            chunks_added += 1
+            word_count += len(text_chunk.split())
+
+        # Flush this batch to database (one write for 30 chunks)
+        flush_batch()
+
+        logger.info(f"✅ Added batch {i//DB_FLUSH_BATCH_SIZE + 1}/{(len(validated_chunks) + DB_FLUSH_BATCH_SIZE - 1)//DB_FLUSH_BATCH_SIZE} ({batch_end - i} chunks)")
+
+    # ═══════════════════════════════════════════════════════════
+    # Handle metadata (small, can be single chunk)
+    # ═══════════════════════════════════════════════════════════
     metadata_summary = f"{title} - {metadata_text}"
     if len(metadata_summary) < 1600:
-        # Final stop check before metadata
         if is_stop_requested():
             logger.warning(f"🛑 Stopped before adding metadata for {title}")
             mark_as_ingested(media_id, status="partial")
@@ -205,37 +378,55 @@ def ingest_item_to_rag(
             }
 
         try:
-            result = rag_add(
-                text=metadata_summary,
-                source=f"plex:{media_id}:metadata",
-                chunk_size=200
-            )
-            if result.get("success"):
-                chunks_added += result.get("chunks_added", 0)
+            # Generate embedding for metadata
+            loop = asyncio.get_event_loop()
+            metadata_embedding = await loop.run_in_executor(None, embeddings_model.embed_query, metadata_summary)
+
+            import uuid
+            import tools.rag.rag_vector_db as rag_db
+
+            doc = {
+                "id": str(uuid.uuid4()),
+                "text": metadata_summary,
+                "embedding": metadata_embedding,
+                "metadata": {
+                    "source": f"plex:{media_id}:metadata",
+                    "length": len(metadata_summary),
+                    "word_count": len(metadata_summary.split())
+                }
+            }
+
+            rag_db._pending_chunks.append(doc)
+            chunks_added += 1
+
+            # Flush metadata
+            flush_batch()
         except Exception as e:
             logger.warning(f"⚠️  Could not add metadata chunk: {e}")
 
     mark_as_ingested(media_id, status="success")
 
-    logger.info(f"✅ Ingested: {title} ({chunks_added} chunks, ~{word_count} words)")
+    ingestion_duration = time.time() - ingestion_start
+    logger.info(f"✅ Ingested: {title} ({chunks_added} chunks, ~{word_count} words) in {ingestion_duration:.1f}s")
 
     return {
         "title": title,
         "id": media_id,
         "subtitle_chunks": chunks_added,
         "subtitle_word_count": word_count,
-        "status": "success"
+        "status": "success",
+        "duration": round(ingestion_duration, 1)
     }
 
 
 # ============================================================================
-# ASYNC PARALLELIZATION WITH COMPREHENSIVE STOP CHECKS
+# Async Pipeline
 # ============================================================================
 
 async def process_item_async(media_item: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process a single item asynchronously (extract + ingest)
-    With stop checks BEFORE and AFTER each blocking operation
+    Process a single item asynchronously (extract + ingest).
+    Includes stop checks before and after each blocking operation.
 
     Args:
         media_item: Media item to process
@@ -287,9 +478,9 @@ async def process_item_async(media_item: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"💾 Starting ingestion for: {title}")
         ingestion_start = time.time()
 
-        # Run ingestion in thread pool (BLOCKING but has internal stop checks per chunk)
-        result = await loop.run_in_executor(
-            None, ingest_item_to_rag, media_id, title, subtitle_lines, metadata_text
+        # Run ingestion with batched operations
+        result = await ingest_item_to_rag(
+            media_id, title, subtitle_lines, metadata_text
         )
 
         ingestion_duration = time.time() - ingestion_start
@@ -315,13 +506,17 @@ async def process_item_async(media_item: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+# ============================================================================
+# Batch Processing
+# ============================================================================
+
 async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Process items in small parallel batches with comprehensive stop handling
+    Process items in small parallel batches with stop signal handling.
 
-    STOP CHECKS:
+    Stop checks:
     - Before each batch starts
-    - After each item completes (via process_item_async)
+    - After each item completes
     - If any item returns "stopped" status, entire batch stops
 
     Args:
@@ -407,37 +602,25 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
     return results
 
 
-# ============================================================================
-# MAIN ASYNC FUNCTION (NO asyncio.run() - WORKS WITH ASYNC MCP SERVER)
-# ============================================================================
-
 async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict[str, Any]:
     """
-    Ingest the next batch of unprocessed Plex items into RAG (ASYNC)
+    Ingest the next batch of unprocessed Plex items into RAG.
 
-    NOW WITH COMPREHENSIVE STOP SIGNAL HANDLING:
-    - Clears stop signal at start
+    Includes stop signal handling:
     - Checks stop during item search
     - Checks stop before/after each item
     - Checks stop between batches
     - Reports stop status in results
 
-    IMPORTANT: This is an async function that works with async MCP servers.
-    Do NOT wrap it in asyncio.run() - just await it directly!
-
     Args:
-        limit: Maximum number of NEW items to process
+        limit: Maximum number of items to process
         rescan_no_subtitles: If True, re-check items that previously had no subtitles
 
     Returns:
         Dictionary with ingestion results (includes "stopped" flag if stopped)
     """
     try:
-        # ═══════════════════════════════════════════════════════════
-        # NOTE: Do NOT clear stop here - let user's stop request persist!
-        # Stop is cleared at the START of each user request in run_agent()
-        # ═══════════════════════════════════════════════════════════
-        logger.info(f"📥 Starting PARALLEL batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
+        logger.info(f"📥 Starting parallel batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
         overall_start = time.time()
 
         # STEP 1: Find unprocessed items (with stop checks)
@@ -478,8 +661,8 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
                 "mode": "parallel"
             }
 
-        # STEP 2 & 3: Extract and ingest IN PARALLEL (with comprehensive stop checks)
-        logger.info(f"🚀 Processing {len(unprocessed_items)} items in parallel batches of {CONCURRENT_LIMIT}...")
+        # STEP 2 & 3: Extract and ingest in parallel
+        logger.info(f"🚀 Processing {len(unprocessed_items)} items with batched operations...")
 
         results = await ingest_batch_parallel_conservative(unprocessed_items)
 
@@ -543,15 +726,17 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
             "duration": round(overall_duration, 2),
             "mode": "parallel",
             "concurrent_limit": CONCURRENT_LIMIT,
+            "embedding_batch_size": EMBEDDING_BATCH_SIZE,
+            "db_flush_batch_size": DB_FLUSH_BATCH_SIZE,
             "average_rate": round(items_processed / overall_duration, 2) if overall_duration > 0 else 0
         }
 
         # Log final status
         if was_stopped:
-            logger.warning(f"🛑 Parallel batch STOPPED by user:")
+            logger.warning(f"🛑 Batch stopped by user:")
             logger.warning(f"   - Reason: {stop_reason}")
         else:
-            logger.info(f"📊 Parallel batch complete:")
+            logger.info(f"📊 Batch complete:")
 
         logger.info(f"   - Items processed: {items_processed}")
         logger.info(f"   - Ingested: {len(ingested_items)}")
