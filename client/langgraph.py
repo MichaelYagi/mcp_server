@@ -52,105 +52,216 @@ except ImportError:
 
 INTENT_PATTERNS = {
     "rag_status": {
-        "pattern": r'\bhow\s+many\s+.*(ingested|in\s+rag)\b'
-                   r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
-                   r'|\bitems?\s+(have\s+been|were)\s+ingested\b'
-                   r'|\bcount\s+.*(items?|in\s+rag)\b'
-                   r'|\btotal\s+.*(items?|in\s+rag)\b'
-                   r'|\b(show|list|display)\s+rag\b'
-                   r'|\brag\s+(status|contents?|info)\b',
+        "pattern": (
+            r'\bhow\s+many\s+.*(ingested|in\s+rag)\b'
+            r'|\bwhat\s+(has|was)\s+been\s+ingested\b'
+            r'|\bitems?\s+(have\s+been|were)\s+ingested\b'
+            r'|\bcount\s+.*(items?|in\s+rag)\b'
+            r'|\btotal\s+.*(items?|in\s+rag)\b'
+            r'|\b(show|list|display)\s+rag\b'
+            r'|\brag\s+(status|contents?|info|summary|overview|report)\b'
+            r'|\bwhat(\'s| is)\s+in\s+(the\s+)?rag\b'
+            r'|\bgive\s+me\s+rag\s+(stats|status|info|details)\b'
+            r'|\bwhat\s+has\s+been\s+ingested\s+so\s+far\b'
+            r'|\bwhat\s+did\s+you\s+ingest\b'
+            r'|\bshow\s+me\s+everything\s+in\s+rag\b'
+            r'|\brag\s+items\b'
+            r'|\brag\s+dump\b'
+            r'|\brag\s+data\b'
+            r'|\bcurrent\s+rag\s+state\b'
+        ),
         "tools": ["rag_status_tool", "rag_diagnose_tool"],
-        "priority": 1  # Highest - check first (most specific)
+        "priority": 1
     },
     "ingest": {
-        "pattern": r'\bingest\b',
-        "exclude_pattern": r'\bhow\s+many\b|\bwhat\s+(has|was)\b|\bcount\b|\btotal\b',  # Exclude status queries
-        "tools": ["plex_ingest_*", "rag_add_tool", "plex_find_unprocessed",
-                  "plex_get_stats", "rag_status_tool"],
+        "pattern": (
+            r'\bingest\b'
+            r'|\bprocess\b'
+            r'|\badd\s+to\s+rag\b'
+            r'|\bindex\b'
+            r'|\bvectorize\b'
+            r'|\bembed\s+(this|it)\b'
+            r'|\bupdate\s+rag\b'
+            r'|\brefresh\s+rag\b'
+            r'|\bscan\s+plex\b'
+            r'|\bprocess\s+next\b'
+            r'|\bingest\s+next\b'
+            r'|\badd\s+movie\b'
+            r'|\badd\s+media\b'
+        ),
+        "exclude_pattern": (
+            r'\bhow\s+many\b'
+            r'|\bwhat\s+(has|was)\b'
+            r'|\bcount\b'
+            r'|\btotal\b'
+            r'|\bstatus\b'
+            r'|\bwhat(\'s| is)\s+in\s+rag\b'
+        ),
+        "tools": [
+            "plex_ingest_*",
+            "plex_find_unprocessed",
+            "plex_ingest_single",
+            "plex_ingest_batch",
+            "rag_add_tool"
+        ],
         "priority": 2
     },
     "location": {
-        "pattern": r'\b(my|what\'?s?\s+my)\s+location\b'
-                   r'|\bwhere\s+am\s+i\b',
+        "pattern": (
+            r'\b(my|what\'?s?\s+my)\s+location\b'
+            r'|\bwhere\s+am\s+i\b'
+            r'|\bcurrent\s+location\b'
+            r'|\bwhere\s+do\s+i\s+live\b'
+        ),
         "tools": ["get_location_tool"],
         "priority": 3
     },
     "weather": {
-        "pattern": r'\bweather\b'
-                   r'|\btemperature\b'
-                   r'|\bforecast\b',
+        "pattern": (
+            r'\bweather\b'
+            r'|\btemperature\b'
+            r'|\bforecast\b'
+            r'|\brain\b'
+            r'|\bsnow\b'
+            r'|\bwind\b'
+            r'|\bconditions\b'
+        ),
         "tools": ["get_location_tool", "get_weather_tool"],
         "priority": 3
     },
     "time": {
-        "pattern": r'\bwhat\s+time\b'
-                   r'|\bcurrent\s+time\b',
+        "pattern": (
+            r'\bwhat\s+time\b'
+            r'|\bcurrent\s+time\b'
+            r'|\btime\s+now\b'
+            r'|\btime\s+is\s+it\b'
+        ),
         "tools": ["get_time_tool"],
         "priority": 3
     },
     "plex_search": {
-        "pattern": r'\b(find|search)\s+.*(plex|library|my\s+library)\b'
-                   r'|\b(plex|library|my\s+library)\s+.*(find|search)\b'
-                   r'|\bmovies?\s+about\b'
-                   r'|\bfilms?\s+about\b',
-        "tools": ["rag_search_tool", "semantic_media_search_text",
-                  "scene_locator_tool", "find_scene_by_title"],
+        "pattern": (
+            r'\b(find|search|look\s+for)\s+.*(plex|library|my\s+library)\b'
+            r'|\b(plex|library|my\s+library)\s+.*(find|search)\b'
+            r'|\bmovies?\s+about\b'
+            r'|\bfilms?\s+about\b'
+            r'|\bshow\s+me\s+movies\b'
+            r'|\bsearch\s+my\s+movies\b'
+            r'|\bfind\s+media\b'
+        ),
+        "tools": [
+            "rag_search_tool",
+            "semantic_media_search_text",
+            "scene_locator_tool",
+            "find_scene_by_title"
+        ],
         "priority": 3
     },
     "system": {
-        "pattern": r'\bsystem\s+info\b'
-                   r'|\bhardware\b'
-                   r'|\b(cpu|gpu|ram)\b'
-                   r'|\bspecs?\b'
-                   r'|\bprocesses?\b',
-        "tools": ["get_hardware_specs_tool", "get_system_info",
-                  "list_system_processes", "terminate_process"],
+        "pattern": (
+            r'\bsystem\s+info\b'
+            r'|\bhardware\b'
+            r'|\b(cpu|gpu|ram)\b'
+            r'|\bspecs?\b'
+            r'|\bprocesses?\b'
+            r'|\bperformance\b'
+            r'|\butilization\b'
+            r'|\bmemory\s+usage\b'
+        ),
+        "tools": [
+            "get_hardware_specs_tool",
+            "get_system_info",
+            "list_system_processes",
+            "terminate_process"
+        ],
         "priority": 3
     },
     "code": {
-        "pattern": r'\bcode\b'
-                   r'|\bscan\s+code\b'
-                   r'|\bdebug\b'
-                   r'|\breview\s+code\b'
-                   r'|\bsummarize\s+code\b',
-        "tools": ["summarize_code_file", "search_code_in_directory",
-                  "scan_code_directory", "summarize_code", "debug_fix"],
+        "pattern": (
+            r'\bcode\b'
+            r'|\bscan\s+code\b'
+            r'|\bdebug\b'
+            r'|\breview\s+code\b'
+            r'|\bsummarize\s+code\b'
+            r'|\bfix\s+this\s+code\b'
+            r'|\bexplain\s+this\s+code\b'
+        ),
+        "tools": [
+            "summarize_code_file",
+            "search_code_in_directory",
+            "scan_code_directory",
+            "summarize_code",
+            "debug_fix"
+        ],
         "priority": 3
     },
     "text": {
-        "pattern": r'\b(summarize|summary|explain)\b',
-        "exclude_pattern": r'\bcode\b',  # Don't match if "code" is also present
-        "tools": ["summarize_text_tool", "summarize_direct_tool",
-                  "explain_simplified_tool", "concept_contextualizer_tool"],
+        "pattern": (
+            r'\b(summarize|summary|explain|simplify|break\s+down)\b'
+        ),
+        "exclude_pattern": r'\bcode\b',
+        "tools": [
+            "summarize_text_tool",
+            "summarize_direct_tool",
+            "explain_simplified_tool",
+            "concept_contextualizer_tool"
+        ],
         "priority": 3
     },
     "todo": {
-        "pattern": r'\btodo\b'
-                   r'|\btask\b'
-                   r'|\bremind\s+me\b'
-                   r'|\bmy\s+todos?\b'
-                   r'|\bmy\s+tasks?\b',
-        "tools": ["add_todo_item", "list_todo_items", "search_todo_items",
-                  "update_todo_item", "delete_todo_item", "delete_all_todo_items"],
+        "pattern": (
+            r'\btodo\b'
+            r'|\btask\b'
+            r'|\bremind\s+me\b'
+            r'|\bmy\s+todos?\b'
+            r'|\bmy\s+tasks?\b'
+            r'|\badd\s+to\s+my\s+list\b'
+            r'|\btask\s+list\b'
+        ),
+        "tools": [
+            "add_todo_item",
+            "list_todo_items",
+            "search_todo_items",
+            "update_todo_item",
+            "delete_todo_item",
+            "delete_all_todo_items"
+        ],
         "priority": 3
     },
     "knowledge": {
-        "pattern": r'\bremember\b'
-                   r'|\bsave\s+this\b'
-                   r'|\bmake\s+a\s+note\b'
-                   r'|\bknowledge\s+base\b'
-                   r'|\bsearch\s+my\s+notes?\b'
-                   r'|\badd\s+entry\b',
-        "tools": ["add_entry", "list_entries", "get_entry", "search_entries",
-                  "search_by_tag", "search_semantic", "update_entry", "delete_entry"],
+        "pattern": (
+            r'\bremember\b'
+            r'|\bsave\s+this\b'
+            r'|\bmake\s+a\s+note\b'
+            r'|\bknowledge\s+base\b'
+            r'|\bsearch\s+my\s+notes?\b'
+            r'|\badd\s+entry\b'
+            r'|\bnote\s+this\b'
+            r'|\bstore\s+this\b'
+        ),
+        "tools": [
+            "add_entry",
+            "list_entries",
+            "get_entry",
+            "search_entries",
+            "search_by_tag",
+            "search_semantic",
+            "update_entry",
+            "delete_entry"
+        ],
         "priority": 3
     },
     "a2a": {
-        "pattern": r'\ba2a\b'
-                   r'|\bremote\s+(agent|tools?)\b'
-                   r'|\bdiscover\s+(agent|tools?)\b'
-                   r'|\bsend\s+to\s+remote\b',
-        "tools": ["send_a2a*", "discover_a2a"],  # * matches send_a2a, send_a2a_streaming, etc
+        "pattern": (
+            r'\ba2a\b'
+            r'|\bremote\s+(agent|tools?)\b'
+            r'|\bdiscover\s+(agent|tools?)\b'
+            r'|\bsend\s+to\s+remote\b'
+            r'|\bcall\s+remote\s+tool\b'
+            r'|\buse\s+remote\s+agent\b'
+            r'|\bconnect\s+to\s+agent\b'
+        ),
+        "tools": ["send_a2a*", "discover_a2a"],
         "priority": 3
     }
 }
