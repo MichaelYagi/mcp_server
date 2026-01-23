@@ -15,10 +15,7 @@ def get_env_display() -> Dict[str, Any]:
     """
 
     def mask_token(value: str) -> str:
-        """Mask sensitive values"""
-        if not value or len(value) < 8:
-            return "***" if value else "(not set)"
-        return value[:4] + "*" * (len(value) - 8) + value[-4:]
+        return value if value == "(not set)" else "*" * len(value)
 
     env_vars = {
         "plex": {
