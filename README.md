@@ -420,10 +420,16 @@ New tools are automatically:
 
 ## Troubleshooting
 
-**`:stop` command not working during ingestion:**
-- Media ingestion must complete the current batch to prevent database corruption
-- The operation will stop after the current batch finishes
+**Stopping long-running operations:**
+- ✅ **Safe**: Use `:stop` command - completes current batch, prevents corruption
+- ⚠️ **Unsafe**: `Ctrl+C` force-exit during ingestion may corrupt the database
 - Monitor progress with `:stats` or `:metrics`
+- For stuck operations, try `:stop` first and wait for current batch to complete
+
+**`:stop` command not immediately responding during ingestion:**
+- This is expected behavior - ingestion must complete current batch
+- Database integrity is protected by finishing atomic operations
+- Operation will stop after current batch finishes
 
 **A2A server not connecting:**
 ```bash
