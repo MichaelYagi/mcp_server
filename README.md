@@ -2,50 +2,15 @@
 
 A Model Context Protocol (MCP) implementation with distributed multi-server architecture, Agent-to-Agent (A2A) protocol support, and intelligent web search fallback via LangSearch.
 
-## Architecture
-
-### Multi-Server Design (stdio)
-
-8 specialized MCP servers communicate via stdio (zero network overhead):
-
-```
-servers/
-├── knowledge_base/    10 tools - Personal knowledge management
-├── todo/              6 tools  - Task management
-├── system_tools/      4 tools  - System info & processes
-├── code_review/       5 tools  - Code analysis
-├── location/          3 tools  - Location/time/weather
-├── text_tools/        7 tools  - Text processing
-├── rag/               4 tools  - Vector search
-└── plex/             10 tools  - Media library
-
-Total: 49 local tools across 8 servers
-```
-
-### A2A Protocol (HTTP)
-
-Single A2A server exposes selected tools via HTTP for remote access:
-
-```
-┌─────────────────────────────────────┐
-│   a2a_server.py (Port 8010)         │
-│         ↓ stdio                     │
-│   ┌─────────────────────┐           │
-│   │  Selected MCP       │           │
-│   │  Servers            │           │
-│   └─────────────────────┘           │
-│                                     │
-│   Exposes via HTTP                  │
-└─────────────────────────────────────┘
-```
-
 ## Installation
 
 ### Prerequisites
 
 * Python 3.10+
 * 16GB+ RAM (for multi-agent)
-* Ollama with llama3.1:8b or qwen2.5:14b
+* Ollama installed with at least one model:
+  * **Quick start**: `llama3.1:8b` (faster, lower resource usage)
+  * **Better results**: `qwen2.5:14b` or larger models
 
 ### Setup
 
@@ -132,17 +97,6 @@ python client.py
 
 Access web UI at: `http://localhost:9000`
 
-## Features
-
-* **Multi-Server Architecture**: 8 specialized stdio servers (49 tools)
-* **A2A Protocol**: HTTP-based remote tool execution
-* **A2A_EXPOSED_TOOLS**: Control which tool categories are publicly accessible
-* **LangSearch Integration**: Automatic web search fallback
-* **Multi-Agent Orchestration**: Parallel task execution
-* **RAG System**: Vector-based semantic search
-* **Plex Integration**: Media library search and analysis
-* **Real-Time Monitoring**: WebSocket logs and system metrics
-
 ## A2A Server Configuration
 
 ### Controlling Exposed Tools
@@ -222,6 +176,54 @@ A2A_ENDPOINT=http://localhost:8010/.well-known/agent-card.json
    [2/2] ✅ Registered successfully (+5 tools)
 🔌 A2A Summary: 2/2 successful, 15 new tools
 ```
+
+## Architecture
+
+### Multi-Server Design (stdio)
+
+8 specialized MCP servers communicate via stdio (zero network overhead):
+
+```
+servers/
+├── knowledge_base/    10 tools - Personal knowledge management
+├── todo/              6 tools  - Task management
+├── system_tools/      4 tools  - System info & processes
+├── code_review/       5 tools  - Code analysis
+├── location/          3 tools  - Location/time/weather
+├── text_tools/        7 tools  - Text processing
+├── rag/               4 tools  - Vector search
+└── plex/             10 tools  - Media library
+
+Total: 49 local tools across 8 servers
+```
+
+### A2A Protocol (HTTP)
+
+Single A2A server exposes selected tools via HTTP for remote access:
+
+```
+┌─────────────────────────────────────┐
+│   a2a_server.py (Port 8010)         │
+│         ↓ stdio                     │
+│   ┌─────────────────────┐           │
+│   │  Selected MCP       │           │
+│   │  Servers            │           │
+│   └─────────────────────┘           │
+│                                     │
+│   Exposes via HTTP                  │
+└─────────────────────────────────────┘
+```
+
+## Features
+
+* **Multi-Server Architecture**: 8 specialized stdio servers (49 tools)
+* **A2A Protocol**: HTTP-based remote tool execution
+* **A2A_EXPOSED_TOOLS**: Control which tool categories are publicly accessible
+* **LangSearch Integration**: Automatic web search fallback
+* **Multi-Agent Orchestration**: Parallel task execution
+* **RAG System**: Vector-based semantic search
+* **Plex Integration**: Media library search and analysis
+* **Real-Time Monitoring**: WebSocket logs and system metrics
 
 ## LangSearch Web Search
 
