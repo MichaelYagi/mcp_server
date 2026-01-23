@@ -318,17 +318,21 @@ async def main():
     # DISTRIBUTED SKILLS DISCOVERY
     # ═══════════════════════════════════════════════════════════════
 
-    skills_manager = DistributedSkillsManager(client)
-    await skills_manager.discover_all_skills()
+    # COMMENT THIS OUT IF YOU DON'T USE SKILLS:
+    # skills_manager = DistributedSkillsManager(client)
+    # await skills_manager.discover_all_skills()
 
-    # Enhance system prompt with skills summary
-    if skills_manager.all_skills:
-        skills_summary = skills_manager.get_skills_summary()
-        SYSTEM_PROMPT = SYSTEM_PROMPT + "\n\n" + skills_summary
-        logger.info(f"📚 System prompt enhanced with {len(skills_manager.all_skills)} distributed skill(s)")
-    else:
-        logger.warning("⚠️  No skills discovered from servers")
-        skills_manager = None  # Disable if no skills found
+    # if skills_manager.all_skills:
+    #     skills_summary = skills_manager.get_skills_summary()
+    #     SYSTEM_PROMPT = SYSTEM_PROMPT + "\n\n" + skills_summary
+    #     logger.info(f"📚 System prompt enhanced with {len(skills_manager.all_skills)} distributed skill(s)")
+    # else:
+    #     logger.warning("⚠️  No skills discovered from servers")
+    #     skills_manager = None  # Disable if no skills found
+
+    # Replace with:
+    skills_manager = None
+    logger.info("⚠️  Skills discovery disabled (manual optimization)")
 
     # ═════════════════════════════════════════════════════════════════
     # MULTI-A2A REGISTRATION (UPDATED)
@@ -355,22 +359,24 @@ async def main():
     llm_with_tools = llm.bind_tools(tools)
 
     # Test tool binding
-    logger.info("=" * 60)
-    logger.info("🧪 TESTING TOOL BINDING")
-    test_messages = [
-        SystemMessage(content="You have access to tools. Call the semantic_media_search_text tool to find movies."),
-        HumanMessage(content="find action movies")
-    ]
-    test_response = await llm_with_tools.ainvoke(test_messages)
-    logger.info(f"Test response type: {type(test_response)}")
-    logger.info(f"Has tool_calls attr: {hasattr(test_response, 'tool_calls')}")
-    if hasattr(test_response, 'tool_calls'):
-        tool_calls = test_response.tool_calls
-        logger.info(f"Number of tool calls: {len(tool_calls)}")
-        if tool_calls:
-            for tc in tool_calls:
-                logger.info(f"  Tool call: {tc}")
-    logger.info("=" * 60)
+    # logger.info("=" * 60)
+    # logger.info("🧪 TESTING TOOL BINDING")
+    # test_messages = [
+    #     SystemMessage(content="You have access to tools. Call the semantic_media_search_text tool to find movies."),
+    #     HumanMessage(content="find action movies")
+    # ]
+    # test_response = await llm_with_tools.ainvoke(test_messages)
+    # logger.info(f"Test response type: {type(test_response)}")
+    # logger.info(f"Has tool_calls attr: {hasattr(test_response, 'tool_calls')}")
+    # if hasattr(test_response, 'tool_calls'):
+    #     tool_calls = test_response.tool_calls
+    #     logger.info(f"Number of tool calls: {len(tool_calls)}")
+    #     if tool_calls:
+    #         for tc in tool_calls:
+    #             logger.info(f"  Tool call: {tc}")
+    # logger.info("=" * 60)
+
+    logger.info("⚠️  Tool binding test skipped (manual optimization)")
 
     # Create LangGraph agent
     agent = langgraph.create_langgraph_agent(llm_with_tools, tools)
