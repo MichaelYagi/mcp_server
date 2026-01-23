@@ -158,9 +158,6 @@ Connect to multiple A2A servers simultaneously:
 ```bash
 # Multiple endpoints (comma-separated)
 A2A_ENDPOINTS=http://localhost:8010/.well-known/agent-card.json,http://gpu-server:8020/.well-known/agent-card.json
-
-# Single endpoint (backward compatible)
-A2A_ENDPOINT=http://localhost:8010/.well-known/agent-card.json
 ```
 
 **Client behavior:**
@@ -293,19 +290,38 @@ LANGSEARCH_TOKEN=your_api_key_here
 
 ## Usage
 
-### CLI Commands
+### CLI/Web UI Commands
 
+These commands work in both the CLI and Web UI interfaces:
 ```
-:commands       List available commands
-:tools          List all tools (local + A2A)
-:tool <name>    Tool description
-:models         List models
-:model <name>   Switch model
-:clear history  Clear conversation
-:multi on/off   Toggle multi-agent
-:a2a on/off     Toggle A2A mode
-:a2a status     Check A2A status
+:commands              List all available commands
+:stop                  Stop current operation (Note: ingestion completes current batch before stopping)
+:stats                 Show performance metrics
+:tools                 List all available tools
+:tool <tool>           Get the tool description
+:model                 View the current active model
+:model <model>         Use the model passed
+:models                List available models
+:multi on              Enable multi-agent mode
+:multi off             Disable multi-agent mode
+:multi status          Check multi-agent status
+:a2a on                Enable agent-to-agent mode
+:a2a off               Disable agent-to-agent mode
+:a2a status            Check A2A system status
+:health                Show agent health summary
+:health alerts         Show recent health alerts
+:health <agent>        Show health for specific agent
+:metrics               Show performance metrics summary
+:metrics comparative   Compare agent performance
+:metrics bottlenecks   Show performance bottlenecks
+:negotiations          Show negotiation statistics
+:routing               Show message routing statistics
+:routing queues        Show message queue status
+:env queues            Show environment configuration
+:clear history         Clear the chat history
 ```
+
+**Note:** The `:stop` command will gracefully halt most operations, but media ingestion will complete the current batch before stopping to prevent database corruption.
 
 ### Example Workflows
 
@@ -403,6 +419,11 @@ New tools are automatically:
 - Available to remote clients (via A2A protocol)
 
 ## Troubleshooting
+
+**`:stop` command not working during ingestion:**
+- Media ingestion must complete the current batch to prevent database corruption
+- The operation will stop after the current batch finishes
+- Monitor progress with `:stats` or `:metrics`
 
 **A2A server not connecting:**
 ```bash
