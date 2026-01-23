@@ -22,15 +22,6 @@ def get_commands_list():
         ":a2a on - Enable agent-to-agent mode",
         ":a2a off - Disable agent-to-agent mode",
         ":a2a status - Check A2A system status",
-        ":health - Show agent health summary",
-        ":health alerts - Show recent health alerts",
-        ":health <agent> - Show health for specific agent",
-        ":metrics - Show performance metrics summary",
-        ":metrics comparative - Compare agent performance",
-        ":metrics bottlenecks - Show performance bottlenecks",
-        ":negotiations - Show negotiation statistics",
-        ":routing - Show message routing statistics",
-        ":routing queues - Show message queue status",
         ":env - Show environment configuration",
         ":clear history - Clear the chat history"
     ]
