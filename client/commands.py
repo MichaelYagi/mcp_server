@@ -352,7 +352,7 @@ async def handle_command(
     # .env values
     if command == ":env":
         from client.env_display import format_env_display
-        return True, format_env_display(), None, None
+        return True, format_env_display(for_cli=True), None, None  # CLI = no backticks
 
     # Health commands
     if command.startswith(":health"):

@@ -48,12 +48,15 @@ def get_env_display() -> Dict[str, Any]:
     return env_vars
 
 
-def format_env_display() -> str:
+def format_env_display(for_cli: bool = False) -> str:
     """
     Format environment variables for display.
 
+    Args:
+        for_cli: If True, don't wrap in code block (for CLI display)
+
     Returns:
-        Formatted string (wrapped in code block for web UI)
+        Formatted string
     """
     env_vars = get_env_display()
 
@@ -91,7 +94,10 @@ def format_env_display() -> str:
 
     output.append("\n" + "=" * 50)
 
-    # Wrap in code block for web UI (preserves formatting)
-    # CLI will still see the equals signs, but they're harmless
     formatted = "\n".join(output)
-    return f"```\n{formatted}\n```"
+
+    # Only wrap in code block for web UI
+    if not for_cli:
+        return f"```\n{formatted}\n```"
+
+    return formatted
