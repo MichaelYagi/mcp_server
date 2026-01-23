@@ -246,6 +246,11 @@ async def plex_ingest_items(item_ids: str) -> str:
 
     Returns:
         JSON string with ingestion results
+
+    Example:
+        item_ids=["4699", "4700"]
+
+    Note: Get IDs from plex_find_unprocessed first
     """
     logger.info(f"🚀 [TOOL] plex_ingest_items called with IDs: {item_ids}")
 

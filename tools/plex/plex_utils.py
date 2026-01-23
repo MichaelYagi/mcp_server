@@ -99,7 +99,6 @@ Genres: {genres}
 Summary: {item['summary']}
 """.strip()
 
-
 def stream_subtitles(rating_key: str) -> Iterator[str]:
     """
     Stream subtitle lines for a given media item.
@@ -116,7 +115,9 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
 
         for part in media.iterParts():
 
-            # Collect all usable subtitle streams
+            # ---------------------------------------------------------
+            # 1. Collect all usable text subtitle streams
+            # ---------------------------------------------------------
             candidates = []
             for stream in part.subtitleStreams():
                 if stream.streamType != 3:
@@ -132,23 +133,33 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
                 logger.warning(f"⚠️ No usable subtitle streams found for: {media.title}")
                 return
 
-            # Prefer English
+            # ---------------------------------------------------------
+            # 2. Prefer English, otherwise first available
+            # ---------------------------------------------------------
             chosen = None
             for stream in candidates:
-                lang = (stream.languageCode or stream.language or stream.languageTag or stream.displayTitle or "").lower()
+                lang = (
+                    stream.languageCode
+                    or stream.language
+                    or stream.languageTag
+                    or stream.displayTitle
+                    or ""
+                ).lower()
+
                 if lang in ("eng", "en", "english"):
                     chosen = stream
                     break
 
-            # No English → use first available
             if not chosen:
                 chosen = candidates[0]
 
             logger.info(f"📝 Using subtitle stream: {chosen.displayTitle or chosen.title or 'Untitled'}")
 
-            # Try external download first
+            # ---------------------------------------------------------
+            # 3. Try external download (if key exists)
+            # ---------------------------------------------------------
             content = None
-            if chosen.key:
+            if getattr(chosen, "key", None):
                 try:
                     subtitle_url = plex.url(chosen.key, includeToken=True)
                     import requests
@@ -159,15 +170,22 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
                 except Exception as e:
                     logger.warning(f"⚠️ Error downloading subtitle via key: {e}")
 
-            # Fallback: embedded subtitle extraction
+            # ---------------------------------------------------------
+            # 4. Fallback: embedded subtitle extraction
+            # ---------------------------------------------------------
             if not content:
                 try:
+                    # PlexAPI exposes embedded subtitle text here
                     content = chosen.parts[0].subtitleContent
                 except Exception:
-                    logger.warning(f"⚠️ Subtitle stream exists but no extractable text found for: {media.title}")
+                    logger.warning(
+                        f"⚠️ Subtitle stream exists but no extractable text found for: {media.title}"
+                    )
                     return
 
-            # Parse SRT/ASS/VTT into text lines
+            # ---------------------------------------------------------
+            # 5. Parse SRT/ASS/VTT into text lines
+            # ---------------------------------------------------------
             for line in parse_srt(content):
                 yield line
 

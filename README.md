@@ -70,24 +70,37 @@ Windows PowerShell:
 
 **2. Configure environment (optional)**
 
-Create `.env` file:
+Create `.env` file in project root:
 ```bash
-# A2A Configuration
-A2A_ENDPOINTS=http://localhost:8010/.well-known/agent-card.json  # Comma-separated for multiple
-A2A_EXPOSED_TOOLS=plex,location,text_tools  # Which tool categories to expose (empty = all)
+# === Plex Media Server ===
+PLEX_URL=http://192.168.0.199:32400    # Plex server URL
+PLEX_TOKEN=***************************  # Plex authentication token
 
-# LangSearch Web Search
-LANGSEARCH_TOKEN=your_api_key  # Optional: https://langsearch.com
+# === Weather API ===
+WEATHER_TOKEN=***************************  # OpenWeatherMap API key
 
-# Weather API
-WEATHER_TOKEN=your_key  # Optional
+# === A2A Protocol ===
+A2A_ENDPOINTS=http://localhost:8010    # Comma-separated A2A endpoints
+A2A_EXPOSED_TOOLS=                     # Tool categories to expose (empty = all)
 
-# Plex Integration
-PLEX_URL=http://ip:32400  # Optional
-PLEX_TOKEN=your_token     # Optional
+# === LangSearch Web Search ===
+LANGSEARCH_TOKEN=***************************  # LangSearch API key (https://langsearch.com)
+
+# === Agent Configuration ===
+MAX_MESSAGE_HISTORY=30                 # Max conversation history (default: 20)
+
+# === RAG Performance ===
+CONCURRENT_LIMIT=2                     # Parallel ingestion jobs (default: 1)
+EMBEDDING_BATCH_SIZE=50                # Embeddings per batch (default: 20)
+DB_FLUSH_BATCH_SIZE=50                 # ChromaDB inserts per batch (default: 30)
 ```
 
-All settings are optional - system works without `.env`.
+**Performance tuning:**
+- `EMBEDDING_BATCH_SIZE=50` + `DB_FLUSH_BATCH_SIZE=50` = ~6x faster ingestion with `nomic-embed-text`
+- For RTX 3060 12GB, can increase to 100 for even faster processing
+- `CONCURRENT_LIMIT=2` enables parallel media ingestion
+
+All settings are optional - system works with defaults.
 
 **3. Download models**
 

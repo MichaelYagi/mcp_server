@@ -6,9 +6,13 @@ Batch embedding generation and database operations for improved performance
 import json
 import logging
 import asyncio
+import os
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
+
+from dotenv import load_dotenv
+
 from tools.rag.rag_storage import check_if_ingested, mark_as_ingested, get_ingestion_stats
 from tools.rag.rag_vector_db import add_to_rag_batch, flush_batch, embeddings_model
 from client.stop_signal import is_stop_requested, clear_stop, get_stop_status
@@ -17,17 +21,18 @@ from .plex_utils import stream_all_media, extract_metadata, stream_subtitles, ch
 logger = logging.getLogger("mcp_server")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 PROGRESS_FILE = PROJECT_ROOT / "data" / "plex_ingest_progress.json"
 PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 # Conservative concurrency limit (safe for most systems)
-CONCURRENT_LIMIT = 1  # Process 1 item at a time for quick stop response
+CONCURRENT_LIMIT = int(os.getenv("MAX_MESSAGE_HISTORY", 1))
 
-# NEW: Embedding batch size for parallel generation
-EMBEDDING_BATCH_SIZE = 10
+# Embedding batch size for parallel generation
+EMBEDDING_BATCH_SIZE = int(os.getenv("MAX_MESSAGE_HISTORY", 10))
 
-# NEW: Database flush batch size (chunks per flush)
-DB_FLUSH_BATCH_SIZE = 30
+# Database flush batch size (chunks per flush)
+DB_FLUSH_BATCH_SIZE = int(os.getenv("MAX_MESSAGE_HISTORY", 30))
 
 
 def load_progress() -> Dict[str, bool]:
@@ -54,28 +59,39 @@ def save_progress(progress: Dict[str, bool]) -> None:
 
 async def generate_embeddings_batch(texts: List[str], batch_size: int = EMBEDDING_BATCH_SIZE) -> List[List[float]]:
     """
-    Generate embeddings for multiple texts in parallel batches.
+    Generate embeddings for multiple texts in parallel batches with stop signal support.
 
     Args:
         texts: List of text chunks to embed
-        batch_size: Number of parallel embedding requests (default: 10)
+        batch_size: Number of parallel embedding requests (default: 50)
 
     Returns:
         List of embeddings in same order as input texts
+
+    Raises:
+        Exception: If stop signal is received or embedding generation fails
     """
     loop = asyncio.get_event_loop()
     embeddings = []
+    total_batches = (len(texts) + batch_size - 1) // batch_size
 
     logger.info(f"🔮 Generating embeddings for {len(texts)} chunks in batches of {batch_size}...")
 
     # Process in batches to avoid overwhelming Ollama
-    for i in range(0, len(texts), batch_size):
-        # Check stop signal between batches
+    for batch_num, i in enumerate(range(0, len(texts), batch_size), 1):
+        # ═══════════════════════════════════════════════════════════
+        # STOP CHECK: Before each embedding batch
+        # ═══════════════════════════════════════════════════════════
         if is_stop_requested():
-            logger.warning(f"🛑 Embedding generation stopped at batch {i//batch_size + 1}")
-            break
+            completed = len(embeddings)
+            remaining = len(texts) - completed
+            logger.info(f"🛑 Embedding generation stopped at batch {batch_num}/{total_batches}")
+            logger.info(f"🛑 Generated {completed}/{len(texts)} embeddings ({remaining} stopped)")
+            # Return empty to signal clean stop (no partial data)
+            return []
 
         batch = texts[i:i + batch_size]
+        batch_size_actual = len(batch)
 
         # Generate embeddings in parallel using thread pool
         # Use return_exceptions=True to handle individual failures
@@ -88,18 +104,28 @@ async def generate_embeddings_batch(texts: List[str], batch_size: int = EMBEDDIN
 
         # Check for errors and handle them
         for idx, result in enumerate(batch_results):
+            # Quick stop check after each embedding completes
+            if is_stop_requested():
+                completed = len(embeddings)
+                remaining = len(texts) - completed
+                logger.warning(f"🛑 Embedding generation stopped mid-batch")
+                logger.warning(f"🛑 Generated {completed}/{len(texts)} embeddings ({remaining} stopped)")
+                raise Exception(f"Embedding generation stopped by user ({completed}/{len(texts)} completed)")
+
             if isinstance(result, Exception):
                 text_preview = batch[idx][:100] + "..." if len(batch[idx]) > 100 else batch[idx]
-                logger.error(f"❌ Failed to generate embedding for chunk {i+idx}: {result}")
+                logger.error(f"❌ Failed to generate embedding for chunk {i + idx}: {result}")
                 logger.error(f"   Text preview: {text_preview}")
                 logger.error(f"   Text length: {len(batch[idx])} chars, ~{len(batch[idx].split())} words")
                 # Raise the exception to stop processing
-                raise Exception(f"Embedding failed for chunk {i+idx}: {result}")
+                raise Exception(f"Embedding failed for chunk {i + idx}: {result}")
             else:
                 embeddings.append(result)
 
-        logger.debug(f"📊 Generated {len(batch_results)} embeddings (total: {len(embeddings)}/{len(texts)})")
+        logger.debug(
+            f"📊 Batch {batch_num}/{total_batches}: Generated {batch_size_actual} embeddings (total: {len(embeddings)}/{len(texts)})")
 
+    logger.info(f"✅ Embedding generation complete: {len(embeddings)}/{len(texts)} embeddings")
     return embeddings
 
 
@@ -188,10 +214,10 @@ def extract_subtitles_for_item(media_item: Dict[str, Any]) -> Tuple[str, str, Li
 # ============================================================================
 
 async def ingest_item_to_rag(
-    media_id: str,
-    title: str,
-    subtitle_lines: List[str],
-    metadata_text: str
+        media_id: str,
+        title: str,
+        subtitle_lines: List[str],
+        metadata_text: str
 ) -> Dict[str, Any]:
     """
     Ingest a single item's subtitles into RAG with batched operations.
@@ -288,10 +314,40 @@ async def ingest_item_to_rag(
         logger.warning(f"⚠️  Chunk count mismatch after validation!")
 
     logger.info(f"🔮 Generating embeddings for {len(validated_chunks)} chunks in batches of {EMBEDDING_BATCH_SIZE}...")
-    embeddings = await generate_embeddings_batch(validated_chunks, batch_size=EMBEDDING_BATCH_SIZE)
 
-    if is_stop_requested() or len(embeddings) != len(validated_chunks):
-        logger.warning(f"🛑 Stopped during embedding generation for {title}")
+    try:
+        embeddings = await generate_embeddings_batch(validated_chunks, batch_size=EMBEDDING_BATCH_SIZE)
+    except Exception as e:
+        # Embedding generation failed or was stopped
+        if "stopped by user" in str(e).lower():
+            logger.warning(f"🛑 Stopped during embedding generation for {title}")
+            mark_as_ingested(media_id, status="partial")
+            return {
+                "title": title,
+                "id": media_id,
+                "subtitle_chunks": 0,
+                "subtitle_word_count": 0,
+                "status": "stopped",
+                "reason": "Stopped during embedding generation"
+            }
+        else:
+            # Real error
+            logger.error(f"❌ Embedding generation failed for {title}: {e}")
+            mark_as_ingested(media_id, status="error")
+            return {
+                "title": title,
+                "id": media_id,
+                "subtitle_chunks": 0,
+                "subtitle_word_count": 0,
+                "status": "error",
+                "reason": f"Embedding generation failed: {str(e)}"
+            }
+
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL CHECK: Verify embeddings are complete
+    # ═══════════════════════════════════════════════════════════
+    if not embeddings or len(embeddings) != len(validated_chunks):
+        logger.warning(f"🛑 Incomplete embeddings for {title} ({len(embeddings)}/{len(validated_chunks)})")
         mark_as_ingested(media_id, status="partial")
         return {
             "title": title,
@@ -299,7 +355,20 @@ async def ingest_item_to_rag(
             "subtitle_chunks": 0,
             "subtitle_word_count": 0,
             "status": "stopped",
-            "reason": f"Stopped during embedding generation ({len(embeddings)}/{len(validated_chunks)} completed)"
+            "reason": f"Incomplete embeddings ({len(embeddings)}/{len(validated_chunks)} generated)"
+        }
+
+    # Final stop check before committing to database
+    if is_stop_requested():
+        logger.warning(f"🛑 Stopped after embedding generation for {title} - not saving to database")
+        mark_as_ingested(media_id, status="partial")
+        return {
+            "title": title,
+            "id": media_id,
+            "subtitle_chunks": 0,
+            "subtitle_word_count": 0,
+            "status": "stopped",
+            "reason": "Stopped before database write"
         }
 
     # ═══════════════════════════════════════════════════════════
@@ -358,7 +427,8 @@ async def ingest_item_to_rag(
         # Flush this batch to database (one write for 30 chunks)
         flush_batch()
 
-        logger.info(f"✅ Added batch {i//DB_FLUSH_BATCH_SIZE + 1}/{(len(validated_chunks) + DB_FLUSH_BATCH_SIZE - 1)//DB_FLUSH_BATCH_SIZE} ({batch_end - i} chunks)")
+        logger.info(
+            f"✅ Added batch {i // DB_FLUSH_BATCH_SIZE + 1}/{(len(validated_chunks) + DB_FLUSH_BATCH_SIZE - 1) // DB_FLUSH_BATCH_SIZE} ({batch_end - i} chunks)")
 
     # ═══════════════════════════════════════════════════════════
     # Handle metadata (small, can be single chunk)
@@ -542,13 +612,17 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
 
             logger.warning(f"🛑 [BATCH STOP] Ingestion stopped after processing {items_processed}/{total_items} items")
 
-            # Add stop indicator to results
-            results.append({
-                "status": "batch_stopped",
-                "title": "Batch Stopped",
-                "message": f"Stopped after {items_processed} items",
-                "items_remaining": items_remaining
-            })
+            # Mark remaining items as stopped
+            for remaining_idx in range(i, total_items):
+                remaining_item = items[remaining_idx]
+                results.append({
+                    "status": "stopped",
+                    "title": remaining_item.get("title", "Unknown"),
+                    "message": "Stopped before processing",
+                    "position": remaining_idx + 1,
+                    "total": total_items
+                })
+
             break
 
         batch = items[i:i + CONCURRENT_LIMIT]
@@ -569,11 +643,12 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
         # Handle results and check for stop status
         batch_was_stopped = False
 
-        for result in batch_results:
+        for idx, result in enumerate(batch_results):
             if isinstance(result, Exception):
                 logger.error(f"❌ Batch task failed: {result}")
                 results.append({
                     "status": "error",
+                    "title": batch[idx].get("title", "Unknown"),
                     "reason": str(result)
                 })
             else:
@@ -584,10 +659,27 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
                     logger.warning(f"🛑 [ITEM STOP] Item '{result.get('title')}' was stopped - ending batch")
                     batch_was_stopped = True
 
-        # If any item was stopped, don't continue to next batch
-        if batch_was_stopped:
+        # ═══════════════════════════════════════════════════════════
+        # STOP CHECK: After each batch completes
+        # ═══════════════════════════════════════════════════════════
+        if batch_was_stopped or is_stop_requested():
             items_remaining = total_items - len(results)
-            logger.warning(f"🛑 Batch ending early - {items_remaining} items not processed")
+
+            if items_remaining > 0:
+                logger.warning(f"🛑 Batch ending early - marking {items_remaining} remaining items as stopped")
+
+                # Mark all remaining items as stopped
+                next_batch_start = i + CONCURRENT_LIMIT
+                for remaining_idx in range(next_batch_start, total_items):
+                    remaining_item = items[remaining_idx]
+                    results.append({
+                        "status": "stopped",
+                        "title": remaining_item.get("title", "Unknown"),
+                        "message": "Stopped before processing",
+                        "position": remaining_idx + 1,
+                        "total": total_items
+                    })
+
             break
 
         # Brief pause between batches (gives stop check opportunity + kind to Plex server)
@@ -595,9 +687,11 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
             await asyncio.sleep(0.1)  # Quick check interval
 
     overall_duration = time.time() - overall_start
-    avg_rate = len(results) / overall_duration if overall_duration > 0 else 0
+    items_completed = sum(1 for r in results if r.get("status") != "stopped")
+    avg_rate = items_completed / overall_duration if overall_duration > 0 else 0
 
-    logger.info(f"🏁 Parallel ingestion completed: {len(results)} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
+    logger.info(
+        f"🏁 Parallel ingestion completed: {items_completed}/{total_items} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
 
     return results
 
