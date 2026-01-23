@@ -31,6 +31,7 @@ def get_commands_list():
         ":negotiations - Show negotiation statistics",
         ":routing - Show message routing statistics",
         ":routing queues - Show message queue status",
+        ":env queues - Show environment configuration",
         ":clear history - Clear the chat history"
     ]
 
@@ -347,6 +348,11 @@ async def handle_command(
         result = await handle_a2a_commands(command, orchestrator)
         if result:
             return (True, result, None, None)
+
+    # .env values
+    if command == ":env":
+        from client.env_display import format_env_display
+        return True, format_env_display(), None, None
 
     # Health commands
     if command.startswith(":health"):

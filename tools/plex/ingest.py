@@ -26,14 +26,13 @@ PROGRESS_FILE = PROJECT_ROOT / "data" / "plex_ingest_progress.json"
 PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 # Conservative concurrency limit (safe for most systems)
-CONCURRENT_LIMIT = int(os.getenv("MAX_MESSAGE_HISTORY", 1))
+CONCURRENT_LIMIT = int(os.getenv("CONCURRENT_LIMIT", 1))
 
 # Embedding batch size for parallel generation
-EMBEDDING_BATCH_SIZE = int(os.getenv("MAX_MESSAGE_HISTORY", 10))
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", 10))
 
 # Database flush batch size (chunks per flush)
-DB_FLUSH_BATCH_SIZE = int(os.getenv("MAX_MESSAGE_HISTORY", 30))
-
+DB_FLUSH_BATCH_SIZE = int(os.getenv("DB_FLUSH_BATCH_SIZE", 30))
 
 def load_progress() -> Dict[str, bool]:
     """Load ingestion progress from disk"""
