@@ -133,21 +133,26 @@ async def generate_embeddings_batch(texts: List[str], batch_size: int = EMBEDDIN
 # PARALLELIZABLE FUNCTIONS (UNCHANGED)
 # ============================================================================
 
-def find_unprocessed_items(limit: int, rescan_no_subtitles: bool = False) -> List[Dict[str, Any]]:
+def find_unprocessed_items(target_success_count: int, rescan_no_subtitles: bool = False) -> List[Dict[str, Any]]:
     """
-    STEP 1: Find unprocessed media items
+    STEP 1: Find unprocessed media items (with buffer for failures)
 
     Args:
-        limit: Maximum number of unprocessed items to find
+        target_success_count: Target number of SUCCESSFUL ingestions we want
         rescan_no_subtitles: Whether to re-check items with no subtitles
 
     Returns:
-        List of unprocessed media items with metadata
+        List of unprocessed media items (up to target * 3 to account for failures)
     """
     unprocessed_items = []
     checked_count = 0
 
-    logger.info(f"🔍 Finding {limit} unprocessed items (rescan: {rescan_no_subtitles})")
+    # Find 3x the target to handle failures/skips
+    buffer_multiplier = 3
+    search_limit = target_success_count * buffer_multiplier
+
+    logger.info(
+        f"🔍 Finding up to {search_limit} unprocessed items (target: {target_success_count} successful, rescan: {rescan_no_subtitles})")
 
     for media_item in stream_all_media():
         # CHECK STOP SIGNAL during search
@@ -168,11 +173,13 @@ def find_unprocessed_items(limit: int, rescan_no_subtitles: bool = False) -> Lis
         logger.info(f"📍 Found unprocessed: {title}")
         unprocessed_items.append(media_item)
 
-        # Stop when we have enough
-        if len(unprocessed_items) >= limit:
+        # Stop when we have enough buffer
+        if len(unprocessed_items) >= search_limit:
+            logger.info(f"📦 Buffer filled: found {search_limit} items for {target_success_count} target")
             break
 
-    logger.info(f"🔍 Found {len(unprocessed_items)} unprocessed items (checked {checked_count + len(unprocessed_items)} total)")
+    logger.info(
+        f"🔍 Found {len(unprocessed_items)} unprocessed items (checked {checked_count + len(unprocessed_items)} total)")
     return unprocessed_items
 
 
@@ -580,55 +587,65 @@ async def process_item_async(media_item: Dict[str, Any]) -> Dict[str, Any]:
 # Batch Processing
 # ============================================================================
 
-async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def ingest_batch_parallel_conservative(
+        items: List[Dict[str, Any]],
+        target_success_count: int
+) -> List[Dict[str, Any]]:
     """
-    Process items in small parallel batches with stop signal handling.
+    Process items until target_success_count successful ingestions are completed.
 
     Stop checks:
     - Before each batch starts
-    - After each item completes
-    - If any item returns "stopped" status, entire batch stops
+    - After each batch completes
+    - When target is reached
 
     Args:
-        items: List of media items to process
+        items: Pool of media items to process
+        target_success_count: How many SUCCESSFUL ingestions we want
 
     Returns:
-        List of ingestion results
+        List of all ingestion results (successful + failed + stopped)
     """
     results = []
+    successful_count = 0
+    items_index = 0
     total_items = len(items)
 
-    logger.info(f"🚀 Starting parallel ingestion of {total_items} items ({CONCURRENT_LIMIT} concurrent)")
+    logger.info(
+        f"🎯 Target: {target_success_count} successful ingestions from pool of {total_items} items ({CONCURRENT_LIMIT} concurrent)")
     overall_start = time.time()
 
-    # Process in batches
-    for batch_num, i in enumerate(range(0, total_items, CONCURRENT_LIMIT), 1):
+    batch_num = 0
+
+    # Process until we reach target or run out of items
+    while successful_count < target_success_count and items_index < total_items:
+        batch_num += 1
+
         # ═══════════════════════════════════════════════════════════
         # STOP CHECK: Before each batch
         # ═══════════════════════════════════════════════════════════
         if is_stop_requested():
-            items_processed = len(results)
-            items_remaining = total_items - items_processed
+            logger.warning(
+                f"🛑 [BATCH STOP] Stopped after {successful_count}/{target_success_count} successful ingestions")
 
-            logger.warning(f"🛑 [BATCH STOP] Ingestion stopped after processing {items_processed}/{total_items} items")
-
-            # Mark remaining items as stopped
-            for remaining_idx in range(i, total_items):
+            # Mark all remaining items as stopped
+            for remaining_idx in range(items_index, total_items):
                 remaining_item = items[remaining_idx]
                 results.append({
                     "status": "stopped",
                     "title": remaining_item.get("title", "Unknown"),
                     "message": "Stopped before processing",
-                    "position": remaining_idx + 1,
-                    "total": total_items
                 })
 
             break
 
-        batch = items[i:i + CONCURRENT_LIMIT]
+        # Get next batch
+        batch = items[items_index:items_index + CONCURRENT_LIMIT]
         batch_size = len(batch)
+        items_index += len(batch)
 
-        logger.info(f"⚙️  Processing batch {batch_num} ({batch_size} items)...")
+        logger.info(
+            f"⚙️  Processing batch {batch_num} ({batch_size} items)... [{successful_count}/{target_success_count} successful so far]")
         batch_start = time.time()
 
         # Process this batch in parallel
@@ -640,7 +657,7 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
         batch_duration = time.time() - batch_start
         logger.info(f"✅ Batch {batch_num} completed in {batch_duration:.2f}s")
 
-        # Handle results and check for stop status
+        # Handle results and count successes
         batch_was_stopped = False
 
         for idx, result in enumerate(batch_results):
@@ -654,70 +671,88 @@ async def ingest_batch_parallel_conservative(items: List[Dict[str, Any]]) -> Lis
             else:
                 results.append(result)
 
-                # If this item was stopped, stop the entire batch
-                if result.get("status") == "stopped":
-                    logger.warning(f"🛑 [ITEM STOP] Item '{result.get('title')}' was stopped - ending batch")
+                # Count successful ingestions
+                if result.get("status") == "success":
+                    successful_count += 1
+                    logger.info(f"✅ Progress: {successful_count}/{target_success_count} successful ingestions")
+
+                    # Check if we hit target
+                    if successful_count >= target_success_count:
+                        logger.info(f"🎯 Target reached! {successful_count}/{target_success_count} successful")
+                        batch_was_stopped = True
+                        break
+
+                elif result.get("status") == "stopped":
+                    logger.warning(f"🛑 [ITEM STOP] Item '{result.get('title')}' was stopped")
                     batch_was_stopped = True
 
-        # ═══════════════════════════════════════════════════════════
-        # STOP CHECK: After each batch completes
-        # ═══════════════════════════════════════════════════════════
-        if batch_was_stopped or is_stop_requested():
-            items_remaining = total_items - len(results)
+                elif result.get("status") in ["no_subtitles", "error"]:
+                    logger.warning(f"⏭️  Skipped: {result.get('title')} ({result.get('status')})")
 
-            if items_remaining > 0:
-                logger.warning(f"🛑 Batch ending early - marking {items_remaining} remaining items as stopped")
+        # ═══════════════════════════════════════════════════════════
+        # STOP CHECK: After batch or target reached
+        # ═══════════════════════════════════════════════════════════
+        if batch_was_stopped or is_stop_requested() or successful_count >= target_success_count:
+            # Mark any remaining items as stopped (if we haven't processed them yet)
+            if items_index < total_items:
+                remaining_count = total_items - items_index
+                logger.info(f"🛑 Stopping early - marking {remaining_count} remaining items as not attempted")
 
-                # Mark all remaining items as stopped
-                next_batch_start = i + CONCURRENT_LIMIT
-                for remaining_idx in range(next_batch_start, total_items):
+                for remaining_idx in range(items_index, total_items):
                     remaining_item = items[remaining_idx]
                     results.append({
-                        "status": "stopped",
+                        "status": "not_attempted",
                         "title": remaining_item.get("title", "Unknown"),
-                        "message": "Stopped before processing",
-                        "position": remaining_idx + 1,
-                        "total": total_items
+                        "message": "Target reached before this item"
                     })
 
             break
 
-        # Brief pause between batches (gives stop check opportunity + kind to Plex server)
-        if i + CONCURRENT_LIMIT < total_items:
-            await asyncio.sleep(0.1)  # Quick check interval
+        # Brief pause between batches
+        if items_index < total_items and successful_count < target_success_count:
+            await asyncio.sleep(0.1)
 
     overall_duration = time.time() - overall_start
-    items_completed = sum(1 for r in results if r.get("status") != "stopped")
-    avg_rate = items_completed / overall_duration if overall_duration > 0 else 0
+    avg_rate = successful_count / overall_duration if overall_duration > 0 else 0
 
+    # Summary
+    failed_count = sum(1 for r in results if r.get("status") in ["error", "no_subtitles"])
+    stopped_count = sum(1 for r in results if r.get("status") == "stopped")
+
+    logger.info(f"🏁 Parallel ingestion completed:")
+    logger.info(f"   - Target: {target_success_count}")
+    logger.info(f"   - Successful: {successful_count}")
+    logger.info(f"   - Failed/Skipped: {failed_count}")
+    logger.info(f"   - Stopped: {stopped_count}")
     logger.info(
-        f"🏁 Parallel ingestion completed: {items_completed}/{total_items} items in {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
+        f"   - Total attempted: {len([r for r in results if r.get('status') not in ['not_attempted', 'stopped']])}")
+    logger.info(f"   - Duration: {overall_duration:.2f}s ({avg_rate:.2f} items/sec)")
 
     return results
 
 
 async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> Dict[str, Any]:
     """
-    Ingest the next batch of unprocessed Plex items into RAG.
+    Ingest items until LIMIT successful ingestions are completed.
 
     Includes stop signal handling:
     - Checks stop during item search
-    - Checks stop before/after each item
-    - Checks stop between batches
+    - Checks stop before/after each batch
+    - Checks stop when target is reached
     - Reports stop status in results
 
     Args:
-        limit: Maximum number of items to process
+        limit: Number of SUCCESSFUL ingestions to complete (not total attempts)
         rescan_no_subtitles: If True, re-check items that previously had no subtitles
 
     Returns:
         Dictionary with ingestion results (includes "stopped" flag if stopped)
     """
     try:
-        logger.info(f"📥 Starting parallel batch ingestion (limit: {limit}, rescan: {rescan_no_subtitles})")
+        logger.info(f"📥 Starting parallel batch ingestion (target: {limit} successful, rescan: {rescan_no_subtitles})")
         overall_start = time.time()
 
-        # STEP 1: Find unprocessed items (with stop checks)
+        # STEP 1: Find unprocessed items (with 3x buffer for failures)
         loop = asyncio.get_event_loop()
         unprocessed_items = await loop.run_in_executor(
             None, find_unprocessed_items, limit, rescan_no_subtitles
@@ -727,11 +762,11 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         if is_stop_requested():
             logger.warning("🛑 Search was stopped - returning early")
             return {
-                "ingested": [],
-                "skipped": [],
+                "target": limit,
+                "successful": 0,
+                "failed_skipped": 0,
                 "stopped": True,
                 "stop_reason": "Stopped during item search",
-                "items_processed": 0,
                 "duration": time.time() - overall_start,
                 "mode": "parallel"
             }
@@ -740,8 +775,9 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
             logger.info("✅ No unprocessed items found")
             stats = get_ingestion_stats()
             return {
-                "ingested": [],
-                "skipped": [],
+                "target": limit,
+                "successful": 0,
+                "failed_skipped": 0,
                 "stopped": False,
                 "stats": {
                     "total_items": stats["total_items"],
@@ -749,20 +785,22 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
                     "missing_subtitles": stats["missing_subtitles"],
                     "remaining_unprocessed": stats["remaining"]
                 },
-                "items_processed": 0,
-                "items_checked": 0,
+                "message": "No unprocessed items found",
                 "duration": 0,
                 "mode": "parallel"
             }
 
-        # STEP 2 & 3: Extract and ingest in parallel
+        # STEP 2 & 3: Process items until target is reached
         logger.info(f"🚀 Processing {len(unprocessed_items)} items with batched operations...")
 
-        results = await ingest_batch_parallel_conservative(unprocessed_items)
+        results = await ingest_batch_parallel_conservative(
+            unprocessed_items,
+            target_success_count=limit  # ADDED: Pass target count
+        )
 
-        # Separate successful, skipped, and stopped
-        ingested_items = []
-        skipped_items = []
+        # Categorize results
+        successful_items = []
+        failed_items = []
         was_stopped = False
         stop_reason = None
 
@@ -770,43 +808,37 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
             status = result.get("status")
 
             if status == "success":
-                ingested_items.append(result)
+                successful_items.append(result)
             elif status == "stopped":
                 was_stopped = True
-                stop_reason = result.get("reason", "Stopped by user")
-                skipped_items.append({
+                stop_reason = result.get("message", "Stopped by user")
+                failed_items.append({
                     "title": result.get("title", "Unknown"),
-                    "reason": result.get("reason", "Stopped")
+                    "reason": "Stopped before processing"
                 })
-            elif status == "batch_stopped":
-                was_stopped = True
-                stop_reason = result.get("message", "Batch stopped by user")
-                skipped_items.append({
-                    "title": "Batch Stopped",
-                    "reason": result.get("message", "Stopped"),
-                    "items_remaining": result.get("items_remaining", 0)
-                })
-            elif status == "no_subtitles":
-                skipped_items.append({
-                    "title": result["title"],
-                    "id": result["id"],
-                    "reason": result.get("reason", "No subtitles found")
-                })
-            elif status == "error":
-                skipped_items.append({
+            elif status == "not_attempted":
+                # Don't count as failed - just not attempted because target was reached
+                pass
+            elif status in ["no_subtitles", "error"]:
+                failed_items.append({
                     "title": result.get("title", "Unknown"),
                     "id": result.get("id", "Unknown"),
-                    "reason": result.get("reason", "Processing error")
+                    "reason": result.get("reason", status)
                 })
 
         # Get total stats
         stats = get_ingestion_stats()
         overall_duration = time.time() - overall_start
-        items_processed = len(ingested_items) + len([s for s in skipped_items if s.get("title") != "Batch Stopped"])
+
+        # Count only items that were actually attempted (not "not_attempted")
+        items_attempted = len([r for r in results if r.get("status") not in ["not_attempted", "stopped"]])
 
         result = {
-            "ingested": ingested_items,
-            "skipped": skipped_items,
+            "target": limit,
+            "successful": len(successful_items),
+            "failed_skipped": len(failed_items),
+            "total_attempted": items_attempted,
+            "target_reached": len(successful_items) >= limit,
             "stopped": was_stopped,
             "stop_reason": stop_reason,
             "stats": {
@@ -815,29 +847,39 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
                 "missing_subtitles": stats["missing_subtitles"],
                 "remaining_unprocessed": stats["remaining"]
             },
-            "items_processed": items_processed,
-            "items_checked": items_processed,
+            "successful_items": [
+                {
+                    "title": item["title"],
+                    "chunks": item.get("subtitle_chunks", 0),
+                    "words": item.get("subtitle_word_count", 0)
+                }
+                for item in successful_items
+            ],
+            "failed_items": failed_items,
             "duration": round(overall_duration, 2),
             "mode": "parallel",
             "concurrent_limit": CONCURRENT_LIMIT,
             "embedding_batch_size": EMBEDDING_BATCH_SIZE,
             "db_flush_batch_size": DB_FLUSH_BATCH_SIZE,
-            "average_rate": round(items_processed / overall_duration, 2) if overall_duration > 0 else 0
+            "rate": round(len(successful_items) / overall_duration, 2) if overall_duration > 0 else 0
         }
 
         # Log final status
         if was_stopped:
             logger.warning(f"🛑 Batch stopped by user:")
             logger.warning(f"   - Reason: {stop_reason}")
+            logger.warning(f"   - Successful: {len(successful_items)}/{limit}")
         else:
             logger.info(f"📊 Batch complete:")
+            logger.info(f"   - Target: {limit}")
+            logger.info(f"   - Successful: {len(successful_items)}")
+            logger.info(f"   - Failed/Skipped: {len(failed_items)}")
+            logger.info(f"   - Total attempted: {items_attempted}")
+            logger.info(f"   - Duration: {overall_duration:.2f}s")
+            logger.info(f"   - Rate: {result['rate']:.2f} items/sec")
 
-        logger.info(f"   - Items processed: {items_processed}")
-        logger.info(f"   - Ingested: {len(ingested_items)}")
-        logger.info(f"   - Skipped: {len(skipped_items)}")
-        logger.info(f"   - Duration: {overall_duration:.2f}s")
-        if items_processed > 0:
-            logger.info(f"   - Rate: {result['average_rate']:.2f} items/sec")
+            if len(successful_items) >= limit:
+                logger.info(f"   🎯 Target reached!")
 
         return result
 
@@ -850,6 +892,8 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         stop_status = get_stop_status()
         if stop_status["is_stopped"]:
             return {
+                "target": limit,
+                "successful": 0,
                 "error": "Stopped during execution",
                 "stopped": True,
                 "stop_reason": str(e),
@@ -857,6 +901,8 @@ async def ingest_next_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
             }
 
         return {
+            "target": limit,
+            "successful": 0,
             "error": str(e),
             "stopped": False,
             "mode": "parallel"

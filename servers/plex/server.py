@@ -520,6 +520,27 @@ async def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         traceback.print_exc()
         return json.dumps({"error": str(e)})
 
+@mcp.tool()
+def rag_rescan_no_subtitles() -> str:
+    """
+    Reset items that were marked as 'no subtitles' to allow re-scanning.
+
+    Use this after you've added subtitle files to your Plex media and want
+    to re-check items that were previously skipped.
+
+    Returns:
+        JSON string with:
+        - reset_count: Number of items unmarked for re-scanning
+        - message: Confirmation message
+    """
+    logger.info(f"🛠 [server] rag_rescan_no_subtitles called")
+    from tools.rag.rag_storage import reset_no_subtitle_items
+    count = reset_no_subtitle_items()
+    return json.dumps({
+        "reset_count": count,
+        "message": f"Reset {count} items for re-scanning. Run plex_ingest_batch to check them again."
+    }, indent=2)
+
 # TOOL 5: Get Ingestion Statistics (Monitoring)
 @mcp.tool()
 def plex_get_stats() -> str:

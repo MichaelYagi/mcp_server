@@ -22,7 +22,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from mcp.server.fastmcp import FastMCP
 from client.stop_signal import is_stop_requested
-from tools.plex import ingest_next_batch
 from tools.rag.rag_add import rag_add
 from tools.rag.rag_search import rag_search
 from tools.rag.rag_diagnose import diagnose_rag
@@ -180,53 +179,6 @@ def rag_status_tool() -> str:
     except Exception as e:
         logger.error(f"❌ Error getting RAG status: {e}")
         return json.dumps({"error": str(e)}, indent=2)
-
-
-@mcp.tool()
-async def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> str:
-    """
-    Ingest Plex items into RAG with STOP SIGNAL support
-    Uses coroutines to parallelize Plex media into RAG database
-    """
-    logger.info(f"🛠 [server] plex_ingest_batch called with limit: {limit}, rescan: {rescan_no_subtitles}")
-
-    # Check stop BEFORE starting
-    if is_stop_requested():
-        logger.warning("🛑 plex_ingest_batch: Stop requested - skipping ingestion")
-        return json.dumps({
-            "ingested": [],
-            "remaining": 0,
-            "total_ingested": 0,
-            "stopped": True,
-            "stop_reason": "Stopped before ingestion started"
-        }, indent=2)
-
-    # Must await the async function!
-    result = await ingest_next_batch(limit, rescan_no_subtitles)
-
-    logger.info(f"🛠 [server] plex_ingest_batch completed")
-    return json.dumps(result, indent=2)
-
-@mcp.tool()
-def rag_rescan_no_subtitles() -> str:
-    """
-    Reset items that were marked as 'no subtitles' to allow re-scanning.
-
-    Use this after you've added subtitle files to your Plex media and want
-    to re-check items that were previously skipped.
-
-    Returns:
-        JSON string with:
-        - reset_count: Number of items unmarked for re-scanning
-        - message: Confirmation message
-    """
-    logger.info(f"🛠 [server] rag_rescan_no_subtitles called")
-    from tools.rag.rag_storage import reset_no_subtitle_items
-    count = reset_no_subtitle_items()
-    return json.dumps({
-        "reset_count": count,
-        "message": f"Reset {count} items for re-scanning. Run plex_ingest_batch to check them again."
-    }, indent=2)
 
 skill_registry = None
 
