@@ -31,7 +31,7 @@ def get_commands_list():
         ":negotiations - Show negotiation statistics",
         ":routing - Show message routing statistics",
         ":routing queues - Show message queue status",
-        ":env queues - Show environment configuration",
+        ":env - Show environment configuration",
         ":clear history - Clear the chat history"
     ]
 
