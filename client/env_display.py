@@ -15,30 +15,33 @@ def get_env_display() -> Dict[str, Any]:
     """
 
     def mask_token(value: str) -> str:
-        return value if value == "(not set)" else "*" * len(value)
+        """Mask token but handle empty/None"""
+        if not value:
+            return "(not set)"
+        return "*" * len(value)
 
     env_vars = {
         "plex": {
-            "PLEX_URL": os.getenv("PLEX_URL", "(not set)"),
-            "PLEX_TOKEN": mask_token(os.getenv("PLEX_TOKEN", "(not set)"))
+            "PLEX_URL": os.getenv("PLEX_URL") or "(not set)",
+            "PLEX_TOKEN": mask_token(os.getenv("PLEX_TOKEN"))
         },
         "weather": {
-            "WEATHER_TOKEN": mask_token(os.getenv("WEATHER_TOKEN", "(not set)"))
+            "WEATHER_TOKEN": mask_token(os.getenv("WEATHER_TOKEN"))
         },
         "a2a": {
-            "A2A_ENDPOINTS": os.getenv("A2A_ENDPOINTS", "(not set)"),
-            "A2A_EXPOSED_TOOLS": os.getenv("A2A_EXPOSED_TOOLS", "(empty = all)")
+            "A2A_ENDPOINTS": os.getenv("A2A_ENDPOINTS") or "(not set)",
+            "A2A_EXPOSED_TOOLS": os.getenv("A2A_EXPOSED_TOOLS") or "(not set)"
         },
         "langsearch": {
-            "LANGSEARCH_TOKEN": mask_token(os.getenv("LANGSEARCH_TOKEN", "(not set)"))
+            "LANGSEARCH_TOKEN": mask_token(os.getenv("LANGSEARCH_TOKEN"))
         },
         "agent": {
-            "MAX_MESSAGE_HISTORY": os.getenv("MAX_MESSAGE_HISTORY", "20")
+            "MAX_MESSAGE_HISTORY": os.getenv("MAX_MESSAGE_HISTORY") or "20"
         },
         "rag_performance": {
-            "CONCURRENT_LIMIT": os.getenv("CONCURRENT_LIMIT", "1"),
-            "EMBEDDING_BATCH_SIZE": os.getenv("EMBEDDING_BATCH_SIZE", "10"),
-            "DB_FLUSH_BATCH_SIZE": os.getenv("DB_FLUSH_BATCH_SIZE", "30")
+            "CONCURRENT_LIMIT": os.getenv("CONCURRENT_LIMIT") or "1",
+            "EMBEDDING_BATCH_SIZE": os.getenv("EMBEDDING_BATCH_SIZE") or "10",
+            "DB_FLUSH_BATCH_SIZE": os.getenv("DB_FLUSH_BATCH_SIZE") or "30"
         }
     }
 
@@ -47,17 +50,16 @@ def get_env_display() -> Dict[str, Any]:
 
 def format_env_display() -> str:
     """
-    Format environment variables for CLI display.
+    Format environment variables for display.
 
     Returns:
-        Formatted string for printing
+        Formatted string (wrapped in code block for web UI)
     """
     env_vars = get_env_display()
 
     output = []
-    output.append("\n" + "=" * 60)
     output.append("📋 ENVIRONMENT CONFIGURATION")
-    output.append("=" * 60)
+    output.append("=" * 50)
 
     # Plex
     output.append("\n🎬 Plex Media Server:")
@@ -87,6 +89,9 @@ def format_env_display() -> str:
     output.append(f"   EMBEDDING_BATCH_SIZE: {env_vars['rag_performance']['EMBEDDING_BATCH_SIZE']}")
     output.append(f"   DB_FLUSH_BATCH_SIZE: {env_vars['rag_performance']['DB_FLUSH_BATCH_SIZE']}")
 
-    output.append("\n" + "=" * 60 + "\n")
+    output.append("\n" + "=" * 50)
 
-    return "\n".join(output)
+    # Wrap in code block for web UI (preserves formatting)
+    # CLI will still see the equals signs, but they're harmless
+    formatted = "\n".join(output)
+    return f"```\n{formatted}\n```"
