@@ -104,10 +104,9 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
     Stream subtitle lines for a given media item.
 
     Selection rules:
-    - Accept ANY stream where streamType == 3 (subtitle types)
-    - Prefer English (eng, en, english)
-    - If no English exists, use the first text subtitle stream
-    - Ignore stream.key entirely (fallback to embedded extraction)
+    - Only process English subtitle streams
+    - Try all English streams until one works
+    - If no English streams work, skip the item
     """
     try:
         plex = get_plex_server()
@@ -116,9 +115,10 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
         for part in media.iterParts():
 
             # ---------------------------------------------------------
-            # 1. Collect all usable text subtitle streams
+            # 1. Collect English text subtitle streams only
             # ---------------------------------------------------------
-            candidates = []
+            english_streams = []
+
             for stream in part.subtitleStreams():
                 if stream.streamType != 3:
                     continue
@@ -127,67 +127,54 @@ def stream_subtitles(rating_key: str) -> Iterator[str]:
                 if stream.codec not in ("srt", "ass", "vtt"):
                     continue
 
-                candidates.append(stream)
-
-            if not candidates:
-                logger.warning(f"⚠️ No usable subtitle streams found for: {media.title}")
-                return
-
-            # ---------------------------------------------------------
-            # 2. Prefer English, otherwise first available
-            # ---------------------------------------------------------
-            chosen = None
-            for stream in candidates:
+                # Check if English
                 lang = (
-                    stream.languageCode
-                    or stream.language
-                    or stream.languageTag
-                    or stream.displayTitle
-                    or ""
+                        stream.languageCode
+                        or stream.language
+                        or stream.languageTag
+                        or stream.displayTitle
+                        or ""
                 ).lower()
 
                 if lang in ("eng", "en", "english"):
-                    chosen = stream
-                    break
+                    english_streams.append(stream)
 
-            if not chosen:
-                chosen = candidates[0]
-
-            logger.info(f"📝 Using subtitle stream: {chosen.displayTitle or chosen.title or 'Untitled'}")
+            if not english_streams:
+                logger.warning(f"⚠️ No English subtitle streams found for: {media.title}")
+                return
 
             # ---------------------------------------------------------
-            # 3. Try external download (if key exists)
+            # 2. Try each English stream until one works
             # ---------------------------------------------------------
-            content = None
-            if getattr(chosen, "key", None):
-                try:
-                    subtitle_url = plex.url(chosen.key, includeToken=True)
-                    import requests
-                    response = requests.get(subtitle_url)
+            for chosen in english_streams:
+                logger.info(f"📝 Trying subtitle stream: {chosen.displayTitle or chosen.title or 'Untitled'}")
 
-                    if response.status_code == 200 and response.text.strip():
-                        content = response.text
-                except Exception as e:
-                    logger.warning(f"⚠️ Error downloading subtitle via key: {e}")
+                # Try external download (if key exists)
+                content = None
+                if getattr(chosen, "key", None):
+                    try:
+                        subtitle_url = plex.url(chosen.key, includeToken=True)
+                        import requests
+                        response = requests.get(subtitle_url)
 
-            # ---------------------------------------------------------
-            # 4. Fallback: embedded subtitle extraction
-            # ---------------------------------------------------------
-            if not content:
-                try:
-                    # PlexAPI exposes embedded subtitle text here
-                    content = chosen.parts[0].subtitleContent
-                except Exception:
-                    logger.warning(
-                        f"⚠️ Subtitle stream exists but no extractable text found for: {media.title}"
-                    )
-                    return
+                        if response.status_code == 200 and response.text.strip():
+                            content = response.text
+                            logger.info(f"✅ Downloaded subtitle via key")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Download failed: {e}")
 
-            # ---------------------------------------------------------
-            # 5. Parse SRT/ASS/VTT into text lines
-            # ---------------------------------------------------------
-            for line in parse_srt(content):
-                yield line
+                # If download worked, parse and return
+                if content:
+                    for line in parse_srt(content):
+                        yield line
+                    return  # Success! Exit after first working stream
+                else:
+                    logger.warning(f"⚠️ Stream has no downloadable content, trying next English stream...")
+                    # Continue to next English stream
+
+            # If we got here, no English streams worked
+            logger.warning(f"⚠️ No extractable English subtitle content found for: {media.title}")
+            return
 
     except Exception as e:
         logger.error(f"❌ Error streaming subtitles for {rating_key}: {e}")
