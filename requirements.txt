@@ -10,7 +10,9 @@ python-dotenv
 requests
 ollama
 plexapi
+llama-cpp-python
 langchain-ollama
+langchain-community
 websockets
 openai
 pandas

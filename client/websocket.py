@@ -150,12 +150,21 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 }))
                 continue
 
+            # ═══════════════════════════════════════════════════════════
+            # UPDATED: List models - Now shows both Ollama and GGUF
+            # ═══════════════════════════════════════════════════════════
             if data.get("type") == "list_models":
-                models = models_module.get_available_models()
+                # Get unified model list (both Ollama and GGUF)
+                all_models = models_module.get_all_models()
+
+                # Extract just the model names for the dropdown
+                model_names = [m["name"] for m in all_models]
+
                 last = models_module.load_last_model()
                 await websocket.send(json.dumps({
                     "type": "models_list",
-                    "models": models,
+                    "models": model_names,
+                    "all_models": all_models,  # Include full info for future enhancement
                     "last_used": last
                 }))
                 continue
@@ -193,8 +202,13 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 }))
                 continue
 
+            # ═══════════════════════════════════════════════════════════
+            # UPDATED: Switch model - Now auto-detects backend
+            # ═══════════════════════════════════════════════════════════
             if data.get("type") == "switch_model":
                 model_name = data.get("model")
+
+                # Use unified switch_model that auto-detects backend
                 new_agent = await models_module.switch_model(
                     model_name,
                     tools,
@@ -202,12 +216,14 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                     create_agent_fn=create_langgraph_agent,
                     a2a_state=a2a_state
                 )
+
                 if new_agent is None:
                     await websocket.send(json.dumps({
                         "type": "model_error",
-                        "message": f"Model '{model_name}' is not installed."
+                        "message": f"Model '{model_name}' not found"
                     }))
                     continue
+
                 agent_ref[0] = new_agent
                 await websocket.send(json.dumps({
                     "type": "model_switched",

@@ -13,6 +13,7 @@ knowledge/
 # IDEs
 .vscode/
 .idea/
+test.py
 /tools/knowledge_base/entries/
 /logs/
 /.venv-wsl/
@@ -25,3 +26,7 @@ knowledge/
 /test_stop_signal.py
 /debug_stop.py
 /mock_a2a_server.py
+/cuda-keyring_1.1-1_all.deb
+/cuda-keyring_1.1-1_all.deb.1
+/cuda-keyring_1.1-1_all.deb.2
+/gguf_models.json

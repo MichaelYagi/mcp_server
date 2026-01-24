@@ -280,26 +280,60 @@ async def main():
     # Log first 200 chars of system prompt for verification
     logger.info(f"📋 System prompt preview: {SYSTEM_PROMPT[:200]}...")
 
-    # Check for available models
-    available = models.get_available_models()
-    if len(available) == 0:
-        print("❌ No models available. Download models using `ollama pull <model>` and run `ollama serve`. Exiting.")
+    # Import backend manager
+    from client.llm_backend import LLMBackendManager, GGUFModelRegistry
+
+    # Get all available models
+    all_models = models.get_all_models()
+    if not all_models:
+        print("❌ No models available")
+        print("   Ollama: ollama pull <model>")
+        print("   GGUF: :gguf add <alias> <path>")
         sys.exit(1)
 
-    # Load last used model
-    model_name = "llama3.1:8b"
-    last = models.load_last_model()
-    if last is not None and last != model_name and last in available:
-        model_name = last
+    # Start with Ollama by default
+    backend = models.get_initial_backend()
+    os.environ["LLM_BACKEND"] = backend
+    logger.info(f"🔧 Backend: {backend}")
+
+    # Check backend-specific requirements
+    if backend == "ollama":
+        try:
+            await utils.ensure_ollama_running()
+        except RuntimeError as e:
+            print(f"❌ {e}")
+            print("💡 Start Ollama: ollama serve")
+            print("   Or use GGUF: LLM_BACKEND=gguf python client.py")
+            sys.exit(1)
+
+        # Get Ollama models
+        ollama_models = [m["name"] for m in all_models if m["backend"] == "ollama"]
+        if not ollama_models:
+            print("❌ No Ollama models. Install with: ollama pull <model>")
+            sys.exit(1)
+
+        model_name = ollama_models[0]
+        last = models.load_last_model()
+        if last and last in ollama_models:
+            model_name = last
+
+    elif backend == "gguf":
+        # Get GGUF models
+        gguf_models = [m["name"] for m in all_models if m["backend"] == "gguf"]
+        if not gguf_models:
+            print("❌ No GGUF models. Add with: :gguf add <alias> <path>")
+            sys.exit(1)
+
+        model_name = gguf_models[0]
+        last = models.load_last_model()
+        if last and last in gguf_models:
+            model_name = last
 
     models.save_last_model(model_name)
-    logger.info(f"🤖 Using model: {model_name}")
+    logger.info(f"🤖 Using {backend}/{model_name}")
 
-    # Check Ollama is running
-    await utils.ensure_ollama_running()
-
-    # Initialize LLM with temperature=0 for deterministic responses
-    llm = ChatOllama(model=model_name, temperature=0)
+    # Initialize LLM
+    llm = LLMBackendManager.create_llm(model_name, temperature=0)
 
     mcp_agent = MCPAgent(
         llm=llm,

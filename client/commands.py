@@ -3,6 +3,7 @@ Command Handlers for MCP Client
 Compatible with existing CLI/WebSocket interfaces
 """
 from client.langgraph import create_langgraph_agent
+from client.llm_backend import GGUFModelRegistry
 
 
 def get_commands_list():
@@ -13,9 +14,12 @@ def get_commands_list():
         ":stats - Show performance metrics",
         ":tools - List all available tools",
         ":tool <tool> - Get the tool description",
-        ":model - View the current active model",
-        ":model <model> - Use the model passed",
-        ":models - List available models",
+        ":model - List all available models (Ollama + GGUF)",
+        ":model <model> - Switch to model (auto-detects backend)",
+        ":models - List available models (legacy)",
+        ":gguf add <alias> <path> [desc] - Register a GGUF model",
+        ":gguf remove <alias> - Remove a GGUF model",
+        ":gguf list - List registered GGUF models",
         ":multi on - Enable multi-agent mode",
         ":multi off - Disable multi-agent mode",
         ":multi status - Check multi-agent status",
@@ -106,6 +110,62 @@ async def handle_multi_agent_commands(command: str, orchestrator, multi_agent_st
             return "Multi-agent mode: DISABLED\n   Use ':multi on' to enable"
 
     return None
+
+
+async def handle_gguf_commands(command: str):
+    """
+    Handle GGUF model registry commands
+    Returns result string or None if command not handled
+    """
+    if not command.startswith(":gguf"):
+        return None
+
+    parts = command[6:].strip().split(maxsplit=2)
+
+    if not parts or parts[0] == "help":
+        return (
+            "\n📦 GGUF Model Commands:\n"
+            "  :gguf add <path> [alias]           - Register a GGUF model\n"
+            "  :gguf remove <alias>               - Remove a GGUF model\n"
+            "  :gguf list                         - List registered models\n"
+            "\n"
+            "Examples:\n"
+            "  :gguf add /path/to/tinyllama.gguf           (uses 'tinyllama' as alias)\n"
+            "  :gguf add /path/to/model.gguf my-model      (uses 'my-model' as alias)\n"
+            "  :gguf remove tinyllama\n"
+        )
+
+    cmd = parts[0]
+
+    if cmd == "add" and len(parts) >= 2:
+        path = parts[1]
+
+        # Auto-extract alias from filename if not provided
+        if len(parts) >= 3:
+            alias = parts[2]
+        else:
+            # Extract filename without extension as alias
+            from pathlib import Path
+            filename = Path(path).stem  # Gets filename without .gguf extension
+            alias = filename
+
+        try:
+            GGUFModelRegistry.add_model(alias, path, "")
+            return f"\n✅ Model '{alias}' registered!\n   Switch to it with: :model {alias}\n"
+        except Exception as e:
+            return f"❌ Error: {e}"
+
+    elif cmd == "remove" and len(parts) >= 2:
+        alias = parts[1]
+        GGUFModelRegistry.remove_model(alias)
+        return f"✅ Removed: {alias}"
+
+    elif cmd == "list":
+        # This will be handled by showing all models
+        return "list_all_models"  # Special signal
+
+    else:
+        return "❌ Invalid GGUF command. Use ':gguf help' for usage"
 
 
 # SAFE VERSION OF HEALTH COMMANDS - Replace in commands.py
@@ -334,6 +394,16 @@ async def handle_command(
     """
     command = command.strip()
 
+    # GGUF commands (NEW)
+    if command.startswith(":gguf"):
+        result = await handle_gguf_commands(command)
+        if result:
+            if result == "list_all_models":
+                # Show all models instead
+                models_module.print_all_models()
+                return (True, "", None, None)
+            return (True, result, None, None)
+
     # A2A commands
     if command.startswith(":a2a"):
         result = await handle_a2a_commands(command, orchestrator)
@@ -411,14 +481,15 @@ async def handle_command(
                 return (True, f"Tool: {tool.name}\n\n{tool.description}", None, None)
         return (True, f"Tool '{tool_name}' not found", None, None)
 
-    # Model commands
+    # Model commands (UPDATED - now shows all models from both backends)
     if command == ":model":
-        return (True, f"Current model: {model_name}", None, None)
+        models_module.print_all_models()
+        return (True, "", None, None)
 
     if command == ":models":
-        available = models_module.get_available_models()
-        models_list = "\n".join([f"  {'→' if m == model_name else ' '} {m}" for m in available])
-        return (True, f"Available models:\n{models_list}", None, None)
+        # Legacy - show all models
+        models_module.print_all_models()
+        return (True, "", None, None)
 
     if command.startswith(":model "):
         new_model = command[7:].strip()
@@ -426,6 +497,7 @@ async def handle_command(
         if logger:
             logger.info(f"Switching to model: {new_model}")
 
+        # Use the unified switch_model that auto-detects backend
         new_agent = await models_module.switch_model(
             new_model,
             tools,
@@ -435,7 +507,7 @@ async def handle_command(
         )
 
         if new_agent is None:
-            return (True, f"❌ Model '{new_model}' is not installed", None, None)
+            return (True, f"❌ Model '{new_model}' not found", None, None)
 
         return (True, f"✅ Switched to model: {new_model}", new_agent, new_model)
 
