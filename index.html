@@ -1734,36 +1734,13 @@
         // Message formatting
         // -------------------------
         function formatMessage(text) {
-            // Step 1: Extract and protect code blocks FIRST
-            const codeBlocks = [];
-            let codeBlockIndex = 0;
-
-            text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
-                const language = lang || 'plaintext';
-                const placeholder = `XOXOCODEBLOCKXOXO${codeBlockIndex}XOXO`;
-                codeBlocks.push(`<pre><code class="language-${language}">${code.trim()}</code></pre>`);
-                codeBlockIndex++;
-                return placeholder;
-            });
-
-            // Step 2: Extract and protect inline code
-            const inlineCodes = [];
-            let inlineIndex = 0;
-
-            text = text.replace(/`([^`]+)`/g, function(match, code) {
-                const placeholder = `___INLINE_CODE_${inlineIndex}___`;
-                inlineCodes.push(`<code>${code}</code>`);
-                inlineIndex++;
-                return placeholder;
-            });
-
-            // Step 3: NOW escape HTML (but code is protected)
+            // Step 1: Escape HTML
             text = text
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
 
-            // Step 4: Process markdown formatting
+            // Step 2: Process markdown formatting
             text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
             text = text.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
             text = text.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
@@ -1810,22 +1787,6 @@
             text = text.replace(/(<\/blockquote>)<br>/g, '$1');
             text = text.replace(/<br>(<hr>)/g, '$1');
             text = text.replace(/(<hr>)<br>/g, '$1');
-
-            // Step 5: Restore inline code
-            for (let i = 0; i < inlineCodes.length; i++) {
-                text = text.replace(`___INLINE_CODE_${i}___`, inlineCodes[i]);
-            }
-
-            // Step 6: Restore code blocks
-            for (let i = 0; i < codeBlocks.length; i++) {
-                text = text.replace(`___CODE_BLOCK_${i}___`, codeBlocks[i]);
-            }
-
-            // At the end, restore code blocks
-            for (let i = 0; i < codeBlocks.length; i++) {
-                const placeholder = `XOXOCODEBLOCKXOXO${i}XOXO`;
-                text = text.replace(placeholder, codeBlocks[i]);
-            }
 
             return text;
         }
