@@ -11,6 +11,7 @@ tags:
   - search
 tools:
   - scene_locator_tool
+  - rag_rescan_no_subtitles
   - find_scene_by_title
 ---
 

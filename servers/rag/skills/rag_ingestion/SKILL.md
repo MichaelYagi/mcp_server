@@ -11,7 +11,6 @@ tags:
   - plex
 tools:
   - rag_add_tool
-  - rag_rescan_no_subtitles
 ---
 
 # RAG Ingestion Skill
