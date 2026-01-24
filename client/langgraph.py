@@ -462,25 +462,88 @@ def create_langgraph_agent(llm_with_tools, tools):
                 break
 
         # Force LangSearch if explicitly requested
-        if user_message and re.search(r'\b(using|use|with|via)\s+langsearch\b', user_message.lower()):
-            logger.info("🎯 FORCED LANGSEARCH")
+        if user_message:
+            user_lower = user_message.lower()
 
-            langsearch = get_langsearch_client()
+            # Check for explicit langsearch requests
+            langsearch_patterns = [
+                r'\buse\s+langsearch\b',
+                r'\busing\s+langsearch\b',
+                r'\bwith\s+langsearch\b',
+                r'\blangsearch\s+for\b',
+                r'\bvia\s+langsearch\b',
+            ]
 
-            if langsearch.is_available():
-                # Remove routing keywords from query
-                query = re.sub(r'\b(using|use|with|via)\s+langsearch\b', '', user_message, flags=re.IGNORECASE).strip()
+            should_use_langsearch = any(
+                re.search(pattern, user_lower)
+                for pattern in langsearch_patterns
+            )
 
-                search_result = await langsearch.search(query)
+            if should_use_langsearch:
+                logger.info("🎯 FORCED LANGSEARCH: User explicitly requested langsearch")
 
-                if search_result["success"]:
-                    response = AIMessage(content=f"**LangSearch Results:**\n\n{search_result['results']}")
+                langsearch = get_langsearch_client()
+
+                if langsearch.is_available():
+                    # Extract the actual query (remove routing keywords)
+                    query = user_message
+                    for pattern in langsearch_patterns:
+                        query = re.sub(pattern, '', query, flags=re.IGNORECASE)
+                    query = query.strip()
+
+                    # Remove common leading words
+                    query = re.sub(r'^,?\s*(who|what|where|when|why|how)\s+', r'\1 ', query, flags=re.IGNORECASE)
+                    query = query.strip()
+
+                    if not query:
+                        query = user_message
+
+                    logger.info(f"🔍 Searching with langsearch: '{query}'")
+
+                    try:
+                        search_result = await langsearch.search(query)
+
+                        if search_result["success"] and search_result["results"]:
+                            logger.info("✅ LangSearch successful - passing to LLM for processing")
+                            search_context = search_result["results"]
+
+                            # Create augmented prompt for LLM to process
+                            augmented_prompt = f"""I searched the web using LangSearch and found the following results:
+
+        {search_context}
+
+        Based on these search results, please answer the user's question: "{user_message}"
+
+        Provide a clear, concise answer in English. Extract the most relevant information and present it naturally."""
+
+                            # Let LLM process the search results
+                            augmented_messages = messages + [HumanMessage(content=augmented_prompt)]
+                            response = await base_llm.ainvoke(augmented_messages)
+
+                            return {
+                                "messages": messages + [response],
+                                "tools": state.get("tools", {}),
+                                "llm": state.get("llm"),
+                                "ingest_completed": state.get("ingest_completed", False),
+                                "stopped": state.get("stopped", False)
+                            }
+                        else:
+                            logger.warning("⚠️ LangSearch returned no results")
+
+                    except Exception as e:
+                        logger.error(f"❌ LangSearch failed: {e}")
+
+                else:
+                    logger.warning("⚠️ LangSearch not available")
+                    error_response = AIMessage(
+                        content="LangSearch is not available. Please check configuration."
+                    )
                     return {
-                        "messages": messages + [response],
+                        "messages": messages + [error_response],
                         "tools": state.get("tools", {}),
                         "llm": state.get("llm"),
-                        "ingest_completed": False,
-                        "stopped": False
+                        "ingest_completed": state.get("ingest_completed", False),
+                        "stopped": state.get("stopped", False)
                     }
 
         # ═══════════════════════════════════════════════════════════
