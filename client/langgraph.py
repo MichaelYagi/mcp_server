@@ -461,6 +461,28 @@ def create_langgraph_agent(llm_with_tools, tools):
                 user_message = msg.content
                 break
 
+        # Force LangSearch if explicitly requested
+        if user_message and re.search(r'\b(using|use|with|via)\s+langsearch\b', user_message.lower()):
+            logger.info("🎯 FORCED LANGSEARCH")
+
+            langsearch = get_langsearch_client()
+
+            if langsearch.is_available():
+                # Remove routing keywords from query
+                query = re.sub(r'\b(using|use|with|via)\s+langsearch\b', '', user_message, flags=re.IGNORECASE).strip()
+
+                search_result = await langsearch.search(query)
+
+                if search_result["success"]:
+                    response = AIMessage(content=f"**LangSearch Results:**\n\n{search_result['results']}")
+                    return {
+                        "messages": messages + [response],
+                        "tools": state.get("tools", {}),
+                        "llm": state.get("llm"),
+                        "ingest_completed": False,
+                        "stopped": False
+                    }
+
         # ═══════════════════════════════════════════════════════════
         # CENTRALIZED PATTERN MATCHING
         # ═══════════════════════════════════════════════════════════
