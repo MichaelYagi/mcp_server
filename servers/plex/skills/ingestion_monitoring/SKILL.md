@@ -10,6 +10,7 @@ tags:
   - stats
 tools:
   - plex_get_stats
+  - plex_ingest_batch
 ---
 
 # Ingestion Monitoring Skill

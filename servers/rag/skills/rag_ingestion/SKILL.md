@@ -11,7 +11,6 @@ tags:
   - plex
 tools:
   - rag_add_tool
-  - plex_ingest_batch
   - rag_rescan_no_subtitles
 ---
 
