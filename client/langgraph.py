@@ -924,6 +924,84 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
 
         return {"messages": conversation_state["messages"]}
 
+    except ValueError as e:
+        # Handle context window overflow gracefully
+        error_str = str(e)
+        if "exceed context window" in error_str or "Requested tokens" in error_str:
+            # Extract token counts from error message
+            import re
+            match = re.search(r'Requested tokens \((\d+)\) exceed context window of (\d+)', error_str)
+
+            if match:
+                requested = int(match.group(1))
+                available = int(match.group(2))
+                overflow = requested - available
+                logger.error(
+                    f"❌ Context overflow: {requested} tokens requested, {available} available ({overflow} over)")
+            else:
+                requested = None
+                available = None
+                logger.error(f"❌ Context window overflow")
+
+            # Calculate how many messages to drop
+            current_msg_count = len(conversation_state["messages"])
+            if current_msg_count > 3:  # Keep at least system + user message
+                # Drop half the history
+                new_limit = max(3, current_msg_count // 2)
+                logger.warning(f"⚠️  Auto-recovery: Reducing history from {current_msg_count} to {new_limit} messages")
+
+                # Keep system message + trim history + keep latest user message
+                system_msg = conversation_state["messages"][0] if isinstance(conversation_state["messages"][0],
+                                                                             SystemMessage) else None
+                user_msg = conversation_state["messages"][-1]
+                middle_msgs = conversation_state["messages"][1:-1]
+
+                # Take most recent middle messages
+                trimmed_middle = middle_msgs[-(new_limit - 2):] if len(middle_msgs) > (new_limit - 2) else middle_msgs
+
+                if system_msg:
+                    conversation_state["messages"] = [system_msg] + trimmed_middle + [user_msg]
+                else:
+                    conversation_state["messages"] = trimmed_middle + [user_msg]
+
+                error_msg = AIMessage(content=f"""⚠️ Context window overflow detected and auto-fixed.
+
+**Issue:** Your conversation ({requested} tokens) exceeded the model's limit ({available} tokens).
+
+**Auto-recovery:** Reduced history from {current_msg_count} to {len(conversation_state['messages'])} messages.
+
+**Suggestions:**
+1. `:clear history` - Start completely fresh
+2. `:model qwen2.5:14b` - Switch to larger model (8K tokens)
+3. Keep conversations shorter with small models
+
+**You can retry your request now.**""")
+            else:
+                # Can't trim further - conversation too short but still overflowing
+                logger.error(f"❌ Cannot auto-recover: conversation already minimal ({current_msg_count} messages)")
+                error_msg = AIMessage(content=f"""❌ Context window overflow - this model is too small for your task.
+
+**Problem:** Even a minimal conversation exceeds this model's {available if available else '?'} token limit.
+
+**Solutions:**
+1. `:clear history` - Start fresh
+2. `:model qwen2.5:14b` - Switch to larger model (8K context)
+3. Use a model with more capacity
+
+This model cannot handle your current workload.""")
+
+            conversation_state["messages"].append(error_msg)
+
+            if METRICS_AVAILABLE:
+                metrics["agent_errors"] += 1
+                duration = time.time() - start_time
+                metrics["agent_times"].append((time.time(), duration))
+
+            return {"messages": conversation_state["messages"]}
+
+        # Re-raise if not context overflow
+        raise
+
     except Exception as e:
         if METRICS_AVAILABLE:
             metrics["agent_errors"] += 1
