@@ -1650,6 +1650,9 @@
             }
 
             if (data.type === "model_switched") {
+                chatHistory = [];
+                saveHistory(chatHistory);
+                chat.innerHTML = "";
                 updateStatusWithMode();
                 sendBtn.disabled = false;
                 isProcessing = false;
