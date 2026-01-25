@@ -263,6 +263,33 @@ INTENT_PATTERNS = {
         ),
         "tools": ["send_a2a*", "discover_a2a"],
         "priority": 3
+    },
+    "ml_recommendation": {
+        "pattern": (
+            r'\brecommend(ation)?s?\b'
+            r'|\bml\s+(model|train|recommendation)\b'
+            r'|\btrain\s+(model|recommender|recommendation)\b'
+            r'|\bauto.?train\b'
+            r'|\bimport\s+.*\s*(plex\s+)?history\b'
+            r'|\bplex\s+history\b'
+            r'|\bviewing\s+history\b'
+            r'|\bwatch\s+history\b'
+            r'|\bwhat\s+should\s+i\s+watch\b'
+            r'|\brecord\s+(viewing|that\s+i\s+watched)\b'
+            r'|\brank\s+(these|movies|shows)\b'
+            r'|\brecommender\s+stats\b'
+            r'|\buse\s+auto.?train\b'
+        ),
+        "tools": [
+            "record_viewing",
+            "train_recommender",
+            "recommend_content",
+            "get_recommender_stats",
+            "import_plex_history",
+            "auto_train_from_plex",
+            "reset_recommender"
+        ],
+        "priority": 2
     }
 }
 

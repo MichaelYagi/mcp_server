@@ -15,13 +15,14 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-import sys
 from typing import Dict, Any
-from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from mcp.server.fastmcp import FastMCP
+
+# Fix ML recommender import - use absolute path
+sys.path.insert(0, str(Path(__file__).parent))
+from ml_recommender import get_recommender
+
 from client.stop_signal import is_stop_requested
 from tools.plex.semantic_media_search import semantic_media_search
 from tools.plex.scene_locator import scene_locator
@@ -634,6 +635,360 @@ def get_tool_names_from_module():
                 tool_names.append(name)
 
     return tool_names
+
+
+# ============================================================================
+# ML RECOMMENDATION TOOLS
+# ============================================================================
+
+@mcp.tool()
+def import_plex_history(limit: int = 50) -> dict:
+    """
+    Automatically import your Plex viewing history into the ML recommender
+
+    This tool:
+    1. Fetches your recently watched items from Plex
+    2. Automatically records them as viewing events
+    3. Returns stats on what was imported
+
+    Args:
+        limit: Number of recent items to import (default: 50)
+
+    Returns:
+        Stats on imported viewing history
+    """
+    logger.info(f"📥 Importing Plex viewing history (limit: {limit})")
+
+    try:
+        from tools.plex.plex_utils import get_plex_server
+
+        plex = get_plex_server()
+        recommender = get_recommender()
+
+        # Get watch history from Plex
+        # This gets items you've actually watched
+        history = plex.history(maxresults=limit)
+
+        imported_count = 0
+        skipped_count = 0
+        errors = []
+
+        for item in history:
+            try:
+                # Extract metadata
+                title = item.title
+                year = getattr(item, 'year', 2020)
+
+                # Get genre (first one if multiple)
+                genres = getattr(item, 'genres', [])
+                genre = genres[0].tag if genres else "Unknown"
+
+                # Get rating
+                rating = getattr(item, 'rating', 7.0)
+                if rating is None:
+                    rating = 7.0
+
+                # Get runtime in minutes
+                duration = getattr(item, 'duration', 0)
+                runtime = int(duration / 60000) if duration else 120  # Convert ms to minutes
+
+                # Check if fully watched (viewCount > 0 means finished)
+                view_count = getattr(item, 'viewCount', 0)
+                finished = view_count > 0
+
+                # Record it
+                recommender.record_view(title, genre, year, rating, runtime, finished)
+                imported_count += 1
+
+                logger.info(f"✅ Imported: {title} ({genre}, {year}) - {'Finished' if finished else 'Abandoned'}")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to import {item.title}: {e}")
+                skipped_count += 1
+                errors.append(f"{item.title}: {str(e)}")
+
+        # Get updated stats
+        stats = recommender.get_stats()
+
+        result = {
+            "imported": imported_count,
+            "skipped": skipped_count,
+            "total_views_now": stats['total_views'],
+            "can_train": stats['total_views'] >= 20,
+            "errors": errors[:5]  # First 5 errors only
+        }
+
+        response = f"""
+📥 Plex History Import Complete!
+
+✅ Imported: {imported_count} viewing events
+❌ Skipped: {skipped_count} items
+📊 Total viewing history: {stats['total_views']}
+
+"""
+
+        if result['can_train']:
+            response += "🎯 You have enough data! Run train_recommender() now!"
+        else:
+            needed = 20 - stats['total_views']
+            response += f"📝 Need {needed} more views to train"
+
+        logger.info(f"✅ Import complete: {imported_count} imported, {skipped_count} skipped")
+
+        return {"message": response, **result}
+
+    except Exception as e:
+        logger.error(f"❌ Failed to import Plex history: {e}")
+        return {
+            "message": f"❌ Error importing Plex history: {str(e)}",
+            "imported": 0,
+            "error": str(e)
+        }
+
+
+@mcp.tool()
+def auto_train_from_plex(import_limit: int = 50) -> dict:
+    """
+    ONE-CLICK: Import Plex history AND train the model automatically
+
+    This convenience tool:
+    1. Imports your recent Plex viewing history
+    2. Automatically trains the ML model if enough data
+    3. Returns training results
+
+    Args:
+        import_limit: Number of recent items to import (default: 50)
+
+    Returns:
+        Combined import + training results
+    """
+    logger.info("🚀 Auto-training from Plex history")
+
+    # Step 1: Import history
+    import_result = import_plex_history(import_limit)
+
+    if import_result.get('imported', 0) == 0:
+        return {
+            "message": "❌ No viewing history imported. Cannot train.",
+            "import_result": import_result
+        }
+
+    # Step 2: Auto-train if we have enough data
+    if import_result.get('can_train', False):
+        logger.info("✅ Enough data - auto-training model")
+        train_result = train_recommender()
+
+        combined_message = f"""
+🎉 Auto-Training Complete!
+
+📥 Import Stats:
+   • Imported: {import_result['imported']} viewing events
+   • Total history: {import_result['total_views_now']}
+
+{train_result.get('message', '')}
+"""
+
+        return {
+            "message": combined_message,
+            "import_result": import_result,
+            "train_result": train_result,
+            "status": "success"
+        }
+    else:
+        return {
+            "message": f"""
+📥 Imported {import_result['imported']} items
+
+❌ Not enough data to train yet
+   Current: {import_result['total_views_now']}
+   Need: {20 - import_result['total_views_now']} more
+
+Import more history or wait until you've watched more!
+""",
+            "import_result": import_result,
+            "status": "insufficient_data"
+        }
+
+
+@mcp.tool()
+def record_viewing(
+        title: str,
+        genre: str,
+        year: int,
+        rating: float,
+        runtime: int,
+        finished: bool = True
+) -> dict:
+    """
+    Record that you watched something (for ML training)
+
+    Args:
+        title: Movie/show title (e.g. "The Matrix")
+        genre: Genre (Action, Comedy, Drama, SciFi, Horror, etc.)
+        year: Release year (e.g. 1999)
+        rating: IMDb/audience rating 0-10 (e.g. 8.7)
+        runtime: Runtime in minutes (e.g. 136)
+        finished: Did you finish it? True=yes, False=abandoned
+
+    Examples:
+        - record_viewing("The Matrix", "SciFi", 1999, 8.7, 136, True)
+        - record_viewing("Boring Movie", "Drama", 2020, 5.2, 145, False)
+    """
+    recommender = get_recommender()
+    result = recommender.record_view(title, genre, year, rating, runtime, finished)
+
+    response = f"✅ Recorded: {title}\n"
+    response += f"Total views in history: {result['total_views']}\n"
+
+    if result['can_train']:
+        response += "\n🎯 You have enough data to train! Use train_recommender()"
+    else:
+        needed = 20 - result['total_views']
+        response += f"\n📊 Need {needed} more views to train ML model"
+
+    return {"message": response, **result}
+
+
+@mcp.tool()
+def train_recommender() -> dict:
+    """
+    Train the ML recommendation model on your viewing history
+
+    Run this after you've recorded 20+ viewing events.
+    The model learns what you like based on what you finish watching.
+
+    Returns:
+        Training results including accuracy and model info
+    """
+    recommender = get_recommender()
+    result = recommender.train()
+
+    if result['status'] == 'success':
+        response = f"""
+🎉 Training Complete!
+
+📊 Stats:
+   • Training samples: {result['training_samples']}
+   • Train accuracy: {result['train_accuracy']}
+   • Test accuracy: {result['test_accuracy']}
+
+✅ Model saved to: {result['model_path']}
+
+Now use recommend_content() to get personalized recommendations!
+"""
+    elif result['status'] == 'insufficient_data':
+        response = f"""
+❌ Not enough data yet
+
+Current views: {result['current_views']}
+Need: {result['views_needed']} more views
+
+Keep recording what you watch with record_viewing()!
+"""
+    else:
+        response = f"❌ {result['message']}"
+
+    return {"message": response, **result}
+
+
+@mcp.tool()
+def recommend_content(
+        available_items: list[dict]
+) -> dict:
+    """
+    Get ML-powered recommendations from a list of items
+
+    Each item should have: title, genre, year, rating, runtime
+    Returns items ranked by predicted enjoyment (best first)
+
+    Args:
+        available_items: List of content to rank
+            Example: [
+                {"title": "Movie A", "genre": "Action", "year": 2023, "rating": 7.5, "runtime": 120},
+                {"title": "Movie B", "genre": "Drama", "year": 2022, "rating": 8.2, "runtime": 145}
+            ]
+
+    Returns:
+        Items ranked by ML score (best matches first)
+    """
+    recommender = get_recommender()
+    result = recommender.predict_enjoyment(available_items)
+
+    if result['status'] == 'no_model':
+        return {
+            "message": "❌ No trained model. Record viewing history and train first!",
+            "status": "error"
+        }
+
+    # Format nice response
+    response = "🎬 ML Recommendations (Best First):\n\n"
+
+    for item in result['items'][:10]:  # Top 10
+        score_pct = f"{item['ml_score']:.0%}"
+        response += f"{item['ml_rank']}. {item['title']} ({item['year']})\n"
+        response += f"   Genre: {item['genre']} | Rating: {item['rating']}/10\n"
+        response += f"   ML Score: {score_pct} | Runtime: {item['runtime']}min\n\n"
+
+    return {
+        "message": response,
+        "recommendations": result['items'],
+        "status": "success"
+    }
+
+
+@mcp.tool()
+def get_recommender_stats() -> dict:
+    """
+    Get statistics about your recommendation system
+
+    Shows:
+        - Whether model is trained
+        - Total viewing history
+        - Genres you've watched
+        - Average ratings
+        - Finish rate
+    """
+    recommender = get_recommender()
+    stats = recommender.get_stats()
+
+    response = f"""
+📊 Recommender Statistics
+
+Model Status: {'✅ Trained' if stats['model_trained'] else '❌ Not trained yet'}
+Total Views: {stats['total_views']}
+Genres Watched: {', '.join(stats['genres_seen']) if stats['genres_seen'] else 'None yet'}
+Avg Rating: {stats['avg_rating']:.1f}/10
+Finish Rate: {stats['finish_rate']}
+
+"""
+
+    if not stats['model_trained'] and stats['total_views'] >= 20:
+        response += "💡 You have enough data! Run train_recommender()"
+    elif not stats['model_trained']:
+        response += f"📝 Record {20 - stats['total_views']} more views to enable training"
+
+    return {"message": response, **stats}
+
+
+@mcp.tool()
+def reset_recommender() -> dict:
+    """
+    ⚠️ DANGER: Clear all viewing history and retrain from scratch
+
+    This deletes:
+        - All viewing history
+        - Trained model
+        - All encoders
+
+    Use this if you want to start fresh.
+    """
+    recommender = get_recommender()
+    result = recommender.reset()
+
+    return {
+        "message": "🗑️  All recommendation data cleared. Start fresh with record_viewing()",
+        **result
+    }
 
 if __name__ == "__main__":
     # Auto-extract tool names - NO manual list needed!

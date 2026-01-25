@@ -1,4 +1,7 @@
 httpx
+numpy
+scikit-learn
+joblib
 mcp
 mcp-use
 psutil
