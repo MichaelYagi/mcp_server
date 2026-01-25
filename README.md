@@ -1,6 +1,6 @@
 # MCP Multi-Server Architecture with A2A Protocol
 
-A Model Context Protocol (MCP) implementation with distributed multi-server architecture, Agent-to-Agent (A2A) protocol support, and intelligent web search fallback via LangSearch.
+A Model Context Protocol (MCP) implementation with distributed multi-server architecture, Agent-to-Agent (A2A) protocol support, ML-powered Plex recommendations, and intelligent web search fallback via LangSearch.
 
 ## Installation
 
@@ -132,7 +132,7 @@ code_review      - 5 tools (code analysis)
 location         - 3 tools (location, time, weather)
 text_tools       - 7 tools (text processing)
 rag              - 4 tools (vector search)
-plex             - 10 tools (media search)
+plex             - 10 tools (media search) + ML recommendations
 ```
 
 ### Checking Available Tools
@@ -189,9 +189,9 @@ servers/
 ├── location/          3 tools  - Location/time/weather
 ├── text_tools/        7 tools  - Text processing
 ├── rag/               4 tools  - Vector search
-└── plex/             10 tools  - Media library
+└── plex/             17 tools  - Media library + ML recommendations
 
-Total: 49 local tools across 8 servers
+Total: 56 local tools across 8 servers
 ```
 
 ### A2A Protocol (HTTP)
@@ -213,14 +213,40 @@ Single A2A server exposes selected tools via HTTP for remote access:
 
 ## Features
 
-* **Multi-Server Architecture**: 8 specialized stdio servers (49 tools)
+* **Multi-Server Architecture**: 8 specialized stdio servers (56 tools)
 * **A2A Protocol**: HTTP-based remote tool execution
 * **A2A_EXPOSED_TOOLS**: Control which tool categories are publicly accessible
+* **ML-Powered Plex Recommendations**: Random Forest model trained on your viewing history
 * **LangSearch Integration**: Automatic web search fallback
 * **Multi-Agent Orchestration**: Parallel task execution
 * **RAG System**: Vector-based semantic search
 * **Plex Integration**: Media library search and analysis
 * **Real-Time Monitoring**: WebSocket logs and system metrics
+
+## ML-Powered Plex Recommendations
+
+The system includes a **Random Forest Classifier** that learns your viewing preferences and recommends content you'll enjoy.
+
+**How it works:**
+1. **Auto-imports** your Plex viewing history on startup (last 50 items)
+2. **Extracts features**: genre, rating, runtime, release year, finish/abandon status
+3. **Trains model**: Learns patterns from what you actually finish watching vs. abandon
+4. **Predicts enjoyment**: Ranks new content by probability you'll finish it
+
+**Algorithm:** Random Forest with 100 trees, analyzes patterns like:
+- Genres you tend to finish (e.g., SciFi 92%, Drama 15%)
+- Runtime preferences (abandons movies >150min)
+- Rating sweet spots (prefers 7.5-8.5 range)
+- Era preferences (recent vs. classic)
+
+**Usage:**
+```
+> What should I watch tonight?
+> Recommend movies from my options
+> Show recommender stats
+```
+
+Model trains automatically if you have 20+ viewing events. Updates on each startup with latest history.
 
 ## LangSearch Web Search
 
@@ -315,6 +341,13 @@ These commands work in both the CLI and Web UI interfaces:
 **Note:** The `:stop` command will gracefully halt most operations, but media ingestion will complete the current batch before stopping to prevent database corruption.
 
 ### Example Workflows
+
+**ML Recommendations:**
+```
+> What should I watch tonight?
+> Recommend movies: Dune, Knives Out, The Northman
+> Show my recommender stats
+```
 
 **Weather via A2A:**
 ```
@@ -472,6 +505,10 @@ mcp_a2a/
 │   ├── text_tools/
 │   ├── rag/
 │   └── plex/
+│       ├── server.py      # Plex MCP server
+│       ├── ml_recommender.py  # ML recommendation engine
+│       └── skills/
+│           └── ml_recommendations.md  # ML skill documentation
 ├── a2a_server.py         # A2A HTTP server (exposes selected tools)
 ├── client.py             # AI Agent with multi-server support
 ├── index.html            # Web UI

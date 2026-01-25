@@ -388,6 +388,185 @@ async def main():
     if a2a_result["failed"]:
         logger.warning(f"⚠️  {len(a2a_result['failed'])} endpoint(s) failed to register")
 
+    # Check if Plex server is available
+    plex_server_available = "plex" in mcp_servers or "plex-server" in mcp_servers
+
+    if plex_server_available:
+        logger.info("🎬 Plex server detected - testing connection...")
+
+        # Test Plex connection before attempting import
+        plex_connected = False
+        try:
+            # Quick connection test using a simple tool
+            test_tool = None
+            for tool in tools:
+                if hasattr(tool, 'name') and tool.name == "plex_get_stats":
+                    test_tool = tool
+                    break
+
+            if test_tool:
+                # Try to get stats - this will fail if Plex is unreachable
+                test_result = await test_tool.ainvoke({})
+
+                # Parse JSON if needed
+                if isinstance(test_result, str):
+                    import json
+                    try:
+                        test_result = json.loads(test_result)
+                    except json.JSONDecodeError:
+                        pass
+
+                # Check if result is valid (not an error)
+                if isinstance(test_result, str) and "error" not in test_result.lower():
+                    plex_connected = True
+                    logger.info("   ✅ Plex connection verified")
+                elif isinstance(test_result, dict) and test_result.get("total_items", 0) >= 0:
+                    plex_connected = True
+                    logger.info("   ✅ Plex connection verified")
+                else:
+                    logger.warning(f"   ⚠️  Plex connection test returned unexpected result")
+            else:
+                logger.warning("   ⚠️  Connection test tool not found")
+
+        except Exception as e:
+            logger.warning(f"   ⚠️  Plex connection test failed: {e}")
+            plex_connected = False
+
+        # Only proceed if Plex is actually connected
+        if plex_connected:
+            logger.info("   📥 Importing Plex viewing history...")
+
+            try:
+                # Find the import_plex_history and train_recommender tools
+                import_tool = None
+                train_tool = None
+
+                for tool in tools:
+                    if hasattr(tool, 'name'):
+                        if tool.name == "import_plex_history":
+                            import_tool = tool
+                        elif tool.name == "train_recommender":
+                            train_tool = tool
+
+                if import_tool and train_tool:
+                    # Step 1: Import Plex history
+                    try:
+                        import_result_raw = await import_tool.ainvoke({"limit": 3000})
+
+                        # Extract JSON from TextContent string representation
+                        import re
+                        import json
+
+                        # Pattern: text='JSON_HERE'
+                        match = re.search(r"text='(.*?)'(?:,|\))", str(import_result_raw), re.DOTALL)
+
+                        if match:
+                            # Get the raw string (still escaped)
+                            escaped_json = match.group(1)
+
+                            # Use Python's string decoder to properly unescape
+                            # This handles \n, \", etc. correctly
+                            try:
+                                # Decode escape sequences properly
+                                import codecs
+                                json_str = codecs.decode(escaped_json, 'unicode_escape')
+
+                                # Now parse the JSON
+                                import_result = json.loads(json_str)
+                                logger.info(f"   ✅ Successfully parsed result")
+                            except Exception as e:
+                                logger.error(f"   ❌ Failed to decode/parse: {e}")
+                                # Try a simpler approach - just replace common escapes
+                                json_str = escaped_json.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+                                try:
+                                    import_result = json.loads(json_str)
+                                    logger.info(f"   ✅ Successfully parsed with fallback method")
+                                except:
+                                    logger.error(f"   ❌ Both parsing methods failed")
+                                    logger.error(f"   Raw: {escaped_json[:200]}")
+                                    import_result = {}
+                        else:
+                            logger.error(f"   ❌ Could not extract JSON from result")
+                            import_result = {}
+
+                        # Parse result
+                        if isinstance(import_result, dict):
+                            imported = import_result.get("imported", 0)
+                            total_views = import_result.get("total_views_now", 0)
+                            can_train = import_result.get("can_train", False)
+
+                            logger.info(f"   ✅ Imported {imported} viewing events (total: {total_views})")
+
+                            # Step 2: Train if we have enough data
+                            if can_train:
+                                logger.info("   🤖 Training ML model...")
+                                train_result_raw = await train_tool.ainvoke({})
+
+                                # Extract JSON from TextContent (same as import)
+                                import re
+                                import json
+                                import codecs
+
+                                match = re.search(r"text='(.*?)'(?:,|\))", str(train_result_raw), re.DOTALL)
+
+                                if match:
+                                    escaped_json = match.group(1)
+
+                                    try:
+                                        json_str = codecs.decode(escaped_json, 'unicode_escape')
+                                        train_result = json.loads(json_str)
+                                        logger.info(f"   ✅ Successfully parsed train result")
+                                    except Exception as e:
+                                        logger.error(f"   ❌ Failed to decode/parse train result: {e}")
+                                        json_str = escaped_json.replace('\\n', '\n').replace('\\"', '"').replace('\\\\',
+                                                                                                                 '\\')
+                                        try:
+                                            train_result = json.loads(json_str)
+                                            logger.info(f"   ✅ Parsed train result with fallback")
+                                        except:
+                                            logger.error(f"   ❌ Train result parsing failed completely")
+                                            train_result = {}
+                                else:
+                                    logger.error(f"   ❌ Could not extract JSON from train result")
+                                    train_result = {}
+
+                                if isinstance(train_result, dict):
+                                    if train_result.get("status") == "success":
+                                        accuracy = train_result.get("train_accuracy", "N/A")
+                                        samples = train_result.get("training_samples", 0)
+                                        logger.info(f"   ✅ Model trained! Accuracy: {accuracy}, Samples: {samples}")
+                                        logger.info("   🎯 ML recommendations ready!")
+                                    else:
+                                        logger.warning(
+                                            f"   ⚠️  Training failed: {train_result.get('message', 'Unknown error')}")
+                            else:
+                                needed = 20 - total_views
+                                logger.info(f"   ℹ️  Need {needed} more viewing events to train (minimum: 20)")
+                        else:
+                            logger.warning(f"   ⚠️  Unexpected import result format: {type(import_result)}")
+
+                    except Exception as e:
+                        logger.error(f"   ❌ Failed to import Plex history: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    missing = []
+                    if not import_tool:
+                        missing.append("import_plex_history")
+                    if not train_tool:
+                        missing.append("train_recommender")
+                    logger.warning(f"   ⚠️  ML tools not found: {', '.join(missing)}")
+
+            except Exception as e:
+                logger.error(f"   ❌ ML auto-training failed: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            logger.info("   ℹ️  Plex connection unavailable - skipping ML auto-training")
+            logger.info("   💡 Check PLEX_URL and PLEX_TOKEN in .env")
+    else:
+        logger.info("ℹ️  Plex server not detected - skipping ML auto-training")
+
     # ═════════════════════════════════════════════════════════════════
 
     llm_with_tools = llm.bind_tools(tools)

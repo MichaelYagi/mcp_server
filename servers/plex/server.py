@@ -647,7 +647,7 @@ def import_plex_history(limit: int = 50) -> dict:
     Automatically import your Plex viewing history into the ML recommender
 
     This tool:
-    1. Fetches your recently watched items from Plex
+    1. Fetches your recently watched items from Plex (movies and TV only)
     2. Automatically records them as viewing events
     3. Returns stats on what was imported
 
@@ -666,7 +666,6 @@ def import_plex_history(limit: int = 50) -> dict:
         recommender = get_recommender()
 
         # Get watch history from Plex
-        # This gets items you've actually watched
         history = plex.history(maxresults=limit)
 
         imported_count = 0
@@ -675,6 +674,12 @@ def import_plex_history(limit: int = 50) -> dict:
 
         for item in history:
             try:
+                # Skip non-movie/show items
+                if item.type not in ['movie', 'episode']:
+                    logger.debug(f"   ⏭️  Skipping non-video content: {item.title}")
+                    skipped_count += 1
+                    continue
+
                 # Extract metadata
                 title = item.title
                 year = getattr(item, 'year', 2020)
@@ -683,6 +688,12 @@ def import_plex_history(limit: int = 50) -> dict:
                 genres = getattr(item, 'genres', [])
                 genre = genres[0].tag if genres else "Unknown"
 
+                # EXCLUDE MUSIC - Skip music videos, concerts, music documentaries
+                if genre.lower() in ['music', 'concert', 'musical']:
+                    logger.debug(f"   ⏭️  Skipping music content: {title}")
+                    skipped_count += 1
+                    continue
+
                 # Get rating
                 rating = getattr(item, 'rating', 7.0)
                 if rating is None:
@@ -690,9 +701,9 @@ def import_plex_history(limit: int = 50) -> dict:
 
                 # Get runtime in minutes
                 duration = getattr(item, 'duration', 0)
-                runtime = int(duration / 60000) if duration else 120  # Convert ms to minutes
+                runtime = int(duration / 60000) if duration else 120
 
-                # Check if fully watched (viewCount > 0 means finished)
+                # Check if fully watched
                 view_count = getattr(item, 'viewCount', 0)
                 finished = view_count > 0
 
@@ -715,14 +726,14 @@ def import_plex_history(limit: int = 50) -> dict:
             "skipped": skipped_count,
             "total_views_now": stats['total_views'],
             "can_train": stats['total_views'] >= 20,
-            "errors": errors[:5]  # First 5 errors only
+            "errors": errors[:5]
         }
 
         response = f"""
 📥 Plex History Import Complete!
 
 ✅ Imported: {imported_count} viewing events
-❌ Skipped: {skipped_count} items
+❌ Skipped: {skipped_count} items (music/non-video)
 📊 Total viewing history: {stats['total_views']}
 
 """
@@ -752,7 +763,7 @@ def auto_train_from_plex(import_limit: int = 50) -> dict:
     ONE-CLICK: Import Plex history AND train the model automatically
 
     This convenience tool:
-    1. Imports your recent Plex viewing history
+    1. Imports your recent Plex viewing history (excludes music)
     2. Automatically trains the ML model if enough data
     3. Returns training results
 
@@ -989,6 +1000,223 @@ def reset_recommender() -> dict:
         "message": "🗑️  All recommendation data cleared. Start fresh with record_viewing()",
         **result
     }
+
+
+@mcp.tool()
+def auto_recommend_from_plex(
+        limit: int = 20,
+        genre_filter: str = "",
+        min_rating: float = 6.0
+) -> dict:
+    """
+    Get ML-powered recommendations from your unwatched Plex content
+
+    This tool automatically:
+    1. Searches Plex for unwatched movies and TV shows (excludes music)
+    2. Filters by genre and rating (optional)
+    3. Ranks results using your trained ML model
+    4. Returns top recommendations
+
+    Args:
+        limit: Number of unwatched items to fetch from Plex (default: 20)
+        genre_filter: Optional genre to filter by (e.g., "SciFi", "Action", "Drama")
+        min_rating: Minimum rating to consider (default: 6.0)
+
+    Returns:
+        Top recommendations ranked by ML model
+
+    Examples:
+        - auto_recommend_from_plex(20) - Get 20 recommendations
+        - auto_recommend_from_plex(10, "SciFi", 7.5) - SciFi movies rated 7.5+
+    """
+    logger.info(f"🎬 Auto-recommending from Plex (limit: {limit}, genre: {genre_filter}, min_rating: {min_rating})")
+
+    try:
+        from tools.plex.plex_utils import get_plex_server
+
+        # Check if model is trained
+        recommender = get_recommender()
+        stats = recommender.get_stats()
+
+        if not stats['model_trained']:
+            return {
+                "message": "❌ ML model not trained yet! Run auto_train_from_plex() first.",
+                "status": "error"
+            }
+
+        plex = get_plex_server()
+
+        # Get all unwatched movies and shows (exclude music)
+        logger.info("   📡 Fetching unwatched content from Plex...")
+
+        unwatched_items = []
+
+        # Fetch from movie library
+        try:
+            movies_section = None
+            for section in plex.library.sections():
+                if section.type == 'movie':
+                    movies_section = section
+                    break
+
+            if movies_section:
+                movies = movies_section.search(unwatched=True, limit=limit)
+                unwatched_items.extend(movies)
+                logger.info(f"   ✅ Found {len(movies)} unwatched movies")
+        except Exception as e:
+            logger.warning(f"   ⚠️  Failed to fetch movies: {e}")
+
+        # Fetch from TV show library
+        try:
+            shows_section = None
+            for section in plex.library.sections():
+                if section.type == 'show':
+                    shows_section = section
+                    break
+
+            if shows_section:
+                shows = shows_section.search(unwatched=True, limit=limit // 2)
+                unwatched_items.extend(shows)
+                logger.info(f"   ✅ Found {len(shows)} unwatched shows")
+        except Exception as e:
+            logger.warning(f"   ⚠️  Failed to fetch shows: {e}")
+
+        if not unwatched_items:
+            return {
+                "message": "📭 No unwatched content found in Plex library (movies/shows only)",
+                "status": "no_content"
+            }
+
+        logger.info(f"   📦 Processing {len(unwatched_items)} unwatched items...")
+
+        # Convert to ML format
+        ml_items = []
+        for item in unwatched_items:
+            try:
+                # Extract metadata
+                title = item.title
+                year = getattr(item, 'year', 2020)
+
+                # Get genre (first one if multiple)
+                genres = getattr(item, 'genres', [])
+                genre = genres[0].tag if genres else "Unknown"
+
+                # Apply genre filter if specified
+                if genre_filter and genre.lower() != genre_filter.lower():
+                    continue
+
+                # Get rating
+                rating = getattr(item, 'rating', 7.0)
+                if rating is None:
+                    rating = 7.0
+
+                # Apply rating filter
+                if rating < min_rating:
+                    continue
+
+                # Get runtime in minutes
+                duration = getattr(item, 'duration', 0)
+                runtime = int(duration / 60000) if duration else 120
+
+                ml_items.append({
+                    "title": title,
+                    "genre": genre,
+                    "year": year,
+                    "rating": rating,
+                    "runtime": runtime,
+                    "plex_id": item.ratingKey,
+                    "type": item.type
+                })
+
+            except Exception as e:
+                logger.warning(f"   ⚠️  Failed to process {item.title}: {e}")
+                continue
+
+        if not ml_items:
+            return {
+                "message": f"📭 No content matches filters (genre: {genre_filter}, min_rating: {min_rating})",
+                "status": "no_matches"
+            }
+
+        logger.info(f"   🤖 Ranking {len(ml_items)} items with ML model...")
+
+        # Get ML recommendations
+        result = recommender.predict_enjoyment(ml_items)
+
+        if result['status'] != 'success':
+            return {
+                "message": f"❌ ML ranking failed: {result}",
+                "status": "error"
+            }
+
+        # Format response
+        top_picks = result['items'][:10]  # Top 10
+
+        response = f"""
+🎬 Your Top Picks from Unwatched Plex Content
+
+📊 Analyzed {len(ml_items)} unwatched items
+🎯 Based on {stats['total_views']} viewing events
+
+Top Recommendations:
+
+"""
+
+        for item in top_picks:
+            score_pct = f"{item['ml_score']:.0%}"
+            match_emoji = "🔥" if item['ml_score'] > 0.7 else "👍" if item['ml_score'] > 0.4 else "🤷"
+
+            response += f"{match_emoji} #{item['ml_rank']} - {item['title']} ({item['year']})\n"
+            response += f"       {item['genre']} | {item['rating']}/10 | {item['runtime']}min | ML: {score_pct}\n\n"
+
+        logger.info(f"   ✅ Recommendations generated: {len(top_picks)} items")
+
+        return {
+            "message": response,
+            "recommendations": top_picks,
+            "total_analyzed": len(ml_items),
+            "filters_applied": {
+                "genre": genre_filter,
+                "min_rating": min_rating
+            },
+            "status": "success"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ auto_recommend_from_plex failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "message": f"❌ Error: {str(e)}",
+            "status": "error"
+        }
+
+# ============================================================================
+# EXAMPLE USAGE PATTERNS
+# ============================================================================
+
+"""
+Typical Workflow:
+
+1. Record your viewing history:
+   > record_viewing("The Matrix", "SciFi", 1999, 8.7, 136, True)
+   > record_viewing("Inception", "SciFi", 2010, 8.8, 148, True)
+   > record_viewing("Boring Movie", "Drama", 2020, 5.2, 145, False)
+   ... record 20+ more ...
+
+2. Train the model:
+   > train_recommender()
+
+3. Get recommendations:
+   > recommend_content([
+       {"title": "Dune", "genre": "SciFi", "year": 2021, "rating": 8.0, "runtime": 155},
+       {"title": "Knives Out", "genre": "Mystery", "year": 2019, "rating": 7.9, "runtime": 130},
+       ...
+   ])
+
+4. Check stats:
+   > get_recommender_stats()
+"""
 
 if __name__ == "__main__":
     # Auto-extract tool names - NO manual list needed!

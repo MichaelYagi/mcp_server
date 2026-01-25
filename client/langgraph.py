@@ -279,6 +279,9 @@ INTENT_PATTERNS = {
             r'|\brank\s+(these|movies|shows)\b'
             r'|\brecommender\s+stats\b'
             r'|\buse\s+auto.?train\b'
+            r'|\bunwatched\s+(content|movies|shows)\b'
+            r'|\bfrom\s+(my\s+)?plex\s+library\b'
+            r'|\bmy\s+best\s+unwatched\b'
         ),
         "tools": [
             "record_viewing",
@@ -287,7 +290,8 @@ INTENT_PATTERNS = {
             "get_recommender_stats",
             "import_plex_history",
             "auto_train_from_plex",
-            "reset_recommender"
+            "reset_recommender",
+            "auto_recommend_from_plex"
         ],
         "priority": 2
     }

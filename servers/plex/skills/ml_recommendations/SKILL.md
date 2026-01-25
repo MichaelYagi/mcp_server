@@ -21,6 +21,7 @@ tools:
   - recommend_content
   - get_recommender_stats
   - reset_recommender
+  - auto_recommend_from_plex
 ---
 
 # ML Recommendations Skill
@@ -40,6 +41,9 @@ Use this skill when the user asks for:
 - "Which of these movies should I watch?"
 - "Rank these shows for me"
 - "What will I enjoy most from this list?"
+- "Show me my best unwatched content"
+- "What unwatched movies would I like?"
+- "Recommend from my Plex library"
 
 ## Recording Views
 - "Record that I watched [movie name]"
@@ -135,6 +139,13 @@ View recommendation system statistics
 Clear all data and start fresh
 - **When to use**: User wants to rebuild from scratch
 - **Example**: "Reset my recommendation data"
+
+### auto_recommend_from_plex(limit, genre_filter, min_rating)
+Get ML recommendations from unwatched Plex content automatically
+- **When to use**: User wants recommendations without specifying movies
+- **Example**: "What should I watch tonight from Plex?"
+- **Note**: Automatically searches unwatched movies/shows, excludes music
+- **Filters**: Optional genre and rating filters
 
 ## Common Patterns
 
