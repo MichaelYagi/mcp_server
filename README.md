@@ -225,28 +225,65 @@ Single A2A server exposes selected tools via HTTP for remote access:
 
 ## ML-Powered Plex Recommendations
 
-The system includes a **Random Forest Classifier** that learns your viewing preferences and recommends content you'll enjoy.
+The system includes a **Random Forest Classifier** that learns your viewing preferences and provides personalized content recommendations.
 
-**How it works:**
-1. **Auto-imports** your Plex viewing history on startup (last 50 items)
-2. **Extracts features**: genre, rating, runtime, release year, finish/abandon status
-3. **Trains model**: Learns patterns from what you actually finish watching vs. abandon
-4. **Predicts enjoyment**: Ranks new content by probability you'll finish it
+### How It Works
 
-**Algorithm:** Random Forest with 100 trees, analyzes patterns like:
-- Genres you tend to finish (e.g., SciFi 92%, Drama 15%)
-- Runtime preferences (abandons movies >150min)
-- Rating sweet spots (prefers 7.5-8.5 range)
-- Era preferences (recent vs. classic)
+**Training Phase (automatic on startup):**
+1. **Data Collection**: Imports viewing history from Plex (default: 3000 items)
+2. **Feature Engineering**: Extracts genre, rating, runtime, release year, finish/abandon status
+3. **Model Training**: Random Forest (100 trees) learns patterns from what you finish vs. abandon
+4. **Validation**: Trains on 80% of data, validates on 20% for accuracy
 
-**Usage:**
+**Prediction Phase (on-demand):**
+1. Fetches unwatched content from Plex library (movies & TV only, filters music)
+2. Extracts same features for each unwatched item
+3. Predicts probability you'll finish each item (0-100%)
+4. Returns top recommendations ranked by ML score
+
+### Algorithm Details
+
+**Model:** Random Forest Classifier
+- **Trees:** 100 decision trees voting on predictions
+- **Features:** genre (encoded), year, rating, runtime, is_recent, is_short, is_highly_rated
+- **Target:** Binary classification (finished=1, abandoned=0)
+- **Training:** Learns YOUR unique patterns, not generic ratings
+
+**Example patterns discovered:**
+- "User finishes 92% of SciFi movies under 140 minutes"
+- "User abandons 98% of movies over 150 minutes"
+- "User prefers ratings in 7.5-8.5 range"
+
+**Performance:**
+- Typical accuracy: 85-100% (depends on data consistency)
+- Minimum data: 20 viewing events required
+- Optimal data: 50+ events for reliable predictions
+
+### Usage
+
+**Auto-setup:**
+```
+# Automatic on first startup with Plex configured
+✅ Imported 211 viewing events (total: 4858)
+🤖 Training ML model...
+✅ Model trained! Accuracy: 100.0%, Samples: 4858
+```
+
+**Get recommendations:**
 ```
 > What should I watch tonight?
-> Recommend movies from my options
-> Show recommender stats
+> Recommend unwatched SciFi movies
+> Show me my best unwatched content
 ```
 
-Model trains automatically if you have 20+ viewing events. Updates on each startup with latest history.
+**Manual operations:**
+```
+> Show recommender stats
+> Import Plex history
+> Train recommender
+```
+
+**Model persists** between sessions and auto-updates with new viewing history on each startup.
 
 ## LangSearch Web Search
 
