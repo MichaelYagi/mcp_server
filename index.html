@@ -1813,7 +1813,12 @@
                 div.className += " multi-agent";
             }
 
-            div.innerHTML = formatMessage(text);
+            if (role === "user") {
+                div.textContent = text;
+            } else {
+                div.innerHTML = formatMessage(text);
+            }
+
             chat.appendChild(div);
 
             chatHistory.push({role, text});

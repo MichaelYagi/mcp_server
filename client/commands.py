@@ -509,7 +509,12 @@ async def handle_command(
         if new_agent is None:
             return (True, f"❌ Model '{new_model}' not found", None, None)
 
-        return (True, f"✅ Switched to model: {new_model}", new_agent, new_model)
+        # Clear conversation history when switching models
+        conversation_state["messages"] = []
+        if logger:
+            logger.info("✅ Chat history cleared after model switch")
+
+        return (True, f"✅ Switched to model: {new_model}\n💬 Chat history cleared", new_agent, new_model)
 
     # Clear history
     if command == ":clear history":
