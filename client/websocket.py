@@ -35,17 +35,21 @@ async def broadcast_message(message_type, data):
         )
 
 
-async def process_query(websocket, prompt, agent_ref, conversation_state, run_agent_fn, logger, tools):
+async def process_query(websocket, prompt, original_prompt, agent_ref, conversation_state, run_agent_fn, logger, tools):
     """
     Process a query in the background (as a task)
     This allows the WebSocket to continue receiving messages (like :stop)
+
+    Args:
+        prompt: Sanitized prompt for LLM processing
+        original_prompt: Original unsanitized prompt for display
     """
     try:
-        print(f"\n> {prompt}")
-        await broadcast_message("user_message", {"text": prompt})
+        print(f"\n> {original_prompt}")  # Show original in CLI
+        await broadcast_message("user_message", {"text": original_prompt})  # Show original in web UI
 
         agent = agent_ref[0]
-        result = await run_agent_fn(agent, conversation_state, prompt, logger, tools)
+        result = await run_agent_fn(agent, conversation_state, prompt, logger, tools)  # Use sanitized for LLM
 
         final_message = result["messages"][-1]
         assistant_text = final_message.content
@@ -239,7 +243,18 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
             # User messages - Create background task for long operations
             # ═══════════════════════════════════════════════════════════
             if data.get("type") == "user" or "text" in data:
-                prompt = data.get("text")
+                original_prompt = data.get("text")  # Keep original for display
+                prompt = original_prompt  # Will be sanitized below
+
+                # Sanitize user input to prevent parsing issues
+                from client.input_sanitizer import sanitize_user_input, sanitize_command
+
+                if prompt.startswith(":"):
+                    # Minimal sanitization for commands
+                    prompt = sanitize_command(prompt)
+                else:
+                    # Full sanitization for regular queries
+                    prompt = sanitize_user_input(prompt, preserve_markdown=True)
 
                 # Handle :a2a commands (fast - process inline)
                 if prompt.startswith(":a2a"):
@@ -300,7 +315,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
                 # Create background task for query processing
                 current_task = asyncio.create_task(
-                    process_query(websocket, prompt, agent_ref, conversation_state,
+                    process_query(websocket, prompt, original_prompt, agent_ref, conversation_state,
                                 run_agent_fn, logger, tools)
                 )
 

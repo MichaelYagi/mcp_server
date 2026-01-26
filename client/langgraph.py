@@ -51,6 +51,16 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════
 
 INTENT_PATTERNS = {
+    "general_knowledge": {
+        "pattern": (
+            r'\bwhat\s+is\s+(a|an|the)\s+\w+\??$'  # "what is a div?"
+            r'|\bdefine\s+'
+            r'|\bexplain\s+\w+\s*$'  # "explain recursion"
+            r'|\bhow\s+does\s+\w+\s+work\??$'
+        ),
+        "tools": [],  # NO TOOLS - just answer from knowledge
+        "priority": 4  # Lower priority than specific intents
+    },
     "rag_status": {
         "pattern": (
             r'\bhow\s+many\s+.*(ingested|in\s+rag)\b'
@@ -466,7 +476,10 @@ def create_langgraph_agent(llm_with_tools, tools):
             logger.info("🎯 Formatting tool results")
             start_time = time.time()
             try:
-                response = await base_llm.ainvoke(messages)
+                response = await asyncio.wait_for(
+                    base_llm.ainvoke(messages),
+                    timeout=30.0
+                )
                 duration = time.time() - start_time
                 if METRICS_AVAILABLE:
                     metrics["llm_calls"] += 1
@@ -634,7 +647,11 @@ def create_langgraph_agent(llm_with_tools, tools):
 
         start_time = time.time()
         try:
-            response = await llm_to_use.ainvoke(messages)
+            # Add 30 second timeout to prevent hanging
+            response = await asyncio.wait_for(
+                llm_to_use.ainvoke(messages),
+                timeout=30.0
+            )
             duration = time.time() - start_time
 
             if METRICS_AVAILABLE:
@@ -668,10 +685,16 @@ Please answer the question using these search results."""
                     else:
                         # LangSearch failed - use base LLM
                         logger.warning("⚠️ LangSearch failed - using base LLM")
-                        response = await base_llm.ainvoke(messages)
+                        response = await asyncio.wait_for(
+                            base_llm.ainvoke(messages),
+                            timeout=30.0
+                        )
                 else:
                     logger.warning("⚠️ LangSearch unavailable - using base LLM")
-                    response = await base_llm.ainvoke(messages)
+                    response = await asyncio.wait_for(
+                        base_llm.ainvoke(messages),
+                        timeout=30.0
+                    )
 
             elif not has_tool_calls and has_content:
                 # Has content but no tools - check if needs current info
@@ -701,6 +724,23 @@ Please provide an updated answer using these search results."""
 
             return {
                 "messages": messages + [response],
+                "tools": state.get("tools", {}),
+                "llm": state.get("llm"),
+                "ingest_completed": state.get("ingest_completed", False),
+                "stopped": state.get("stopped", False)
+            }
+
+        except asyncio.TimeoutError:
+            duration = time.time() - start_time
+            if METRICS_AVAILABLE:
+                metrics["llm_errors"] += 1
+                metrics["llm_times"].append((time.time(), duration))
+            logger.error(f"⏱️ LLM call timed out after 30s")
+
+            # Return helpful timeout message instead of crashing
+            return {
+                "messages": messages + [AIMessage(
+                    content="⏱️ Request timed out after 30 seconds. Please try:\n\n1. Rephrasing your question\n2. Breaking it into smaller parts\n3. Using a simpler query")],
                 "tools": state.get("tools", {}),
                 "llm": state.get("llm"),
                 "ingest_completed": state.get("ingest_completed", False),

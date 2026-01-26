@@ -1512,12 +1512,16 @@
             thinkingIndicator = document.createElement("div");
             thinkingIndicator.className = "thinking";
             thinkingIndicator.innerHTML = '<div class="thinking-dots"><span>.</span><span>.</span><span>.</span></div>';
+            sendBtn.style.opacity = '0.5';
+            sendBtn.style.cursor = 'not-allowed';
             chat.appendChild(thinkingIndicator);
             chat.scrollTop = chat.scrollHeight;
         }
 
         function hideThinking() {
             if (thinkingIndicator) {
+                sendBtn.style.opacity = '1';
+                sendBtn.style.cursor = 'auto';
                 thinkingIndicator.remove();
                 thinkingIndicator = null;
             }
@@ -1743,7 +1747,17 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
 
-            // Step 2: Process markdown formatting
+            // Step 2: Process code blocks FIRST (before other markdown)
+            // Multi-line code blocks with language
+            text = text.replace(/```(\w+)?\n([\s\S]+?)```/g, function(match, lang, code) {
+                const language = lang || 'code';
+                return `<pre><code class="language-${language}">${code.trim()}</code></pre>`;
+            });
+
+            // Inline code (single backticks)
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Step 3: Process markdown formatting
             text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
             text = text.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
             text = text.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
@@ -1790,6 +1804,8 @@
             text = text.replace(/(<\/blockquote>)<br>/g, '$1');
             text = text.replace(/<br>(<hr>)/g, '$1');
             text = text.replace(/(<hr>)<br>/g, '$1');
+            text = text.replace(/<br>(<code>)/g, '$1');
+            text = text.replace(/(<\/code>)<br>/g, '$1');
 
             return text;
         }
