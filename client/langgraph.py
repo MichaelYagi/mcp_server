@@ -491,10 +491,41 @@ def create_langgraph_agent(llm_with_tools, tools):
                     "ingest_completed": state.get("ingest_completed", False),
                     "stopped": state.get("stopped", False)
                 }
+            except asyncio.TimeoutError:
+                duration = time.time() - start_time
+                if METRICS_AVAILABLE:
+                    metrics["llm_errors"] += 1
+                    metrics["llm_times"].append((time.time(), duration))
+                logger.error(f"⏱️ LLM call timed out after 30s")
+
+                # Return helpful timeout message instead of crashing
+                timeout_message = AIMessage(content="""⏱️ Request timed out after 30 seconds.
+
+                **The model is taking too long to respond.** This usually happens when:
+                - The model is processing too many tools (58 tools detected)
+                - The query is ambiguous and the model is stuck deciding
+                - The model is overloaded
+
+                **Try these solutions:**
+                1. Rephrase your question more specifically
+                2. Break complex questions into smaller parts
+                3. Restart the Ollama service: `ollama restart`
+
+                **Your question:** {question}""".format(question=messages[-1].content if messages else "unknown"))
+
+                return {
+                    "messages": messages + [timeout_message],
+                    "tools": state.get("tools", {}),
+                    "llm": state.get("llm"),
+                    "ingest_completed": state.get("ingest_completed", False),
+                    "stopped": state.get("stopped", False)
+                }
+
             except Exception as e:
                 duration = time.time() - start_time
                 if METRICS_AVAILABLE:
                     metrics["llm_errors"] += 1
+                    metrics["llm_times"].append((time.time(), duration))
                 logger.error(f"❌ Model call failed: {e}")
                 raise
 
