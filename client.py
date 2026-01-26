@@ -288,7 +288,7 @@ async def main():
     if not all_models:
         print("❌ No models available")
         print("   Ollama: ollama pull <model>")
-        print("   GGUF: :gguf add <alias> <path>")
+        print("   GGUF: :gguf add <path>")
         sys.exit(1)
 
     # Start with Ollama by default
@@ -321,7 +321,7 @@ async def main():
         # Get GGUF models
         gguf_models = [m["name"] for m in all_models if m["backend"] == "gguf"]
         if not gguf_models:
-            print("❌ No GGUF models. Add with: :gguf add <alias> <path>")
+            print("❌ No GGUF models. Add with: :gguf add <path>")
             sys.exit(1)
 
         model_name = gguf_models[0]

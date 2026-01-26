@@ -168,7 +168,7 @@ def print_all_models():
     if not all_models:
         print("\n📦 No models available")
         print("   Ollama: ollama pull <model>")
-        print("   GGUF: :gguf add <alias> <path>")
+        print("   GGUF: :gguf add <path>")
         return
 
     # Group by backend

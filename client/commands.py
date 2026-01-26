@@ -19,7 +19,7 @@ def get_commands_list():
         ":model - List all available models (Ollama + GGUF)",
         ":model <model> - Switch to model (auto-detects backend)",
         ":models - List available models (legacy)",
-        ":gguf add <alias> <path> [desc] - Register a GGUF model",
+        ":gguf add <path> - Register a GGUF model",
         ":gguf remove <alias> - Remove a GGUF model",
         ":gguf list - List registered GGUF models",
         ":multi on - Enable multi-agent mode",
@@ -127,7 +127,7 @@ async def handle_gguf_commands(command: str):
     if not parts or parts[0] == "help":
         return (
             "\n📦 GGUF Model Commands:\n"
-            "  :gguf add <path> [alias]           - Register a GGUF model\n"
+            "  :gguf add <path>                   - Register a GGUF model\n"
             "  :gguf remove <alias>               - Remove a GGUF model\n"
             "  :gguf list                         - List registered models\n"
             "\n"
