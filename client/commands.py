@@ -1,6 +1,7 @@
 """
 Command Handlers for MCP Client
 Compatible with existing CLI/WebSocket interfaces
+UPDATED: :tools command now filters disabled tools
 """
 from client.langgraph import create_langgraph_agent
 from client.llm_backend import GGUFModelRegistry
@@ -12,7 +13,8 @@ def get_commands_list():
         ":commands - List all available commands",
         ":stop - Stop current operation (ingestion, search, etc.)",
         ":stats - Show performance metrics",
-        ":tools - List all available tools",
+        ":tools - List available tools (disabled tools hidden)",
+        ":tools --all - List all tools (shows disabled tools marked)",
         ":tool <tool> - Get the tool description",
         ":model - List all available models (Ollama + GGUF)",
         ":model <model> - Switch to model (auto-detects backend)",
@@ -385,7 +387,8 @@ async def handle_command(
     logger=None,
     orchestrator=None,
     multi_agent_state=None,
-    a2a_state=None
+    a2a_state=None,
+    mcp_agent=None  # ← ADDED mcp_agent parameter
 ):
     """
     Main command handler compatible with existing CLI/WebSocket interface
@@ -466,12 +469,145 @@ async def handle_command(
         except ImportError:
             return (True, "📊 Stats system not available", None, None)
 
-    # Tools command
-    if command == ":tools":
-        if tools:
+    # Tools command - UPDATED to filter disabled tools
+    if command == ":tools" or command == ":tools --all":
+        show_all = command == ":tools --all"
+
+        if not tools:
+            return (True, "No tools available", None, None)
+
+        try:
+            from tools.tool_control import is_tool_enabled, get_disabled_tools
+
+            # Group tools by server/category for better filtering
+            tools_by_server = {}
+
+            # Try to extract server info from agent if available
+            if hasattr(agent_ref, 'tools_by_server'):
+                # We have server information
+                for server_name, server_tools in agent_ref.tools_by_server.items():
+                    # Extract category from server name (e.g., "todo-server" -> "todo")
+                    category = server_name.replace("-server", "").replace("_", "")
+
+                    for tool in server_tools.values():
+                        tool_name = getattr(tool, 'name', str(tool))
+                        enabled = is_tool_enabled(tool_name, category)
+
+                        if server_name not in tools_by_server:
+                            tools_by_server[server_name] = {'enabled': [], 'disabled': []}
+
+                        if enabled:
+                            tools_by_server[server_name]['enabled'].append(tool)
+                        else:
+                            tools_by_server[server_name]['disabled'].append(tool)
+            else:
+                # Fallback: Infer category from tool name patterns
+                category_patterns = {
+                    'todo': ['todo', 'task'],
+                    'knowledge_base': ['entry', 'entries', 'knowledge'],
+                    'plex': ['plex', 'media', 'scene', 'semantic_media', 'import_plex', 'train_recommender', 'recommend', 'record_viewing', 'auto_train', 'auto_recommend'],
+                    'rag': ['rag_'],
+                    'system': ['system', 'hardware', 'process'],
+                    'location': ['location', 'time', 'weather'],
+                    'text': ['text', 'summarize', 'chunk', 'explain', 'concept'],
+                    'code': ['code', 'debug'],
+                }
+
+                # Group tools by inferred category
+                tools_by_category = {}
+                for tool in tools:
+                    tool_name = getattr(tool, 'name', str(tool))
+
+                    # Try to match tool to a category
+                    matched_category = 'other'
+                    for category, patterns in category_patterns.items():
+                        if any(pattern in tool_name.lower() for pattern in patterns):
+                            matched_category = category
+                            break
+
+                    if matched_category not in tools_by_category:
+                        tools_by_category[matched_category] = {'enabled': [], 'disabled': []}
+
+                    # Check if tool is enabled for this category
+                    if is_tool_enabled(tool_name, matched_category):
+                        tools_by_category[matched_category]['enabled'].append(tool)
+                    else:
+                        tools_by_category[matched_category]['disabled'].append(tool)
+
+                tools_by_server = tools_by_category
+
+            # Build output
+            output = ["\n" + "=" * 60]
+            if show_all:
+                output.append("ALL TOOLS (including disabled)")
+            else:
+                output.append("AVAILABLE TOOLS")
+            output.append("=" * 60)
+            output.append("")
+
+            total_enabled = 0
+            total_disabled = 0
+
+            # Show tools grouped by server
+            for server_name in sorted(tools_by_server.keys()):
+                server_data = tools_by_server[server_name]
+                enabled = server_data['enabled']
+                disabled = server_data['disabled']
+
+                # Skip servers with no enabled tools (unless --all)
+                if not enabled and not show_all:
+                    continue
+
+                # Show server name if we have multiple servers
+                if len(tools_by_server) > 1 and server_name != 'all':
+                    output.append(f"\n{server_name}:")
+                    output.append("-" * 60)
+
+                # Show enabled tools
+                for tool in enabled:
+                    tool_name = getattr(tool, 'name', str(tool))
+                    tool_desc = getattr(tool, 'description', 'No description')
+                    desc_line = tool_desc.split('\n')[0][:70] if tool_desc else 'No description'
+                    output.append(f"  ✓ {tool_name}")
+                    if desc_line and desc_line != 'No description':
+                        output.append(f"    {desc_line}")
+
+                total_enabled += len(enabled)
+
+                # Show disabled tools if --all flag
+                if show_all and disabled:
+                    if enabled:  # Add separator if we showed enabled tools
+                        output.append("")
+                    output.append("  DISABLED:")
+                    for tool in disabled:
+                        tool_name = getattr(tool, 'name', str(tool))
+                        tool_desc = getattr(tool, 'description', 'No description')
+                        desc_line = tool_desc.split('\n')[0][:70] if tool_desc else 'No description'
+                        output.append(f"  ✗ {tool_name} [DISABLED]")
+                        if desc_line and desc_line != 'No description':
+                            output.append(f"    {desc_line}")
+
+                total_disabled += len(disabled)
+
+            # Summary
+            output.append("")
+            output.append("=" * 60)
+            output.append(f"Available: {total_enabled} tools")
+
+            if total_disabled > 0:
+                output.append(f"Disabled: {total_disabled} tools (hidden)")
+                if not show_all:
+                    output.append("\nUse ':tools --all' to see disabled tools")
+                output.append("\nCheck DISABLED_TOOLS in .env to modify")
+
+            output.append("=" * 60)
+
+            return (True, "\n".join(output), None, None)
+
+        except ImportError:
+            # Fallback if tool_control not available
             tool_list = "\n".join([f"  - {tool.name}" for tool in tools])
             return (True, f"Available tools:\n{tool_list}", None, None)
-        return (True, "No tools available", None, None)
 
     # Tool detail command
     if command.startswith(":tool "):

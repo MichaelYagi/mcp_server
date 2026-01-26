@@ -735,6 +735,7 @@ async def main():
         orchestrator=orchestrator,
         multi_agent_state=MULTI_AGENT_STATE,
         a2a_state=A2A_STATE,
+        mcp_agent=mcp_agent,
         host="0.0.0.0",
         port=8765
     )
@@ -788,7 +789,8 @@ async def main():
             langgraph.create_langgraph_agent,
             orchestrator,
             MULTI_AGENT_STATE,
-            A2A_STATE
+            A2A_STATE,
+            mcp_agent
         )
     except KeyboardInterrupt:
         print("\n👋 Shutting down...")

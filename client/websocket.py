@@ -81,7 +81,7 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
 
 async def websocket_handler(websocket, agent_ref, tools, logger, conversation_state, run_agent_fn,
                             models_module, model_name, system_prompt, orchestrator=None,
-                            multi_agent_state=None, a2a_state=None):
+                            multi_agent_state=None, a2a_state=None, mcp_agent=None):
     """
     Handle WebSocket connections with TRUE concurrent processing
 
@@ -288,7 +288,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                         logger=logger,
                         orchestrator=orchestrator,
                         multi_agent_state=multi_agent_state,
-                        a2a_state=a2a_state
+                        a2a_state=a2a_state,
+                        mcp_agent=mcp_agent
                     )
                     if handled:
                         if response:
@@ -333,7 +334,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
 async def start_websocket_server(agent, tools, logger, conversation_state, run_agent_fn, models_module,
                                  model_name, system_prompt, orchestrator=None, multi_agent_state=None,
-                                 a2a_state=None, host="0.0.0.0", port=8765):
+                                 a2a_state=None, mcp_agent=None, host="0.0.0.0", port=8765):
     """Start the WebSocket server for chat (WITH MULTI-AGENT STATE + A2A)"""
 
     async def handler(websocket):
@@ -343,7 +344,8 @@ async def start_websocket_server(agent, tools, logger, conversation_state, run_a
                 models_module, model_name, system_prompt,
                 orchestrator=orchestrator,
                 multi_agent_state=multi_agent_state,
-                a2a_state=a2a_state
+                a2a_state=a2a_state,
+                mcp_agent=mcp_agent
             )
         except websockets.exceptions.ConnectionClosed:
             pass

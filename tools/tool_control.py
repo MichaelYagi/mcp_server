@@ -45,7 +45,6 @@ _DISABLED_TOOLS_RAW = os.getenv("DISABLED_TOOLS", "")
 _DISABLED_TOOLS = set()
 _DISABLED_CATEGORIES = {}
 
-
 def _parse_disabled_tools():
     """Parse DISABLED_TOOLS environment variable"""
     global _DISABLED_TOOLS, _DISABLED_CATEGORIES
@@ -80,7 +79,6 @@ def _parse_disabled_tools():
                     logger.info(f"   Disabled category: {cat}:* (all tools)")
                 else:
                     logger.info(f"   Disabled {cat}: {', '.join(tools)}")
-
 
 # Parse on module load
 _parse_disabled_tools()
@@ -166,7 +164,6 @@ def check_tool_enabled(func: Callable = None, *, category: Optional[str] = None)
         def add_todo_item(title: str) -> str:
             return add_todo(title)
     """
-
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -220,9 +217,48 @@ def get_disabled_tools() -> dict:
     }
 
 
+def filter_enabled_tools(tools: list, category: Optional[str] = None) -> list:
+    """
+    Filter a list of tools to only include enabled ones.
+
+    Args:
+        tools: List of tool names or tool objects
+        category: Optional category for the tools
+
+    Returns:
+        Filtered list of enabled tools
+
+    Example:
+        all_tools = ["add_todo", "delete_all_todos", "list_todos"]
+        enabled = filter_enabled_tools(all_tools, "todo")
+        # Returns: ["add_todo", "list_todos"] if delete_all_todos is disabled
+    """
+    filtered = []
+
+    for tool in tools:
+        # Handle both tool names (str) and tool objects
+        if isinstance(tool, str):
+            tool_name = tool
+        elif hasattr(tool, 'name'):
+            tool_name = tool.name
+        elif hasattr(tool, '__name__'):
+            tool_name = tool.__name__
+        else:
+            # Unknown format, include it
+            filtered.append(tool)
+            continue
+
+        # Check if enabled
+        if is_tool_enabled(tool_name, category):
+            filtered.append(tool)
+
+    return filtered
+
+
 __all__ = [
     'is_tool_enabled',
     'disabled_tool_response',
     'check_tool_enabled',
-    'get_disabled_tools'
+    'get_disabled_tools',
+    'filter_enabled_tools'
 ]

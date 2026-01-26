@@ -474,6 +474,41 @@ python client.py  # Auto-discovers new server
 A2A_EXPOSED_TOOLS=plex,location,email_tools  # Include new category
 ```
 
+**5. Tool Control  (optional):**
+
+### Overview
+
+The `DISABLED_TOOLS` environment variable lets you disable specific tools or entire categories without modifying code. Disabled tools are hidden from the `:tools` list and return an error if called.
+
+### Patterns
+
+1. **Specific tool**: `DISABLED_TOOLS=delete_all_todo_items,terminate_process`
+2. **Category-specific**: `DISABLED_TOOLS=todo:delete_all_todo_items,system:terminate_process`
+3. **All in category**: `DISABLED_TOOLS=system:*,rag:*`
+
+### Use Cases
+
+**Disable destructive operations:**
+```bash
+DISABLED_TOOLS=delete_all_todo_items,terminate_process,delete_all_entries
+```
+
+**Disable slow operations:**
+```bash
+DISABLED_TOOLS=rag:plex_ingest_batch,rag:*
+```
+
+**Disable experimental tools:**
+```bash
+DISABLED_TOOLS=code:debug_fix,system:*
+```
+
+### Behavior
+
+- Hidden from `:tools` list
+- Returns error if called
+- Use `:tools --all` to see disabled tools (marked)
+
 New tools are automatically:
 - Discovered by client (local access via stdio)
 - Exposed by A2A server (if in A2A_EXPOSED_TOOLS or all exposed)

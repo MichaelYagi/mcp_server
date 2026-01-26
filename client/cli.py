@@ -30,7 +30,8 @@ def input_thread(input_queue, stop_event):
             break
 
 async def cli_input_loop(agent, logger, tools, model_name, conversation_state, run_agent_fn, models_module,
-                         system_prompt, create_agent_fn, orchestrator=None, multi_agent_state=None, a2a_state=None):
+                         system_prompt, create_agent_fn, orchestrator=None, multi_agent_state=None, a2a_state=None,
+                         mcp_agent=None):
     """Handle CLI input using a separate thread (with multi-agent + A2A support + REAL-TIME STOP)"""
     input_queue = Queue()
     stop_event = threading.Event()
@@ -101,7 +102,8 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
                         logger=logger,
                         orchestrator=orchestrator,
                         multi_agent_state=multi_agent_state,
-                        a2a_state=a2a_state
+                        a2a_state=a2a_state,
+                        mcp_agent=mcp_agent
                     )
 
                     if handled:
