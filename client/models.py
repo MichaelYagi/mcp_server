@@ -5,7 +5,10 @@ Handles both Ollama and GGUF models with automatic backend switching
 
 import os
 import subprocess
+import logging
 from client.llm_backend import LLMBackendManager, GGUFModelRegistry
+
+logger = logging.getLogger(__name__)
 
 MODEL_STATE_FILE = "last_model.txt"
 
@@ -56,7 +59,8 @@ def get_all_models():
         all_models.append({
             "name": model,
             "backend": "gguf",
-            "size_mb": info.get("size_mb", 0) if info else 0
+            "size_mb": info.get("size_mb", 0) if info else 0,
+            "path": info.get("path", "") if info else ""
         })
 
     return all_models
@@ -110,12 +114,16 @@ async def switch_model(model_name, tools, logger, create_agent_fn, a2a_state=Non
     Switch to any model - automatically switches backend if needed
 
     This is the main entry point for model switching from CLI/WebUI
+
+    Returns:
+        New agent instance, or None if switch failed
     """
     # Detect which backend this model needs
     target_backend = detect_backend(model_name)
 
     if not target_backend:
-        print(f"❌ Model '{model_name}' not found")
+        logger.error(f"❌ Model '{model_name}' not found")
+        print(f"\n❌ Model '{model_name}' not found in any backend\n")
         print_all_models()
         return None
 
@@ -133,32 +141,75 @@ async def switch_model(model_name, tools, logger, create_agent_fn, a2a_state=Non
                 async with httpx.AsyncClient(timeout=1.0) as client:
                     await client.get("http://127.0.0.1:11434/api/tags")
             except:
-                print("❌ Ollama not running. Start with: ollama serve")
+                logger.error("❌ Ollama not running")
+                print("\n❌ Ollama not running")
+                print("   Start with: ollama serve\n")
                 os.environ["LLM_BACKEND"] = current_backend  # Revert
                 return None
 
-    # Create new LLM
+    # Create new LLM with proper error handling
     logger.info(f"🔄 Switching to {target_backend}/{model_name}")
 
     try:
+        # This will raise specific errors for invalid models
         new_llm = LLMBackendManager.create_llm(model_name, temperature=0)
-        llm_with_tools = new_llm.bind_tools(tools)
-        agent = create_agent_fn(llm_with_tools, tools)
 
-        # Re-register A2A tools if needed
-        if a2a_state and hasattr(a2a_state, "register_a2a_tools"):
-            logger.info("🔌 Re-registering A2A tools")
-            await a2a_state.register_a2a_tools(agent)
+    except ValueError as e:
+        # Model not found or invalid configuration
+        logger.error(f"❌ Configuration error: {e}")
+        print(f"\n❌ {e}\n")
+        os.environ["LLM_BACKEND"] = current_backend  # Revert
+        return None
 
-        save_last_model(model_name)
-        logger.info(f"✅ Switched to {target_backend}/{model_name}")
+    except FileNotFoundError as e:
+        # GGUF file missing
+        logger.error(f"❌ File not found: {e}")
+        print(f"\n❌ {e}\n")
+        os.environ["LLM_BACKEND"] = current_backend  # Revert
+        return None
 
-        return agent
+    except RuntimeError as e:
+        # GGUF file corrupted or invalid format
+        logger.error(f"❌ Invalid model: {e}")
+        print(f"\n❌ INVALID MODEL")
+        print("=" * 70)
+        print(str(e))
+        print("=" * 70 + "\n")
+        os.environ["LLM_BACKEND"] = current_backend  # Revert
+        return None
 
     except Exception as e:
-        logger.error(f"❌ Model switch failed: {e}")
-        os.environ["LLM_BACKEND"] = current_backend  # Revert backend
+        # Unexpected error
+        logger.error(f"❌ Unexpected error: {e}")
+        print(f"\n❌ Failed to load model: {e}\n")
+        os.environ["LLM_BACKEND"] = current_backend  # Revert
         return None
+
+    # Bind tools and create agent
+    try:
+        llm_with_tools = new_llm.bind_tools(tools)
+        agent = create_agent_fn(llm_with_tools, tools)
+    except Exception as e:
+        logger.error(f"❌ Failed to create agent: {e}")
+        print(f"\n❌ Failed to create agent: {e}\n")
+        os.environ["LLM_BACKEND"] = current_backend  # Revert
+        return None
+
+    # Re-register A2A tools if needed
+    if a2a_state and hasattr(a2a_state, "register_a2a_tools"):
+        try:
+            logger.info("🔌 Re-registering A2A tools")
+            await a2a_state.register_a2a_tools(agent)
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to re-register A2A tools: {e}")
+            # Don't fail the switch, just warn
+
+    # Success!
+    save_last_model(model_name)
+    logger.info(f"✅ Switched to {target_backend}/{model_name}")
+    print(f"✅ Now using: {target_backend}/{model_name}")
+
+    return agent
 
 
 def print_all_models():
@@ -168,7 +219,7 @@ def print_all_models():
     if not all_models:
         print("\n📦 No models available")
         print("   Ollama: ollama pull <model>")
-        print("   GGUF: :gguf add <path>")
+        print("   GGUF: :gguf add <alias> <path>")
         return
 
     # Group by backend
