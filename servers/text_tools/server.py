@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,11 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-from typing import List
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.text_tools.split_text import split_text
@@ -67,6 +66,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("text-tools-server")
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def split_text_tool(text: str, max_chunk_size: int = 2000) -> str:
     """
     Split long text into manageable chunks for processing.
@@ -88,6 +88,7 @@ def split_text_tool(text: str, max_chunk_size: int = 2000) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def summarize_chunk_tool(chunk: str, style: str = "short") -> str:
     """
     Summarize a single text chunk.
@@ -110,6 +111,7 @@ def summarize_chunk_tool(chunk: str, style: str = "short") -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def merge_summaries_tool(summaries: List[str], style: str = "medium") -> str:
     """
     Combine multiple summaries into one cohesive summary.
@@ -132,6 +134,7 @@ def merge_summaries_tool(summaries: List[str], style: str = "medium") -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def summarize_text_tool(text: str | None = None,
                         file_path: str | None = None,
                         style: str = "medium") -> str:
@@ -159,6 +162,7 @@ def summarize_text_tool(text: str | None = None,
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def summarize_direct_tool(text: str, style: str = "medium") -> str:
     """
     Summarize text in a single LLM call (for shorter texts).
@@ -180,6 +184,7 @@ def summarize_direct_tool(text: str, style: str = "medium") -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def explain_simplified_tool(concept: str) -> str:
     """
     Explain complex concepts using the Ladder of Abstraction.
@@ -202,6 +207,7 @@ def explain_simplified_tool(concept: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def concept_contextualizer_tool(concept: str) -> str:
     """
     Provide comprehensive context and background for a concept.
@@ -227,6 +233,7 @@ def concept_contextualizer_tool(concept: str) -> str:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -244,6 +251,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="text_tools")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

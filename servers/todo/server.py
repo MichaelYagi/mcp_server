@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,11 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-from typing import Optional
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.todo.add_todo import add_todo
@@ -66,6 +65,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("todo-tools-server")
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def add_todo_item(title: str,
                   description: Optional[str] = None,
                   due_by: Optional[str] = None) -> str:
@@ -96,6 +96,7 @@ def add_todo_item(title: str,
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def list_todo_items() -> str:
     """
     List all todo items.
@@ -122,6 +123,7 @@ def list_todo_items() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def search_todo_items(text: Optional[str] = None,
                       status: Optional[str] = None,
                       due_before: Optional[str] = None,
@@ -164,6 +166,7 @@ def search_todo_items(text: Optional[str] = None,
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def update_todo_item(todo_id: str,
                      title: Optional[str] = None,
                      description: Optional[str] = None,
@@ -201,6 +204,7 @@ def update_todo_item(todo_id: str,
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def delete_todo_item(todo_id: str) -> str:
     """
     Delete a single todo item by its ID.
@@ -222,6 +226,7 @@ def delete_todo_item(todo_id: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def delete_all_todo_items() -> str:
     """
     Delete ALL todo items. Use with caution!
@@ -247,6 +252,7 @@ def delete_all_todo_items() -> str:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -264,6 +270,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="todo")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

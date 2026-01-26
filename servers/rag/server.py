@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,10 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from client.stop_signal import is_stop_requested
@@ -63,6 +63,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("rag-server")
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def rag_add_tool(text: str, source: str | None = None, chunk_size: int = 500) -> str:
     """
     Add text to the RAG (Retrieval-Augmented Generation) vector database.
@@ -89,6 +90,7 @@ def rag_add_tool(text: str, source: str | None = None, chunk_size: int = 500) ->
 
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def rag_search_tool(query: str, top_k: int = 5, min_score: float = 0.0) -> str:
     """
     Search the RAG database using semantic similarity with STOP SIGNAL support.
@@ -110,6 +112,7 @@ def rag_search_tool(query: str, top_k: int = 5, min_score: float = 0.0) -> str:
     return json.dumps(result, indent=2)
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def rag_diagnose_tool() -> str:
     """
     Diagnose RAG database for incomplete or problematic entries.
@@ -139,6 +142,7 @@ def rag_diagnose_tool() -> str:
     return json.dumps(result, indent=2)
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def rag_status_tool() -> str:
     """
     Get quick status of RAG database without full diagnostics.
@@ -183,6 +187,7 @@ def rag_status_tool() -> str:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -200,6 +205,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="rag")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

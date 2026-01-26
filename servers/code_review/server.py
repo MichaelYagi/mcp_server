@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,11 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-import sys
-from typing import Optional
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.code_review.scan_directory import scan_directory
@@ -66,6 +65,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("code-review-server")
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
     """
     Read a code file and return a structured summary.
@@ -143,6 +143,7 @@ def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def search_code_in_directory(
         query: str,
         extension: Optional[str] = None,
@@ -175,6 +176,7 @@ def search_code_in_directory(
 
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def scan_code_directory(path: str) -> str:
     """
     Recursively scan a directory and summarize its code structure.
@@ -202,6 +204,7 @@ def scan_code_directory(path: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def summarize_code() -> str:
     """
     Generate a high-level summary of the entire codebase.
@@ -226,6 +229,7 @@ def summarize_code() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def debug_fix(error_message: str,
               stack_trace: Optional[str] = None,
               code_snippet: Optional[str] = None,
@@ -262,6 +266,7 @@ def debug_fix(error_message: str,
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -279,6 +284,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

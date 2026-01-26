@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,15 +17,11 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-from typing import Dict, Any
-
-from mcp.server.fastmcp import FastMCP
-
-# Fix ML recommender import - use absolute path
-sys.path.insert(0, str(Path(__file__).parent))
-from ml_recommender import get_recommender
+from pathlib import Path
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from client.stop_signal import is_stop_requested
+from mcp.server.fastmcp import FastMCP
 from tools.plex.semantic_media_search import semantic_media_search
 from tools.plex.scene_locator import scene_locator
 from tools.plex.ingest import ingest_next_batch, ingest_batch_parallel_conservative, find_unprocessed_items, process_item_async
@@ -65,6 +63,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("plex-server")
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def semantic_media_search_text(query: str, limit: int = 10) -> Dict[str, Any]:
     """
     Search for movies and TV shows in the Plex library by title, genre, actor, or description.
@@ -98,6 +97,7 @@ def semantic_media_search_text(query: str, limit: int = 10) -> Dict[str, Any]:
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def scene_locator_tool(media_id: str, query: str, limit: int = 5):
     """
     Find specific scenes within a movie or TV show using subtitle search.
@@ -129,6 +129,7 @@ def scene_locator_tool(media_id: str, query: str, limit: int = 5):
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def find_scene_by_title(movie_title: str, scene_query: str, limit: int = 5):
     """
     Find a specific scene in a movie - convenience tool combining search and scene location.
@@ -178,6 +179,7 @@ def find_scene_by_title(movie_title: str, scene_query: str, limit: int = 5):
 
 # TOOL 1: Find Unprocessed Items (Discovery Phase)
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def plex_find_unprocessed(limit: int = 5, rescan_no_subtitles: bool = False) -> str:
     """
     Find unprocessed Plex items that need ingestion.
@@ -237,6 +239,7 @@ def plex_find_unprocessed(limit: int = 5, rescan_no_subtitles: bool = False) -> 
 
 # TOOL 2: Ingest Multiple Items in Parallel (Batch Processing)
 @mcp.tool()
+@check_tool_enabled(category="plex")
 async def plex_ingest_items(item_ids: str) -> str:
     """
     Ingest multiple Plex items in parallel (ASYNC) with STOP SIGNAL support.
@@ -404,6 +407,7 @@ async def plex_ingest_items(item_ids: str) -> str:
 
 # TOOL 3: Ingest Single Item (Granular Processing)
 @mcp.tool()
+@check_tool_enabled(category="plex")
 async def plex_ingest_single(media_id: str) -> str:
     """
     Ingest a single Plex item with STOP SIGNAL support.
@@ -486,6 +490,7 @@ async def plex_ingest_single(media_id: str) -> str:
 
 # TOOL 4: All-in-One Ingestion (Original - Keep for Simple Queries)
 @mcp.tool()
+@check_tool_enabled(category="plex")
 async def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -> str:
     """
     Ingest the NEXT unprocessed Plex items into RAG (ALL-IN-ONE).
@@ -522,6 +527,7 @@ async def plex_ingest_batch(limit: int = 5, rescan_no_subtitles: bool = False) -
         return json.dumps({"error": str(e)})
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def rag_rescan_no_subtitles() -> str:
     """
     Reset items that were marked as 'no subtitles' to allow re-scanning.
@@ -544,6 +550,7 @@ def rag_rescan_no_subtitles() -> str:
 
 # TOOL 5: Get Ingestion Statistics (Monitoring)
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def plex_get_stats() -> str:
     """
     Get overall Plex ingestion statistics.
@@ -590,6 +597,7 @@ def plex_get_stats() -> str:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -607,6 +615,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")
@@ -642,6 +651,7 @@ def get_tool_names_from_module():
 # ============================================================================
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def import_plex_history(limit: int = 50) -> dict:
     """
     Automatically import your Plex viewing history into the ML recommender
@@ -758,6 +768,7 @@ def import_plex_history(limit: int = 50) -> dict:
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def auto_train_from_plex(import_limit: int = 50) -> dict:
     """
     ONE-CLICK: Import Plex history AND train the model automatically
@@ -822,6 +833,7 @@ Import more history or wait until you've watched more!
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def record_viewing(
         title: str,
         genre: str,
@@ -861,6 +873,7 @@ def record_viewing(
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def train_recommender() -> dict:
     """
     Train the ML recommendation model on your viewing history
@@ -903,6 +916,7 @@ Keep recording what you watch with record_viewing()!
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def recommend_content(
         available_items: list[dict]
 ) -> dict:
@@ -948,6 +962,7 @@ def recommend_content(
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def get_recommender_stats() -> dict:
     """
     Get statistics about your recommendation system
@@ -982,6 +997,7 @@ Finish Rate: {stats['finish_rate']}
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def reset_recommender() -> dict:
     """
     ⚠️ DANGER: Clear all viewing history and retrain from scratch
@@ -1003,6 +1019,7 @@ def reset_recommender() -> dict:
 
 
 @mcp.tool()
+@check_tool_enabled(category="plex")
 def auto_recommend_from_plex(
         limit: int = 20,
         genre_filter: str = "",

@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,11 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-from typing import List
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.knowledge_base.kb_add import kb_add
@@ -70,6 +69,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("kb-server")
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def add_entry(title: str, content: str, tags: List[str] | None = None) -> str:
     """
     Create a new KNOWLEDGE BASE entry (for storing information, notes, URLs).
@@ -98,6 +98,7 @@ def add_entry(title: str, content: str, tags: List[str] | None = None) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def search_entries(query: str) -> str:
     """
     Perform full-text search across all knowledge base entries.
@@ -121,6 +122,7 @@ def search_entries(query: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def search_by_tag(tag: str) -> str:
     """
     Retrieve all knowledge base entries with a specific tag.
@@ -143,6 +145,7 @@ def search_by_tag(tag: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def search_semantic(query: str, top_k: int = 5) -> str:
     """
     Perform semantic (embedding-based) search across the knowledge base.
@@ -167,6 +170,7 @@ def search_semantic(query: str, top_k: int = 5) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def get_entry(entry_id: str) -> str:
     """
     Retrieve a single knowledge base entry by its ID.
@@ -191,6 +195,7 @@ def get_entry(entry_id: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def delete_entry(entry_id: str) -> str:
     """
     Delete a single knowledge base entry by ID.
@@ -212,6 +217,7 @@ def delete_entry(entry_id: str) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def delete_entries(entry_ids: List[str]) -> str:
     """
     Delete multiple knowledge base entries at once.
@@ -233,6 +239,7 @@ def delete_entries(entry_ids: List[str]) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def update_entry(entry_id: str,
                  title: str | None = None,
                  content: str | None = None,
@@ -265,6 +272,7 @@ def update_entry(entry_id: str,
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def list_entries() -> str:
     """
     List all entries in the knowledge base.
@@ -288,6 +296,7 @@ def list_entries() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def update_entry_versioned(entry_id: str,
                            title: str | None = None,
                            content: str | None = None,
@@ -318,6 +327,7 @@ def update_entry_versioned(entry_id: str,
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -335,6 +345,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="knowledge_base")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

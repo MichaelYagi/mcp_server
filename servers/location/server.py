@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,10 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.location.geolocate_util import geolocate_ip, CLIENT_IP
@@ -63,6 +63,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("location-server")
 
 @mcp.tool()
+@check_tool_enabled(category="location")
 def get_location_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
     Retrieve structured geographic information for any location.
@@ -99,6 +100,7 @@ def get_location_tool(city: str | None = None, state: str | None = None, country
 
 
 @mcp.tool()
+@check_tool_enabled(category="location")
 def get_time_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
     Get the current local time for any city in the world.
@@ -135,6 +137,7 @@ def get_time_tool(city: str | None = None, state: str | None = None, country: st
 
 
 @mcp.tool()
+@check_tool_enabled(category="location")
 def get_weather_tool(city: str | None = None, state: str | None = None, country: str | None = None) -> str:
     """
     Get current weather conditions for any location.
@@ -185,6 +188,7 @@ def get_weather_tool(city: str | None = None, state: str | None = None, country:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="location")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -202,6 +206,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="location")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")

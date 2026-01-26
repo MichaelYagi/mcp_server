@@ -4,6 +4,8 @@ Runs over stdio transport
 """
 import sys
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -15,10 +17,8 @@ from servers.skills.skill_loader import SkillLoader
 import inspect
 import json
 import logging
-import sys
 from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from tools.tool_control import check_tool_enabled, is_tool_enabled, disabled_tool_response
 
 from mcp.server.fastmcp import FastMCP
 from tools.system import get_hardware_specs
@@ -62,6 +62,7 @@ logger.info("🚀 Server logging initialized - writing to logs/mcp-server.log")
 mcp = FastMCP("system-tools-server")
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def get_hardware_specs_tool() -> str:
     """
     Get detailed hardware specifications including CPU, GPU, and RAM.
@@ -86,6 +87,7 @@ def get_hardware_specs_tool() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def get_system_info() -> str:
     """
     Retrieve current system health and resource usage.
@@ -108,6 +110,7 @@ def get_system_info() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def list_system_processes(top_n: int = 10) -> str:
     """
     List active system processes sorted by resource usage.
@@ -130,6 +133,7 @@ def list_system_processes(top_n: int = 10) -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def terminate_process(pid: int) -> str:
     """
     Terminate a process by its process ID (PID).
@@ -151,6 +155,7 @@ def terminate_process(pid: int) -> str:
 skill_registry = None
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def list_skills() -> str:
     """List all available skills for this server."""
     logger.info(f"🛠  list_skills called")
@@ -168,6 +173,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
+@check_tool_enabled(category="system_tools")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"🛠  read_skill called")
