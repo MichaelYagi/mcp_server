@@ -1771,7 +1771,10 @@
             text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
             text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-            text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+
+            // Only match underscores with word boundaries (not in variable_names)
+            // This requires spaces or punctuation on both sides
+            text = text.replace(/(\s|^)_([^_\s]+?)_(\s|$|[.,!?;:])/g, '$1<em>$2</em>$3');
 
             // Strikethrough
             text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
