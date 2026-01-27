@@ -6,17 +6,20 @@ description: >
   overview of a project or file.
 tags:
   - code
+  - review
   - summarization
   - analysis
 tools:
   - summarize_code
   - summarize_code_file
+  - review_code
 ---
 
 # Code Summarization Skill
 
 Use this skill when the user asks for:
 
+- "review this code"
 - "summarize this file"
 - "give me an overview of the codebase"
 - "explain this project"

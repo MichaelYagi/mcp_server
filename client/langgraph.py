@@ -197,6 +197,7 @@ INTENT_PATTERNS = {
             r'|\bexplain\s+this\s+code\b'
         ),
         "tools": [
+            "review_code",
             "summarize_code_file",
             "search_code_in_directory",
             "scan_code_directory",

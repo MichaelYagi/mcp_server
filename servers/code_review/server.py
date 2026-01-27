@@ -1,5 +1,5 @@
 """
-Code Review MCP Server
+Code Review MCP Server - UPDATED with comprehensive code review
 Runs over stdio transport
 """
 import sys
@@ -26,6 +26,9 @@ from tools.code_review.summarize_codebase import summarize_codebase
 from tools.code_review.fix_bug import fix_bug
 from tools.code_review.search_code import search_code
 
+# Import the new comprehensive review tool
+from tools.code_review.review_code import review_python_file
+
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -35,7 +38,7 @@ LOG_DIR.mkdir(exist_ok=True)
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
 
-# Remove any existing handlers (in case something already configured it)
+# Remove any existing handlers
 root_logger.handlers.clear()
 
 # Create formatter
@@ -66,9 +69,72 @@ mcp = FastMCP("code-review-server")
 
 @mcp.tool()
 @check_tool_enabled(category="code_reviewer")
+def review_code(path: str, max_bytes: int = 200_000) -> str:
+    """
+    Perform comprehensive code review and static analysis on a Python file or directory.
+
+    This tool analyzes Python code for:
+    - Security vulnerabilities (hardcoded credentials, eval/exec, SQL injection)
+    - Code quality issues (missing docstrings, long functions, complexity)
+    - Exception handling problems (bare except, silent failures)
+    - Performance concerns (nested comprehensions, global variables)
+    - Syntax errors and type issues
+
+    Can review:
+    - Single Python file: Detailed analysis of one file
+    - Directory: Analyzes all .py files in directory (non-recursive)
+
+    Args:
+        path (str, required): Absolute or relative path to Python file or directory
+        max_bytes (int, optional): Maximum file size to process per file (default: 200,000)
+
+    Returns:
+        JSON string with detailed analysis:
+
+        For single file:
+        - metrics: File statistics (lines, functions, classes)
+        - summary: Issue counts by severity (critical, high, medium, low, info)
+        - issues_by_severity: Categorized list of specific issues with:
+          * line: Line number where issue occurs
+          * type: Issue category
+          * message: Description of the problem
+          * suggestion: How to fix it
+        - recommendations: High-level action items
+
+        For directory:
+        - metrics: Aggregated statistics across all files
+        - summary: Total issue counts and files with issues
+        - files: Per-file summaries
+        - issues_by_severity: All issues with file context
+        - recommendations: Directory-level improvements
+
+    Use when user wants to:
+    - Review code for quality or security
+    - Find bugs or potential issues in file or directory
+    - Get improvement suggestions for a module
+    - Audit code before deployment
+    - Scan entire package/directory for issues
+    """
+    logger.info(f"🛠 [server] review_code called with path: {path}, max_bytes: {max_bytes}")
+
+    try:
+        result = review_python_file(path, max_bytes)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"❌ review_code failed: {str(e)}", exc_info=True)
+        return json.dumps({
+            "error": f"Review failed: {str(e)}",
+            "path": path
+        }, indent=2)
+
+
+@mcp.tool()
+@check_tool_enabled(category="code_reviewer")
 def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
     """
-    Read a code file and return a structured summary.
+    Read a code file and return a structured summary (basic version).
+
+    For comprehensive code review with security and quality analysis, use review_code instead.
 
     Args:
         path (str, required): Absolute or relative file path
@@ -85,9 +151,7 @@ def summarize_code_file(path: str, max_bytes: int = 200_000) -> str:
         - preview: First 20 lines of code
         - error: Error message if file cannot be read
 
-    Works across Windows, Linux, and macOS.
-
-    Use when user wants to summarize or review a specific code file.
+    Use for quick file summary. For detailed analysis, use review_code.
     """
     logger.info(f"🛠 [server] summarize_code_file called with path: {path}, max_bytes: {max_bytes}")
     from pathlib import Path
@@ -325,4 +389,5 @@ if __name__ == "__main__":
 
     logger.info(f"🛠  {len(server_tools)} tools: {', '.join(server_tools)}")
     logger.info(f"🛠  {len(skill_registry.skills)} skills loaded")
+    logger.info(f"✨ NEW: review_code tool provides comprehensive static analysis")
     mcp.run(transport="stdio")
