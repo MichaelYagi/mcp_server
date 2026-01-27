@@ -582,8 +582,6 @@ def create_langgraph_agent(llm_with_tools, tools):
                             logger.info("✅ LangSearch successful - passing to LLM for processing")
                             search_context = search_result["results"]
 
-                            logger.info(f"✅ LangSearch truncated raw results - {search_context[:500]} ...")
-
                             # Create augmented prompt for LLM to process
                             augmented_prompt = f"""I searched the web using LangSearch and found the following results:
 
