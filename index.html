@@ -1551,15 +1551,17 @@
         }
 
         function updateStatusWithMode() {
-            let baseStatus = modelSelect.value ? "Model: " + modelSelect.value : "Connected";
+            // let baseStatus = modelSelect.value ? "Model: " + modelSelect.value : "Connected";
 
-            if (lastResponseWasMultiAgent) {
-                status.innerHTML = baseStatus + ' <span class="status-badge multi">Multi-Agent</span>';
-            } else if (multiAgentEnabled) {
-                status.innerHTML = baseStatus + ' <span class="status-badge multi" style="opacity: 0.5;">Multi-Agent</span>';
-            } else {
-                status.innerHTML = baseStatus + ' <span class="status-badge single">Single Agent</span>';
-            }
+            // if (lastResponseWasMultiAgent) {
+            //     status.innerHTML = baseStatus + ' <span class="status-badge multi">Multi-Agent</span>';
+            // } else if (multiAgentEnabled) {
+            //     status.innerHTML = baseStatus + ' <span class="status-badge multi" style="opacity: 0.5;">Multi-Agent</span>';
+            // } else {
+            //     status.innerHTML = baseStatus + ' <span class="status-badge single">Single Agent</span>';
+            // }
+
+            status.innerHTML = modelSelect.value ? "Model: " + modelSelect.value : "Connected";
         }
 
         function stopProcessing() {
