@@ -125,7 +125,7 @@ INTENT_PATTERNS = {
             r'|\\binspect.*code\\b'
             r'|\\blint\\b'
             
-            # Analysis with file extensions (NEW!)
+            # Analysis with file extensions
             r'|\\banalyze.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
             r'|\\bcheck.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
             r'|\\breview.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
@@ -151,7 +151,7 @@ INTENT_PATTERNS = {
             r'|\\bfind.*bug\\b'
             r'|\\bdetect.*bug\\b'
             r'|\\banti.?pattern\\b'
-            r'|\\bwhat.?wrong\\s+with.*code\\b'
+            r'|\\bwhat.*wrong\\s+with.*code\\b'
             r'|\\bissues?\\s+in.*code\\b'
             
             # Testing
@@ -159,9 +159,21 @@ INTENT_PATTERNS = {
             r'|\\bwrite.*test\\b'
             r'|\\bcreate.*test\\b'
             
-            # Direct file analysis (matches your query!)
+            # Direct file analysis
             r'|\\banalyze.*my.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
             r'|\\bcheck.*my.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
+            
+            # CODE GENERATION
+            r'|\\bgenerate.*code\\b'
+            r'|\\bcreate.*(function|class|module|script|component)\\b'
+            r'|\\bwrite.*(function|class|code)\\b'
+            r'|\\bmake.*(function|class|component)\\b'
+            r'|\\bbuild.*(function|class|component)\\b'
+            r'|\\bcode\\s+(for|that)\\b'
+            r'|\\bfunction\\s+that\\b'
+            r'|\\bclass\\s+that\\b'
+            r'|\\bscript\\s+(that|to)\\b'
+            r'|\\bcomponent\\s+that\\b'
         ),
         "tools": [
             "analyze_code_file",
@@ -169,7 +181,8 @@ INTENT_PATTERNS = {
             "suggest_improvements",
             "explain_code",
             "generate_tests",
-            "refactor_code"
+            "refactor_code",
+            "generate_code"
         ],
         "priority": 2
     },

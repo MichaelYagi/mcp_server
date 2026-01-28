@@ -389,5 +389,5 @@ if __name__ == "__main__":
 
     logger.info(f"🛠  {len(server_tools)} tools: {', '.join(server_tools)}")
     logger.info(f"🛠  {len(skill_registry.skills)} skills loaded")
-    logger.info(f"✨ NEW: review_code tool provides comprehensive static analysis")
+    logger.info(f"✨ Review_code tool provides comprehensive static analysis")
     mcp.run(transport="stdio")

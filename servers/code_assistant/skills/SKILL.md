@@ -3,7 +3,8 @@ name: python_bug_fixing
 description: >
   Automatically detect and fix common Python bugs and anti-patterns using AST
   analysis. Identifies mutable defaults, bare except clauses, identity comparisons,
-  and unused imports. Creates backups before applying fixes.
+  and unused imports. Creates backups before applying fixes. Also generates new
+  code from natural language descriptions.
 tags:
   - code
   - python
@@ -11,10 +12,12 @@ tags:
   - fixing
   - analysis
   - quality
+  - generation
 tools:
   - analyze_code_file
   - fix_code_file
   - suggest_improvements
+  - generate_code
 ---
 
 # Python Bug Fixing Skill
@@ -267,3 +270,111 @@ Agent reports:
 - Validates fixes don't break syntax
 - Logs all changes
 - Can be reverted using backup file
+
+---
+
+## Code Generation
+
+### Tool: `generate_code(description, language, style, ...)`
+
+Generate new code from natural language descriptions.
+
+### When to Use
+
+User asks to:
+- "create a function that..."
+- "generate code for..."
+- "write a class that..."
+- "make an API endpoint for..."
+- "build a component that..."
+
+### Workflow
+
+**STEP 1: Get Clear Requirements**
+
+Ask clarifying questions:
+- What are the inputs?
+- What should it return?
+- Any edge cases to handle?
+- Any specific frameworks?
+
+**STEP 2: Generate Code**
+
+```
+generate_code(
+    description="Calculate factorial recursively with error handling",
+    language="python",
+    style="function",
+    include_tests=True,
+    include_docstrings=True
+)
+```
+
+**STEP 3: Review and Refine**
+
+Show the generated code to the user and ask:
+- Does this match what you wanted?
+- Any changes needed?
+- Should I save this to a file?
+
+### Examples
+
+```
+User: "create a function to validate email addresses"
+
+Agent: "I'll create an email validator. Should it:
+- Return True/False or raise exceptions?
+- Allow plus signs in the local part?
+- Require specific domains?"
+
+User: "return true/false and allow plus signs"
+
+Agent: generate_code(
+    description="Validate email addresses, returns True/False,
+                 allows + in local part, checks for @ and domain",
+    language="python",
+    style="function",
+    include_docstrings=True
+)
+
+Generated:
+def validate_email(email: str) -> bool:
+    \"\"\"
+    Validate an email address.
+    
+    Allows + sign in local part.
+    Returns True if valid, False otherwise.
+    \"\"\"
+    if '@' not in email:
+        return False
+    
+    local, domain = email.split('@', 1)
+    if not local or not domain:
+        return False
+    
+    if '.' not in domain:
+        return False
+    
+    return True
+
+Agent: "Here's the email validator. Would you like me to:
+1. Add unit tests?
+2. Save to a file?
+3. Make any changes?"
+```
+
+### Supported Languages
+
+- **Python**: Functions, classes, modules, FastAPI/Flask endpoints
+- **JavaScript**: Functions, classes, React components, Express routes
+- **TypeScript**: Typed versions of JavaScript
+- **Rust**: Functions, structs, traits (basic support)
+- **Go**: Functions, structs, interfaces (basic support)
+
+### Best Practices
+
+1. **Get specifics** - Don't generate from vague descriptions
+2. **Show before saving** - Let user review first
+3. **Offer tests** - Ask if they want unit tests
+4. **Ask about framework** - FastAPI vs Flask, React vs Vue, etc.
+5. **Iterate** - Generated code is a starting point, refine based on feedback

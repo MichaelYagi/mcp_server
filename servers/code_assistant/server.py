@@ -25,7 +25,8 @@ from tools.code_assistant.tool import (
     suggest_improvements_impl,
     explain_code_impl,
     generate_tests_impl,
-    refactor_code_impl
+    refactor_code_impl,
+    generate_code_impl
 )
 
 # Import tool control if available (optional)
@@ -299,6 +300,68 @@ def refactor_code(
     """
     logger.info(f"♻️  [TOOL] refactor_code called: {file_path} ({refactor_type})")
     return refactor_code_impl(file_path, refactor_type, target, preview)
+
+
+@mcp.tool()
+@check_tool_enabled(category="code_assistant")
+def generate_code(
+    description: str,
+    language: str = "python",
+    style: str = "function",
+    include_tests: bool = False,
+    include_docstrings: bool = True,
+    framework: str = "",
+    output_file: str = ""
+) -> str:
+    """
+    Generate code from a natural language description.
+
+    Creates production-ready code following best practices for the target language.
+
+    Args:
+        description (str): What the code should do (be specific and detailed)
+        language (str): Programming language: "python", "javascript", "typescript", "rust", "go"
+        style (str): Code style:
+            - "function": Single function
+            - "class": Class with methods
+            - "module": Complete module/package
+            - "script": Standalone script
+            - "api_endpoint": REST API endpoint
+        include_tests (bool): Generate unit tests (default: False)
+        include_docstrings (bool): Include documentation (default: True)
+        framework (str): Optional framework: "fastapi", "flask", "react", "express", "actix"
+        output_file (str): Optional file path to save generated code
+
+    Returns:
+        JSON with:
+        - generated_code: The generated code
+        - language: Language used
+        - style: Code style
+        - framework: Framework used (if any)
+        - includes_tests: Whether tests were included
+        - includes_docs: Whether documentation was included
+        - saved_to: File path if saved
+        - prompt_used: The prompt sent to generate code
+
+    Examples:
+        generate_code("Calculate factorial recursively", "python", "function")
+        generate_code("User authentication manager", "python", "class", include_tests=True)
+        generate_code("REST API for todo items", "python", "api_endpoint", framework="fastapi")
+        generate_code("React counter component", "javascript", "module", framework="react")
+
+    Description tips:
+        - Be specific about inputs/outputs
+        - Mention edge cases to handle
+        - Specify any constraints or requirements
+        - Include examples if helpful
+
+    Good: "Create a function that validates email addresses, returns True/False,
+           handles edge cases like missing @ or domain, allows + in local part"
+
+    Bad:  "email validator"
+    """
+    logger.info(f"✨ [TOOL] generate_code called: {description[:50]}...")
+    return generate_code_impl(description, language, style, include_tests, include_docstrings, framework, output_file)
 
 
 # Skill management tools
