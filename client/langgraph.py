@@ -149,15 +149,33 @@ INTENT_PATTERNS = {
         "tools": ["get_time_tool"],
         "priority": 3
     },
+    # ═══════════════════════════════════════════════════════════════
+    # CRITICAL FIX: plex_search BEFORE ml_recommendation (priority 2 vs 3)
+    # ═══════════════════════════════════════════════════════════════
     "plex_search": {
         "pattern": (
-            r'\b(find|search|look\s+for)\s+.*(plex|library|my\s+library)\b'
-            r'|\b(plex|library|my\s+library)\s+.*(find|search)\b'
-            r'|\bmovies?\s+about\b'
-            r'|\bfilms?\s+about\b'
-            r'|\bshow\s+me\s+movies\b'
-            r'|\bsearch\s+my\s+movies\b'
-            r'|\bfind\s+media\b'
+            # Direct search phrases
+            r'\b(find|search|look\s+for|show\s+me)\s+.*\b(movie|film|show|media|series)\b'
+
+            # Plot-based searches (CRITICAL for "where hero wins")
+            r'|\bmovies?\s+(about|where|with|featuring|in\s+which)\b'
+            r'|\bfilms?\s+(about|where|with|featuring|in\s+which)\b'
+
+            # "where X happens" pattern
+            r'|\bwhere\s+.*\s+(wins?|loses?|dies|survives|happens|occurs|escapes)\b'
+
+            # Library references
+            r'|\bsearch\s+(plex|library|my\s+library|my\s+movies)\b'
+            r'|\bfind\s+.*\s+in\s+(plex|library|my\s+library)\b'
+
+            # Scene searches
+            r'|\bscene\s+(where|with|from)\b'
+            r'|\bfind\s+scene\b'
+            r'|\blocate\s+scene\b'
+
+            # Browse/explore (not recommendations)
+            r'|\bbrowse\s+my\b'
+            r'|\blist\s+.*\s+(movies|films|shows)\b'
         ),
         "tools": [
             "rag_search_tool",
@@ -165,7 +183,45 @@ INTENT_PATTERNS = {
             "scene_locator_tool",
             "find_scene_by_title"
         ],
-        "priority": 3
+        "priority": 2  # HIGHER priority than ml_recommendation!
+    },
+    "ml_recommendation": {
+        "pattern": (
+            # Explicit recommendation requests
+            r'\brecommend(ation)?s?\b'
+            r'|\bsuggest(ion)?s?\b'
+
+            # ML/training specific
+            r'|\bml\s+(model|train|recommendation)\b'
+            r'|\btrain\s+(model|recommender|recommendation)\b'
+            r'|\bauto.?train\b'
+
+            # History management
+            r'|\bimport\s+.*\s*history\b'
+            r'|\bviewing\s+history\b'
+            r'|\bwatch\s+history\b'
+            r'|\brecord\s+(viewing|that\s+i\s+watched)\b'
+
+            # Personalized suggestions
+            r'|\bwhat\s+should\s+i\s+watch\b'
+            r'|\brank\s+(these|movies|shows)\b'
+            r'|\bmy\s+best\s+unwatched\b'
+            r'|\bunwatched\s+(recommendations|suggestions)\b'
+
+            # Stats/model info
+            r'|\brecommender\s+stats\b'
+        ),
+        "tools": [
+            "record_viewing",
+            "train_recommender",
+            "recommend_content",
+            "get_recommender_stats",
+            "import_plex_history",
+            "auto_train_from_plex",
+            "reset_recommender",
+            "auto_recommend_from_plex"
+        ],
+        "priority": 3  # LOWER priority - only matches if plex_search doesn't
     },
     "system": {
         "pattern": (
@@ -274,37 +330,6 @@ INTENT_PATTERNS = {
         ),
         "tools": ["send_a2a*", "discover_a2a"],
         "priority": 3
-    },
-    "ml_recommendation": {
-        "pattern": (
-            r'\brecommend(ation)?s?\b'
-            r'|\bml\s+(model|train|recommendation)\b'
-            r'|\btrain\s+(model|recommender|recommendation)\b'
-            r'|\bauto.?train\b'
-            r'|\bimport\s+.*\s*(plex\s+)?history\b'
-            r'|\bplex\s+history\b'
-            r'|\bviewing\s+history\b'
-            r'|\bwatch\s+history\b'
-            r'|\bwhat\s+should\s+i\s+watch\b'
-            r'|\brecord\s+(viewing|that\s+i\s+watched)\b'
-            r'|\brank\s+(these|movies|shows)\b'
-            r'|\brecommender\s+stats\b'
-            r'|\buse\s+auto.?train\b'
-            r'|\bunwatched\s+(content|movies|shows)\b'
-            r'|\bfrom\s+(my\s+)?plex\s+library\b'
-            r'|\bmy\s+best\s+unwatched\b'
-        ),
-        "tools": [
-            "record_viewing",
-            "train_recommender",
-            "recommend_content",
-            "get_recommender_stats",
-            "import_plex_history",
-            "auto_train_from_plex",
-            "reset_recommender",
-            "auto_recommend_from_plex"
-        ],
-        "priority": 2
     }
 }
 
