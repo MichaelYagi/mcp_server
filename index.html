@@ -1123,7 +1123,7 @@
 <!--                </label>-->
 <!--                <span class="mode-status single" id="modeStatus">Single Agent</span>-->
 <!--            </div>-->
-            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chat</button>
+            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chats</button>
             <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
             <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
             <a href="dashboard.html" id="dashboardBtn">📈 Dashboard</a>
@@ -1285,11 +1285,11 @@
 
             if (sessionsSidebarOpen) {
                 sidebar.classList.add('open');
-                button.textContent = '✖ Chat';
+                button.textContent = '✖ Chats';
                 loadSessions();
             } else {
                 sidebar.classList.remove('open');
-                button.textContent = '💬 Chat';
+                button.textContent = '💬 Chats';
                 openMenuSessionId = null;
                 editingSessionId = null;
             }
