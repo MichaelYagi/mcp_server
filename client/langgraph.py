@@ -119,61 +119,79 @@ INTENT_PATTERNS = {
     "code_assistant": {
         "pattern": (
             # Analysis with "code" keyword
-            r'\\banalyze.*code\\b'
-            r'|\\bcheck.*code\\b'
-            r'|\\breview.*code\\b'
-            r'|\\binspect.*code\\b'
-            r'|\\blint\\b'
+            r'\banalyze.*code\b'
+            r'|\bcheck.*code\b'
+            r'|\breview.*code\b'
+            r'|\binspect.*code\b'
+            r'|\blint\b'
             
             # Analysis with file extensions
-            r'|\\banalyze.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
-            r'|\\bcheck.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
-            r'|\\breview.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
-            r'|\\binspect.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
+            r'|\banalyze.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\bcheck.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\breview.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\binspect.*\.(py|js|jsx|ts|tsx|rs|go)\b'
             
             # Fix requests
-            r'|\\bfix.*bug\\b'
-            r'|\\bfix.*error\\b'
-            r'|\\bfix.*issue\\b'
-            r'|\\bfix.*code\\b'
-            r'|\\bfix\\s+this\\b'
-            r'|\\bfix\\s+my\\b'
-            r'|\\bfix.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
+            r'|\bfix.*bug\b'
+            r'|\bfix.*error\b'
+            r'|\bfix.*issue\b'
+            r'|\bfix.*code\b'
+            r'|\bfix\s+this\b'
+            r'|\bfix\s+my\b'
+            r'|\bfix.*\.(py|js|jsx|ts|tsx|rs|go)\b'
             
             # Quality/improvement
-            r'|\\bcode.*quality\\b'
-            r'|\\bcode.*smell\\b'
-            r'|\\bimprove.*code\\b'
-            r'|\\brefactor\\b'
-            r'|\\boptimize.*code\\b'
+            r'|\bcode.*quality\b'
+            r'|\bcode.*smell\b'
+            r'|\bimprove.*code\b'
+            r'|\brefactor\b'
+            r'|\boptimize.*code\b'
             
             # Detection
-            r'|\\bfind.*bug\\b'
-            r'|\\bdetect.*bug\\b'
-            r'|\\banti.?pattern\\b'
-            r'|\\bwhat.*wrong\\s+with.*code\\b'
-            r'|\\bissues?\\s+in.*code\\b'
+            r'|\bfind.*bug\b'
+            r'|\bdetect.*bug\b'
+            r'|\banti.?pattern\b'
+            r'|\bwhat.*wrong\s+with.*code\b'
+            r'|\bissues?\s+in.*code\b'
             
             # Testing
-            r'|\\bgenerate.*test\\b'
-            r'|\\bwrite.*test\\b'
-            r'|\\bcreate.*test\\b'
+            r'|\bgenerate.*test\b'
+            r'|\bwrite.*test\b'
+            r'|\bcreate.*test\b'
             
             # Direct file analysis
-            r'|\\banalyze.*my.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
-            r'|\\bcheck.*my.*\\.(py|js|jsx|ts|tsx|rs|go)\\b'
+            r'|\banalyze.*my.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\bcheck.*my.*\.(py|js|jsx|ts|tsx|rs|go)\b'
             
-            # CODE GENERATION
-            r'|\\bgenerate.*code\\b'
-            r'|\\bcreate.*(function|class|module|script|component)\\b'
-            r'|\\bwrite.*(function|class|code)\\b'
-            r'|\\bmake.*(function|class|component)\\b'
-            r'|\\bbuild.*(function|class|component)\\b'
-            r'|\\bcode\\s+(for|that)\\b'
-            r'|\\bfunction\\s+that\\b'
-            r'|\\bclass\\s+that\\b'
-            r'|\\bscript\\s+(that|to)\\b'
-            r'|\\bcomponent\\s+that\\b'
+            # CODE GENERATION - Explicit tool mentions
+            r'|\buse\s+the\s+generate_code\s+tool\b'
+            r'|\bgenerate_code\s+tool\b'
+            r'|\bcall\s+generate_code\b'
+            r'|\binvoke\s+generate_code\b'
+            
+            # CODE GENERATION - Natural language
+            r'|\bgenerate\s+(me\s+)?(a\s+|some\s+)?code\b'
+            r'|\bwrite\s+(me\s+)?(a\s+|some\s+)?code\b'
+            r'|\bcreate\s+(me\s+)?(a\s+|some\s+)?code\b'
+            r'|\bmake\s+(me\s+)?(a\s+|some\s+)?code\b'
+            r'|\bbuild\s+(me\s+)?(a\s+|some\s+)?code\b'
+            
+            # CODE GENERATION - Specific constructs
+            r'|\bgenerate\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
+            r'|\bwrite\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
+            r'|\bcreate\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
+            r'|\bmake\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
+            r'|\bbuild\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
+            
+            # CODE GENERATION - Task-based
+            r'|\b(function|class|script|component)\s+(that|to|for)\b'
+            r'|\bcode\s+(that|to|for)\b'
+            r'|\bprogram\s+(that|to|for)\b'
+            
+            # CODE GENERATION - "Calculate/compute" patterns
+            r'|\bcalculate\s+\w+\s+(recursively|iteratively|using)\b'
+            r'|\bcompute\s+\w+\s+(recursively|iteratively|using)\b'
+            r'|\bimplement\s+\w+\s+(algorithm|function|method)\b'
         ),
         "tools": [
             "analyze_code_file",
