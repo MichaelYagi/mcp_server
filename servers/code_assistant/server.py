@@ -71,7 +71,7 @@ mcp = FastMCP("code-assistant-server")
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def analyze_code_file(file_path: str, language: str = "auto", deep_analysis: bool = True) -> str:
     """
     Analyze a code file for bugs, anti-patterns, and issues.
@@ -113,7 +113,7 @@ def analyze_code_file(file_path: str, language: str = "auto", deep_analysis: boo
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def fix_code_file(file_path: str, auto_fix: bool = True, backup: bool = True, dry_run: bool = False) -> str:
     """
     Automatically fix detected issues in a code file.
@@ -151,7 +151,7 @@ def fix_code_file(file_path: str, auto_fix: bool = True, backup: bool = True, dr
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def suggest_improvements(file_path: str, context: str = "", focus: str = "all") -> str:
     """
     Suggest code improvements and best practices.
@@ -188,7 +188,7 @@ def suggest_improvements(file_path: str, context: str = "", focus: str = "all") 
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def explain_code(file_path: str, line_start: int = None, line_end: int = None, detail_level: str = "medium") -> str:
     """
     Explain what code does in natural language.
@@ -222,7 +222,7 @@ def explain_code(file_path: str, line_start: int = None, line_end: int = None, d
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def generate_tests(file_path: str, test_framework: str = "auto", coverage_target: str = "functions") -> str:
     """
     Generate unit tests for code.
@@ -256,7 +256,7 @@ def generate_tests(file_path: str, test_framework: str = "auto", coverage_target
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def refactor_code(
     file_path: str,
     refactor_type: str,
@@ -305,7 +305,7 @@ def refactor_code(
 skill_registry = None
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def list_skills() -> str:
     """List all available skills for code assistant."""
     logger.info("📚 [TOOL] list_skills called")
@@ -323,7 +323,7 @@ def list_skills() -> str:
 
 
 @mcp.tool()
-@check_tool_enabled(category="code")
+@check_tool_enabled(category="code_assistant")
 def read_skill(skill_name: str) -> str:
     """Read the full content of a skill."""
     logger.info(f"📖 [TOOL] read_skill called: {skill_name}")
