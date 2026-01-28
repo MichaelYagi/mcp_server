@@ -1089,7 +1089,7 @@
                 </label>
                 <span class="mode-status single" id="modeStatus">Single Agent</span>
             </div>
-            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chat</button>
+            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chats</button>
             <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
             <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
             <a href="dashboard.html" id="dashboardBtn">📈 Dashboard</a>
@@ -1099,13 +1099,13 @@
     <div id="mainContainer">
         <div id="sessionsSidebar">
             <div class="sessions-header">
-                <h2>💬 Sessions</h2>
+                <h2>💬 Chats</h2>
                 <button class="session-close-btn" onclick="toggleSessionsSidebar()">Close</button>
             </div>
 
             <div class="sessions-search-container">
                 <button class="new-session-btn" onclick="startNewSession()" title="New Session">+</button>
-                <input type="text" id="sessionSearch" placeholder="Search sessions..." oninput="filterSessions()">
+                <input type="text" id="sessionSearch" placeholder="Search chats..." oninput="filterSessions()">
             </div>
 
             <div class="sessions-list" id="sessionsList"></div>
@@ -1251,11 +1251,11 @@
 
             if (sessionsSidebarOpen) {
                 sidebar.classList.add('open');
-                button.textContent = '✖ Chat';
+                button.textContent = '✖ Chats';
                 loadSessions();
             } else {
                 sidebar.classList.remove('open');
-                button.textContent = '💬 Chat';
+                button.textContent = '💬 Chats';
                 openMenuSessionId = null;
                 editingSessionId = null;
             }
