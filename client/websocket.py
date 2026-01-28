@@ -64,22 +64,6 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
             MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
             session_manager.add_message(session_id, "assistant", assistant_text, MAX_MESSAGE_HISTORY)
 
-            # Generate session name if this is first exchange
-            messages = session_manager.get_session_messages(session_id)
-            if len(messages) <= 2:  # First user + assistant message
-                try:
-                    # Get first user message for summarization
-                    first_user_msg = next((m for m in messages if m['role'] == 'user'), None)
-                    if first_user_msg:
-                        # Generate a simple name from first message (truncated)
-                        text = first_user_msg['text']
-                        # Take first sentence or 50 chars
-                        name = text.split('.')[0] if '.' in text else text
-                        name = name[:50] + '...' if len(name) > 50 else name
-                        session_manager.update_session_name(session_id, name)
-                except Exception as e:
-                    logger.error(f"Failed to generate session name: {e}")
-
         await broadcast_message("assistant_message", {
             "text": assistant_text,
             "multi_agent": result.get("multi_agent", False),
@@ -153,6 +137,28 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
             if data.get("type") == "new_session":
                 current_session_id = None
+                continue
+
+            if data.get("type") == "rename_session" and session_manager:
+                session_id = data.get("session_id")
+                new_name = data.get("name", "").strip()
+                if session_id and new_name:
+                    session_manager.update_session_name(session_id, new_name)
+                    await websocket.send(json.dumps({
+                        "type": "session_renamed",
+                        "session_id": session_id,
+                        "name": new_name
+                    }))
+                continue
+
+            if data.get("type") == "delete_session" and session_manager:
+                session_id = data.get("session_id")
+                if session_id:
+                    session_manager.delete_session(session_id)
+                    await websocket.send(json.dumps({
+                        "type": "session_deleted",
+                        "session_id": session_id
+                    }))
                 continue
 
             # ═══════════════════════════════════════════════════════════
@@ -373,6 +379,26 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                     # Save user message
                     MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
                     session_manager.add_message(current_session_id, "user", prompt, MAX_MESSAGE_HISTORY)
+
+                    # Generate session name immediately after first user message
+                    messages = session_manager.get_session_messages(current_session_id)
+                    if len(messages) == 1:  # First message only
+                        try:
+                            # Generate a simple name from first message (truncated)
+                            text = prompt
+                            # Take first sentence or 50 chars
+                            name = text.split('.')[0] if '.' in text else text
+                            name = name[:50] + '...' if len(name) > 50 else name
+                            session_manager.update_session_name(current_session_id, name)
+
+                            # Notify client of name update
+                            await websocket.send(json.dumps({
+                                "type": "session_name_updated",
+                                "session_id": current_session_id,
+                                "name": name
+                            }))
+                        except Exception as e:
+                            logger.error(f"Failed to generate session name: {e}")
 
                 # ═══════════════════════════════════════════════════════════
                 # Normal query - Run as BACKGROUND TASK

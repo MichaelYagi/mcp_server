@@ -263,10 +263,151 @@
             transition: background 0.2s;
             color: white;
             font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            position: relative;
+        }
+
+        .session-item-text {
+            flex: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
+        .session-menu-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.2s;
+            opacity: 0;
+            line-height: 1;
+        }
+
+        .session-item:hover .session-menu-btn {
+            opacity: 1;
+        }
+
+        .session-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .session-menu-btn.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .session-submenu {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: #34495e;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            min-width: 120px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .session-submenu.open {
+            display: block;
+        }
+
+        .session-submenu-item {
+            padding: 0.6rem 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: white;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .session-submenu-item:first-child {
+            border-radius: 6px 6px 0 0;
+        }
+
+        .session-submenu-item:last-child {
+            border-radius: 0 0 6px 6px;
+        }
+
+        .session-submenu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .session-submenu-item.delete {
+            color: #e74c3c;
+        }
+
+        .session-submenu-item.delete:hover {
+            background: rgba(231, 76, 60, 0.2);
+        }
+
+        .session-edit-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .session-edit-input:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .session-edit-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .session-edit-btn {
+            background: rgba(46, 204, 113, 0.8);
+            border: none;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .session-edit-btn:hover {
+            background: rgba(39, 174, 96, 1);
+        }
+
+        .session-edit-cancel {
+            background: rgba(149, 165, 166, 0.8);
+            border: none;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .session-edit-cancel:hover {
+            background: rgba(127, 140, 141, 1);
+        }
+
 
         .session-item:hover {
             background: #3d5a80;
@@ -914,6 +1055,13 @@
                 display: flex;
                 align-items: center;
             }
+
+            .session-menu-btn {
+                opacity: 1;
+                width: 36px;
+                height: 36px;
+                font-size: 1.4rem;
+            }
         }
     </style>
 </head>
@@ -1070,6 +1218,8 @@
         let currentSessionId = null;
         let allSessions = [];
         let sessionsSidebarOpen = false;
+        let openMenuSessionId = null;
+        let editingSessionId = null;
 
         multiAgentToggle.checked = multiAgentEnabled;
         updateModeStatus();
@@ -1097,8 +1247,26 @@
             } else {
                 sidebar.classList.remove('open');
                 button.textContent = '💬 Chat';
+                openMenuSessionId = null;
+                editingSessionId = null;
             }
         }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            // Don't close if clicking menu button or submenu
+            if (e.target.closest('.session-menu-btn') || e.target.closest('.session-submenu')) {
+                return;
+            }
+
+            // Close menu if clicking outside
+            if (openMenuSessionId !== null) {
+                openMenuSessionId = null;
+                if (allSessions && allSessions.length > 0) {
+                    renderSessions(allSessions);
+                }
+            }
+        });
 
         function startNewSession() {
             currentSessionId = null;
@@ -1127,11 +1295,97 @@
                 if (session.id === currentSessionId) {
                     item.classList.add('active');
                 }
-                item.textContent = session.name || 'Untitled Session';
-                item.onclick = () => selectSession(session.id);
+
+                // Check if in edit mode
+                if (editingSessionId === session.id) {
+                    // Edit mode UI
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'session-edit-input';
+                    input.value = session.name || 'Untitled Session';
+                    input.onclick = (e) => e.stopPropagation();
+
+                    const actions = document.createElement('div');
+                    actions.className = 'session-edit-actions';
+
+                    const saveBtn = document.createElement('button');
+                    saveBtn.textContent = '✓';
+                    saveBtn.className = 'session-edit-btn';
+                    saveBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        saveSessionRename(session.id, input.value);
+                    };
+
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.textContent = '✕';
+                    cancelBtn.className = 'session-edit-cancel';
+                    cancelBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        cancelSessionEdit();
+                    };
+
+                    actions.appendChild(saveBtn);
+                    actions.appendChild(cancelBtn);
+                    item.appendChild(input);
+                    item.appendChild(actions);
+
+                    // Focus input
+                    setTimeout(() => input.focus(), 10);
+                } else {
+                    // Normal mode UI
+                    const text = document.createElement('span');
+                    text.className = 'session-item-text';
+                    text.textContent = session.name || 'Untitled Session';
+
+                    const menuBtn = document.createElement('button');
+                    menuBtn.className = 'session-menu-btn';
+                    menuBtn.textContent = '⋮';
+                    menuBtn.onclick = (e) => {
+                        console.log('Menu button clicked!', session.id);
+                        e.stopPropagation();
+                        toggleSessionMenu(session.id);
+                    };
+                    if (openMenuSessionId === session.id) {
+                        menuBtn.classList.add('active');
+                    }
+
+                    const submenu = document.createElement('div');
+                    submenu.className = 'session-submenu';
+                    if (openMenuSessionId === session.id) {
+                        submenu.classList.add('open');
+                        console.log('Adding open class to submenu for session', session.id);
+                    }
+
+                    const editItem = document.createElement('div');
+                    editItem.className = 'session-submenu-item';
+                    editItem.innerHTML = '✏️ Edit';
+                    editItem.onclick = (e) => {
+                        e.stopPropagation();
+                        startSessionEdit(session.id);
+                    };
+
+                    const deleteItem = document.createElement('div');
+                    deleteItem.className = 'session-submenu-item delete';
+                    deleteItem.innerHTML = '🗑️ Delete';
+                    deleteItem.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteSession(session.id);
+                    };
+
+                    submenu.appendChild(editItem);
+                    submenu.appendChild(deleteItem);
+
+                    item.appendChild(text);
+                    item.appendChild(menuBtn);
+                    item.appendChild(submenu);
+
+                    item.onclick = () => selectSession(session.id);
+                }
+
                 list.appendChild(item);
             });
         }
+
 
         function filterSessions() {
             const searchTerm = document.getElementById('sessionSearch').value;
@@ -1144,6 +1398,65 @@
             const filtered = allSessions.filter(s => regex.test(s.name));
             renderSessions(filtered);
         }
+
+        function toggleSessionMenu(sessionId) {
+            console.log('toggleSessionMenu called with sessionId:', sessionId);
+            console.log('Current openMenuSessionId:', openMenuSessionId);
+            if (openMenuSessionId === sessionId) {
+                openMenuSessionId = null;
+            } else {
+                openMenuSessionId = sessionId;
+            }
+            console.log('New openMenuSessionId:', openMenuSessionId);
+            renderSessions(allSessions);
+        }
+
+        function startSessionEdit(sessionId) {
+            openMenuSessionId = null;
+            editingSessionId = sessionId;
+            renderSessions(allSessions);
+        }
+
+        function cancelSessionEdit() {
+            editingSessionId = null;
+            renderSessions(allSessions);
+        }
+
+        function saveSessionRename(sessionId, newName) {
+            if (!newName || !newName.trim()) {
+                alert('Session name cannot be empty');
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'rename_session',
+                session_id: sessionId,
+                name: newName.trim()
+            }));
+
+            editingSessionId = null;
+        }
+
+        function deleteSession(sessionId) {
+            if (!confirm('Are you sure you want to delete this conversation? This cannot be undone.')) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'delete_session',
+                session_id: sessionId
+            }));
+
+            openMenuSessionId = null;
+
+            // If deleting current session, clear the chat
+            if (sessionId === currentSessionId) {
+                currentSessionId = null;
+                localStorage.setItem(CURRENT_SESSION_KEY, '');
+                chat.innerHTML = '';
+            }
+        }
+
 
         function selectSession(sessionId) {
             ws.send(JSON.stringify({
@@ -1500,6 +1813,23 @@
                         renderSessions(allSessions);
                     }
                 }
+                return;
+            }
+
+            if (data.type === 'session_renamed') {
+                // Update the session name in the local list
+                const session = allSessions.find(s => s.id === data.session_id);
+                if (session) {
+                    session.name = data.name;
+                    renderSessions(allSessions);
+                }
+                return;
+            }
+
+            if (data.type === 'session_deleted') {
+                // Remove session from local list
+                allSessions = allSessions.filter(s => s.id !== data.session_id);
+                renderSessions(allSessions);
                 return;
             }
 
