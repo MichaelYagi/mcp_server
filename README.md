@@ -7,7 +7,7 @@ A Model Context Protocol (MCP) implementation with distributed multi-server arch
 ### Prerequisites
 
 * Python 3.10+
-* 16GB+ RAM (for multi-agent)
+* 16GB+ RAM
 * Ollama installed with at least one model:
   * **Quick start**: `llama3.1:8b` (faster, lower resource usage)
   * **Better results**: `qwen2.5:14b` or larger models
@@ -72,7 +72,7 @@ All settings are optional - system works with defaults.
 ```bash
 ollama serve
 ollama pull llama3.1:8b
-ollama pull qwen2.5:14b  # Recommended for multi-agent
+ollama pull qwen2.5:14b
 ollama pull bge-large
 ```
 
@@ -218,7 +218,6 @@ Single A2A server exposes selected tools via HTTP for remote access:
 * **A2A_EXPOSED_TOOLS**: Control which tool categories are publicly accessible
 * **ML-Powered Plex Recommendations**: Random Forest model trained on your viewing history
 * **LangSearch Integration**: Automatic web search fallback
-* **Multi-Agent Orchestration**: Parallel task execution
 * **RAG System**: Vector-based semantic search
 * **Plex Integration**: Media library search and analysis
 * **Real-Time Monitoring**: WebSocket logs and system metrics
@@ -328,29 +327,6 @@ Get API key from https://langsearch.com
 LANGSEARCH_TOKEN=your_api_key_here
 ```
 
-## Multi-Agent System
-
-### Agents
-
-* **Orchestrator** - Plans and coordinates
-* **Researcher** - Gathers information (RAG, web, Plex)
-* **Coder** - Generates code
-* **Analyst** - Analyzes data
-* **Writer** - Creates content
-* **Planner** - Manages tasks
-
-### Automatic Triggers
-
-**Multi-Agent:**
-- Sequential: "then", "after that", "and then"
-- Multi-step: "research AND analyze"
-- Complex queries (30+ words)
-
-**Single-Agent:**
-- Simple questions
-- Direct tool calls
-- Quick lookups
-
 ## Usage
 
 ### CLI/Web UI Commands
@@ -365,9 +341,6 @@ These commands work in both the CLI and Web UI interfaces:
 :model                 View the current active model
 :model <model>         Use the model passed
 :models                List available models
-:multi on              Enable multi-agent mode
-:multi off             Disable multi-agent mode
-:multi status          Check multi-agent status
 :a2a on                Enable agent-to-agent mode
 :a2a off               Disable agent-to-agent mode
 :a2a status            Check A2A system status
@@ -407,11 +380,6 @@ These commands work in both the CLI and Web UI interfaces:
 ```
 > Who won the 2024 NBA championship?
 > What are the latest AI developments?
-```
-
-**Multi-agent:**
-```
-> Research Python frameworks, analyze their performance, and create a comparison
 ```
 
 ## Network Access
@@ -553,12 +521,6 @@ curl http://localhost:8010/tool-categories
 - Check logs for LangSearch activity
 - System falls back to LLM if unavailable
 
-**Multi-agent not activating:**
-```
-:multi status  # Check if enabled
-:multi on      # Enable multi-agent
-```
-
 **Web UI won't load:**
 - Check ports available: 8765, 8766, 9000, 8010
 - Verify firewall rules
@@ -582,13 +544,12 @@ mcp_a2a/
 │       └── skills/
 │           └── ml_recommendations.md  # ML skill documentation
 ├── a2a_server.py         # A2A HTTP server (exposes selected tools)
-├── client.py             # AI Agent with multi-server support
+├── client.py             # AI Agent
 ├── index.html            # Web UI
 ├── dashboard.html        # Performance metrics
 ├── client/
 │   ├── a2a_client.py     # A2A client
 │   ├── langsearch_client.py  # LangSearch web search
-│   ├── multi_agent.py    # Multi-agent orchestration
 │   ├── langgraph.py      # Single-agent execution
 │   └── websocket.py      # WebSocket server
 └── tools/                # Tool implementations

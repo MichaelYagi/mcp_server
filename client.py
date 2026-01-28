@@ -49,7 +49,8 @@ MAX_MESSAGE_HISTORY = int(os.getenv("MAX_MESSAGE_HISTORY", "20"))
 
 # Shared multi-agent state (mutable dict so changes propagate)
 MULTI_AGENT_STATE = {
-    "enabled": MULTI_AGENT_AVAILABLE and os.getenv("MULTI_AGENT_ENABLED", "false").lower() == "true"
+    # "enabled": MULTI_AGENT_AVAILABLE and os.getenv("MULTI_AGENT_ENABLED", "false").lower() == "true"
+    "enabled": True
 }
 
 A2A_STATE = {

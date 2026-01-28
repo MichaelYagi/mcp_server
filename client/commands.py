@@ -90,28 +90,31 @@ async def handle_multi_agent_commands(command: str, orchestrator, multi_agent_st
     Handle multi-agent commands
     Returns result string or None if command not handled
     """
-    if command == ":multi on":
-        if orchestrator:
-            multi_agent_state["enabled"] = True
-            return "✅ Multi-agent mode enabled\n   Complex queries will be broken down automatically"
-        return "❌ Multi-agent orchestrator not available"
+    # if command == ":multi on":
+    #     if orchestrator:
+    #         multi_agent_state["enabled"] = True
+    #         return "✅ Multi-agent mode enabled\n   Complex queries will be broken down automatically"
+    #     return "❌ Multi-agent orchestrator not available"
+    #
+    # elif command == ":multi off":
+    #     if orchestrator:
+    #         multi_agent_state["enabled"] = False
+    #         return "🤖 Multi-agent mode disabled\n   Using single-agent execution"
+    #     return "❌ Multi-agent orchestrator not available"
+    #
+    # elif command == ":multi status":
+    #     if not orchestrator:
+    #         return "❌ Multi-agent orchestrator not available"
+    #
+    #     if multi_agent_state["enabled"]:
+    #         return "Multi-agent mode: ENABLED\n   Complex queries are automatically distributed to specialized agents"
+    #     else:
+    #         return "Multi-agent mode: DISABLED\n   Use ':multi on' to enable"
+    #
+    # return None
 
-    elif command == ":multi off":
-        if orchestrator:
-            multi_agent_state["enabled"] = False
-            return "🤖 Multi-agent mode disabled\n   Using single-agent execution"
-        return "❌ Multi-agent orchestrator not available"
-
-    elif command == ":multi status":
-        if not orchestrator:
-            return "❌ Multi-agent orchestrator not available"
-
-        if multi_agent_state["enabled"]:
-            return "Multi-agent mode: ENABLED\n   Complex queries are automatically distributed to specialized agents"
-        else:
-            return "Multi-agent mode: DISABLED\n   Use ':multi on' to enable"
-
-    return None
+    multi_agent_state["enabled"] = True
+    return "✅ Multi-agent mode enabled\n   Complex queries will be broken down automatically"
 
 
 async def handle_gguf_commands(command: str):
