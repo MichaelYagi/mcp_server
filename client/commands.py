@@ -25,8 +25,7 @@ def get_commands_list():
         ":a2a on - Enable agent-to-agent mode",
         ":a2a off - Disable agent-to-agent mode",
         ":a2a status - Check A2A system status",
-        ":env - Show environment configuration",
-        ":clear history - Clear the chat history"
+        ":env - Show environment configuration"
     ]
 
 
@@ -652,10 +651,10 @@ async def handle_command(
 
         return (True, f"✅ Switched to model: {new_model}\n💬 Chat history cleared", new_agent, new_model)
 
-    # Clear history
-    if command == ":clear history":
-        conversation_state["messages"] = []
-        return (True, "✅ Chat history cleared", None, None)
+    # # Clear history
+    # if command == ":clear history":
+    #     conversation_state["messages"] = []
+    #     return (True, "✅ Chat history cleared", None, None)
 
     # Command not recognized
     return (False, None, None, None)

@@ -345,7 +345,6 @@ These commands work in both the CLI and Web UI interfaces:
 :a2a off               Disable agent-to-agent mode
 :a2a status            Check A2A system status
 :env                   Show environment configuration
-:clear history         Clear the chat history
 ```
 
 **Note:** The `:stop` command will gracefully halt most operations, but media ingestion will complete the current batch before stopping to prevent database corruption.

@@ -36,7 +36,6 @@
     Modifications:
     ├─ Add message (CLI/Web)
     ├─ Agent adds messages
-    ├─ :clear history (both)
     └─ History sync (Web → CLI)
     
     Persistence:

@@ -1138,7 +1138,7 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
 **Auto-recovery:** Reduced history from {current_msg_count} to {len(conversation_state['messages'])} messages.
 
 **Suggestions:**
-1. `:clear history` - Start completely fresh
+1. Start a new chat
 2. `:model qwen2.5:14b` - Switch to larger model (8K tokens)
 3. Keep conversations shorter with small models
 
@@ -1151,7 +1151,7 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
 **Problem:** Even a minimal conversation exceeds this model's {available if available else '?'} token limit.
 
 **Solutions:**
-1. `:clear history` - Start fresh
+1. Start a new chat session
 2. `:model qwen2.5:14b` - Switch to larger model (8K context)
 3. Use a model with more capacity
 
