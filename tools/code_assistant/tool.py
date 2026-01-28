@@ -326,19 +326,28 @@ def refactor_code_impl(file_path: str, refactor_type: str, target: str, preview:
 
 
 def generate_code_impl(
-    description: str,
-    language: str = "python",
-    style: str = "function",
-    include_tests: bool = False,
-    include_docstrings: bool = True,
-    framework: str = "",
-    output_file: str = ""
+        description: str,
+        language: str = "python",
+        style: str = "function",
+        include_tests: bool = False,
+        include_docstrings: bool = True,
+        framework: str = "",
+        output_file: str = ""
 ) -> str:
     """
-    Implementation of generate_code.
+    Generate code from natural language description using LLM.
 
-    Generates code from natural language description.
-    Uses structured prompts to ensure high-quality, best-practice code.
+    Args:
+        description: What the code should do
+        language: Programming language (python, javascript, typescript, rust, go)
+        style: Code style (function, class, module, script, api_endpoint)
+        include_tests: Generate unit tests
+        include_docstrings: Include documentation
+        framework: Optional framework (fastapi, flask, react, express)
+        output_file: Optional file path to save generated code
+
+    Returns:
+        JSON with generated code and metadata
     """
     if not description or not description.strip():
         return json.dumps({
@@ -346,101 +355,74 @@ def generate_code_impl(
             "status": "invalid_input"
         }, indent=2)
 
-    # Build language-specific prompt
-    language_lower = language.lower()
+    # Build comprehensive prompt
+    prompt = _build_code_generation_prompt(
+        description=description,
+        language=language,
+        style=style,
+        include_tests=include_tests,
+        include_docstrings=include_docstrings,
+        framework=framework
+    )
 
-    # Base prompt
-    prompt_parts = [
-        f"Generate {language} code following these specifications:",
-        f"\nTask: {description}",
-        f"\nStyle: {style}",
-        f"Language: {language}",
-    ]
+    # Generate code using LLM
+    try:
+        from langchain_ollama import ChatOllama
+        import os
 
-    # Add framework if specified
-    if framework:
-        prompt_parts.append(f"Framework: {framework}")
+        model_name = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+        llm = ChatOllama(
+            model=model_name,
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+            temperature=0.3
+        )
 
-    # Language-specific best practices
-    best_practices = {
-        "python": [
-            "- Follow PEP 8 style guide",
-            "- Use type hints for all parameters and returns",
-            "- No mutable default arguments (use None instead)",
-            "- Use 'except Exception as e:' not bare except",
-            "- Include comprehensive docstrings",
-            "- Use f-strings for formatting"
-        ],
-        "javascript": [
-            "- Use modern ES6+ syntax",
-            "- Use const/let, never var",
-            "- Use arrow functions appropriately",
-            "- Include JSDoc comments",
-            "- Handle promises with async/await",
-            "- Use destructuring when appropriate"
-        ],
-        "typescript": [
-            "- Use strict TypeScript with proper types",
-            "- Avoid 'any' type - use specific types or generics",
-            "- Define interfaces for object shapes",
-            "- Use enums for fixed sets of values",
-            "- Include proper return types",
-            "- Use readonly where applicable"
-        ],
-        "rust": [
-            "- Follow Rust idioms and conventions",
-            "- Use Result<T, E> for error handling",
-            "- Implement proper error types",
-            "- Use appropriate ownership patterns",
-            "- Include comprehensive doc comments (///)",
-            "- Use Option<T> for nullable values"
-        ],
-        "go": [
-            "- Follow Go conventions and idioms",
-            "- Use proper error handling (return error)",
-            "- Include package-level documentation",
-            "- Use defer for cleanup",
-            "- Keep functions focused and small",
-            "- Use meaningful variable names"
-        ]
-    }
+        response = llm.invoke(prompt)
+        generated_code = response.content
 
-    if language_lower in best_practices:
-        prompt_parts.append("\nBest practices to follow:")
-        prompt_parts.extend(best_practices[language_lower])
+        # Clean up markdown code blocks if present
+        if "```" in generated_code:
+            lines = generated_code.split('\n')
+            code_lines = []
+            in_code_block = False
 
-    # Add requirements
-    requirements = []
-    if include_docstrings:
-        requirements.append("- Include comprehensive documentation")
-    if include_tests:
-        requirements.append("- Include unit tests with edge cases")
+            for line in lines:
+                if line.startswith('```'):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    code_lines.append(line)
 
-    if requirements:
-        prompt_parts.append("\nAdditional requirements:")
-        prompt_parts.extend(requirements)
+            if code_lines:
+                generated_code = '\n'.join(code_lines)
 
-    prompt_parts.append("\nReturn ONLY the code, properly formatted and ready to use.")
+        generated_code = generated_code.strip()
+        status = "success"
+        note = "Generated using LLM"
 
-    full_prompt = "\n".join(prompt_parts)
+    except ImportError:
+        # LLM not available, use template
+        generated_code = _generate_template_code(description, language.lower(), style, framework)
+        status = "template"
+        note = "LLM not available. Install langchain-ollama for AI generation."
+    except Exception as e:
+        # LLM error, fallback to template
+        generated_code = _generate_template_code(description, language.lower(), style, framework)
+        status = "fallback_template"
+        note = f"LLM error: {str(e)}, using template"
 
-    # NOTE: This is where you'd integrate with your LLM
-    # For now, return a template showing what would be generated
-
-    # Generate example based on description keywords
-    generated_code = _generate_template_code(description, language_lower, style)
-
+    # Build result
     result = {
         "description": description,
         "language": language,
         "style": style,
         "framework": framework if framework else "none",
         "generated_code": generated_code,
-        "prompt_used": full_prompt,
+        "prompt_used": prompt,
         "includes_tests": include_tests,
         "includes_docs": include_docstrings,
-        "status": "success",
-        "note": "Integrate with LLM for actual code generation"
+        "status": status,
+        "note": note
     }
 
     # Save to file if requested
@@ -462,242 +444,318 @@ def generate_code_impl(
     return json.dumps(result, indent=2)
 
 
-def _generate_template_code(description: str, language: str, style: str) -> str:
-    """Generate template code based on description (placeholder for LLM)"""
+def _build_code_generation_prompt(
+        description: str,
+        language: str,
+        style: str,
+        include_tests: bool,
+        include_docstrings: bool,
+        framework: str
+) -> str:
+    """Build comprehensive prompt for code generation"""
 
-    # Simple keyword-based template generation
-    desc_lower = description.lower()
+    prompt_parts = [
+        f"Generate {language} code following these specifications:",
+        f"\n**Task:** {description}",
+        f"\n**Style:** {style}",
+        f"**Language:** {language}",
+    ]
 
+    if framework:
+        prompt_parts.append(f"**Framework:** {framework}")
+
+    # Language-specific best practices
+    best_practices = {
+        "python": [
+            "- Follow PEP 8 style guide",
+            "- Use type hints for all parameters and returns",
+            "- No mutable default arguments (use None instead)",
+            "- Use 'except Exception as e:' not bare except",
+            "- Include comprehensive docstrings" if include_docstrings else "- Skip docstrings",
+            "- Use f-strings for formatting",
+            "- Handle edge cases (None, empty, invalid input)"
+        ],
+        "javascript": [
+            "- Use modern ES6+ syntax",
+            "- Use const/let, never var",
+            "- Use arrow functions appropriately",
+            "- Include JSDoc comments" if include_docstrings else "- Skip JSDoc",
+            "- Handle promises with async/await",
+            "- Use destructuring when appropriate",
+            "- Validate inputs"
+        ],
+        "typescript": [
+            "- Use strict TypeScript with proper types",
+            "- Avoid 'any' type - use specific types or generics",
+            "- Define interfaces for object shapes",
+            "- Use enums for fixed sets of values",
+            "- Include proper return types",
+            "- Use readonly where applicable",
+            "- Handle null/undefined explicitly"
+        ],
+        "rust": [
+            "- Follow Rust idioms and conventions",
+            "- Use Result<T, E> for error handling",
+            "- Implement proper error types",
+            "- Use appropriate ownership patterns",
+            "- Include comprehensive doc comments (///)" if include_docstrings else "- Skip doc comments",
+            "- Use Option<T> for nullable values"
+        ],
+        "go": [
+            "- Follow Go conventions and idioms",
+            "- Use proper error handling (return error)",
+            "- Include package-level documentation" if include_docstrings else "- Skip documentation",
+            "- Use defer for cleanup",
+            "- Keep functions focused and small",
+            "- Use meaningful variable names"
+        ]
+    }
+
+    language_lower = language.lower()
+    if language_lower in best_practices:
+        prompt_parts.append("\n**Best practices to follow:**")
+        prompt_parts.extend(best_practices[language_lower])
+
+    # Add test requirements
+    if include_tests:
+        test_frameworks = {
+            "python": "pytest with fixtures and edge cases",
+            "javascript": "Jest with describe/it blocks",
+            "typescript": "Jest with proper typing",
+            "rust": "Built-in #[test] with assertions",
+            "go": "testing package with table-driven tests"
+        }
+
+        framework_instruction = test_frameworks.get(language_lower, "appropriate test framework")
+        prompt_parts.append(f"\n**Include unit tests using {framework_instruction}:**")
+        prompt_parts.append("- Test normal cases")
+        prompt_parts.append("- Test edge cases (empty, None, invalid)")
+        prompt_parts.append("- Test error conditions")
+
+    # Framework-specific instructions
+    if framework:
+        framework_instructions = {
+            "fastapi": [
+                "- Use FastAPI decorators (@app.get, @app.post)",
+                "- Use Pydantic models for request/response",
+                "- Include proper status codes",
+                "- Add error handling with HTTPException"
+            ],
+            "flask": [
+                "- Use Flask decorators (@app.route)",
+                "- Return JSON responses with jsonify",
+                "- Include error handlers",
+                "- Use request.get_json() for POST data"
+            ],
+            "react": [
+                "- Use functional components with hooks",
+                "- Use useState for state management",
+                "- Use useEffect for side effects",
+                "- Include prop validation with PropTypes"
+            ],
+            "express": [
+                "- Use Express middleware patterns",
+                "- Include proper error handling",
+                "- Use async/await for route handlers",
+                "- Return proper HTTP status codes"
+            ]
+        }
+
+        if framework.lower() in framework_instructions:
+            prompt_parts.append(f"\n**{framework} specific:**")
+            prompt_parts.extend(framework_instructions[framework.lower()])
+
+    prompt_parts.append(
+        "\n**IMPORTANT:** Return ONLY the code, properly formatted and ready to use. No markdown code blocks, no explanations before or after. Just the raw code.")
+
+    return "\n".join(prompt_parts)
+
+
+def _generate_template_code(description: str, language: str, style: str, framework: str = "") -> str:
+    """Generate template code as fallback (when LLM not available)"""
+
+    language = language.lower()
+    style = style.lower()
+
+    # Python templates
     if language == "python":
-        if "class" in style.lower() or "class" in desc_lower:
-            return f'''class GeneratedClass:
-    """
-    {description}
-    
-    This is a template. Integrate with LLM for actual generation.
-    """
-    
-    def __init__(self):
-        pass
-    
-    def method(self, param: str) -> str:
-        """Process the parameter."""
-        return param
-'''
-        else:
+        if style == "function":
             return f'''def generated_function(param: str) -> str:
     """
     {description}
-    
-    This is a template. Integrate with LLM for actual generation.
-    
+
     Args:
         param: Input parameter
-        
+
     Returns:
         Processed result
+
+    Examples:
+        >>> generated_function("test")
+        "test"
     """
+    # TODO: Implement actual logic
     return param
 '''
 
+        elif style == "class":
+            return f'''class GeneratedClass:
+    """
+    {description}
+    """
+
+    def __init__(self, value: str):
+        """
+        Initialize the class.
+
+        Args:
+            value: Initial value
+        """
+        self.value = value
+
+    def process(self, data: str) -> str:
+        """
+        Process the data.
+
+        Args:
+            data: Data to process
+
+        Returns:
+            Processed result
+        """
+        # TODO: Implement actual logic
+        return f"{self.value}: {data}"
+'''
+
+        elif style == "api_endpoint" and framework == "fastapi":
+            return f'''from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+
+app = FastAPI()
+
+class RequestModel(BaseModel):
+    """Request data model"""
+    name: str
+    value: str
+
+class ResponseModel(BaseModel):
+    """Response data model"""
+    result: str
+    status: str
+
+@app.post("/endpoint", response_model=ResponseModel)
+async def generated_endpoint(request: RequestModel):
+    """
+    {description}
+
+    Args:
+        request: Request data
+
+    Returns:
+        Response with result
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    try:
+        # TODO: Implement actual logic
+        result = f"Processed: {request.name} - {request.value}"
+        return ResponseModel(result=result, status="success")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+'''
+
+        elif style == "script":
+            return f'''#!/usr/bin/env python3
+"""
+{description}
+"""
+import sys
+from typing import List
+
+def main(args: List[str]):
+    """
+    Main entry point.
+
+    Args:
+        args: Command line arguments
+    """
+    # TODO: Implement actual logic
+    print(f"Running with args: {args}")
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+'''
+
+    # JavaScript/TypeScript templates
     elif language in ["javascript", "typescript"]:
-        if "react" in desc_lower or "component" in desc_lower:
-            return f'''import React from 'react';
+        if "react" in framework.lower() or "component" in style:
+            return f'''import React, {{ useState }} from 'react';
 
 /**
  * {description}
- * 
- * This is a template. Integrate with LLM for actual generation.
  */
 function GeneratedComponent() {{
+    const [state, setState] = useState('');
+
+    const handleChange = (e) => {{
+        setState(e.target.value);
+    }};
+
     return (
         <div>
             <h1>Generated Component</h1>
+            <input 
+                value={{state}} 
+                onChange={{handleChange}}
+                placeholder="Enter value"
+            />
+            <p>{{state}}</p>
         </div>
     );
 }}
 
 export default GeneratedComponent;
 '''
-        else:
+
+        elif style == "function":
             return f'''/**
  * {description}
  * 
- * This is a template. Integrate with LLM for actual generation.
+ * @param {{string}} param - Input parameter
+ * @returns {{string}} Processed result
  */
 function generatedFunction(param) {{
+    // TODO: Implement actual logic
     return param;
 }}
 
 export {{ generatedFunction }};
 '''
 
-    else:
-        return f'''// {description}
-// This is a template. Integrate with LLM for actual generation.
-
-// Generated code would go here
-'''
-
-
-def generate_code_impl(
-    description: str,
-    language: str = "python",
-    style: str = "function",
-    framework: str = "",
-    save_to: str = ""
-) -> str:
-    """
-    Generate code from natural language description.
-
-    Args:
-        description: What the code should do
-        language: Programming language (python, javascript, typescript, rust, go)
-        style: Code style (function, class, script, module, api_endpoint)
-        framework: Optional framework (fastapi, flask, react, express)
-        save_to: Optional file path to save generated code
-
-    Returns:
-        JSON with generated code
-    """
-    if not description or not description.strip():
-        return json.dumps({"error": "Description cannot be empty"}, indent=2)
-
-    # Build code generation prompt
-    prompt_parts = [
-        f"Generate {language} code that does the following:\n",
-        description,
-        f"\n\nRequirements:",
-        f"- Language: {language}",
-        f"- Style: {style}"
-    ]
-
-    if framework:
-        prompt_parts.append(f"- Framework: {framework}")
-
-    # Language-specific best practices
-    best_practices = {
-        "python": [
-            "- Follow PEP 8",
-            "- Use type hints",
-            "- Include docstrings",
-            "- No mutable defaults",
-            "- Use 'except Exception' not bare except"
-        ],
-        "javascript": [
-            "- Use ES6+ syntax",
-            "- Use const/let, not var",
-            "- Include JSDoc",
-            "- Handle errors properly"
-        ],
-        "typescript": [
-            "- Use strict types",
-            "- Avoid 'any'",
-            "- Include interfaces",
-            "- Proper error handling"
-        ]
-    }
-
-    if language in best_practices:
-        prompt_parts.extend(best_practices[language])
-
-    prompt_parts.append("\nReturn ONLY the code, no explanations or markdown.")
-
-    prompt = "\n".join(prompt_parts)
-
-    # For now, return template
-    # TODO: Integrate with LLM for actual generation
-    template_code = generate_code_template(description, language, style, framework)
-
-    result = {
-        "description": description,
-        "language": language,
-        "style": style,
-        "framework": framework or "none",
-        "generated_code": template_code,
-        "prompt": prompt,
-        "status": "template",
-        "note": "Integrate with LLM for actual code generation"
-    }
-
-    # Save if requested
-    if save_to:
-        try:
-            save_path = Path(save_to)
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, 'w') as f:
-                f.write(template_code)
-            result["saved_to"] = str(save_path)
-        except Exception as e:
-            result["save_error"] = str(e)
-
-    return json.dumps(result, indent=2)
-
-
-def generate_code_template(description: str, language: str, style: str, framework: str) -> str:
-    """Generate a code template based on parameters"""
-
-    if language == "python" and style == "function":
-        return f'''def generated_function():
-    """
-    {description}
-    
-    TODO: Implement this function
-    """
-    pass
-'''
-
-    elif language == "python" and style == "class":
-        return f'''class GeneratedClass:
-    """
-    {description}
-    """
-    
-    def __init__(self):
-        """Initialize the class"""
-        pass
-'''
-
-    elif language == "python" and style == "api_endpoint" and framework == "fastapi":
-        return f'''from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
-app = FastAPI()
-
-class Item(BaseModel):
-    """Data model"""
-    name: str
-    value: str
-
-@app.get("/endpoint")
-async def generated_endpoint():
-    """
-    {description}
-    """
-    return {{"message": "TODO: Implement endpoint"}}
-'''
-
-    elif language == "javascript" and style == "function":
-        return f'''/**
- * {description}
- */
-function generatedFunction() {{
-    // TODO: Implement this function
-}}
-'''
-
-    elif language == "typescript" and style == "class":
-        return f'''/**
+        elif style == "class":
+            return f'''/**
  * {description}
  */
 class GeneratedClass {{
-    constructor() {{
-        // TODO: Initialize
+    constructor(value) {{
+        this.value = value;
+    }}
+
+    process(data) {{
+        // TODO: Implement actual logic
+        return `${{this.value}}: ${{data}}`;
     }}
 }}
+
+export {{ GeneratedClass }};
 '''
 
+    # Generic fallback
     else:
         return f'''// {description}
+// Language: {language}
+// Style: {style}
 // TODO: Implement in {language} using {style} style
 '''
