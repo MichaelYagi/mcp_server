@@ -229,8 +229,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                     continue
 
                 # Clear conversation history when switching models
-                conversation_state["messages"] = []
-                logger.info("✅ Chat history cleared after model switch")
+                # conversation_state["messages"] = []
+                # logger.info("✅ Chat history cleared after model switch")
 
                 agent_ref[0] = new_agent
                 await websocket.send(json.dumps({

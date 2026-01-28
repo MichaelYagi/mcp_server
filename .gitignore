@@ -23,3 +23,4 @@ test.py
 /tools/rag/ingested_items.json
 /gguf_models.json
 /models/
+/sessions/
