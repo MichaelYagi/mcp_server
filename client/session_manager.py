@@ -178,6 +178,8 @@ class SessionManager:
 
         cursor.execute('DELETE FROM sessions WHERE id = ?', (session_id,))
 
+        cursor.execute('DELETE FROM messages WHERE session_id = ?', (session_id,))
+
         conn.commit()
         conn.close()
 
