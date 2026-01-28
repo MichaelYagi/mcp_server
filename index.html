@@ -1011,6 +1011,40 @@
 
         /* Mobile */
         @media (max-width: 768px) {
+            #header {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: stretch;
+            }
+
+            #header h1 {
+                font-size: 1.1rem;
+                text-align: center;
+            }
+
+            #topBar {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                justify-content: center;
+            }
+
+            #topBar button {
+                font-size: 0.85rem;
+                padding: 0.5rem 0.75rem;
+            }
+
+            #modelSelect {
+                font-size: 16px;
+                max-width: 100%;
+            }
+
+            .mode-toggle-container {
+                order: -1;
+                width: 100%;
+                justify-content: center;
+            }
+
             /* Sessions sidebar mobile */
             #sessionsSidebar.open {
                 width: 100%;
@@ -1089,7 +1123,7 @@
                 </label>
                 <span class="mode-status single" id="modeStatus">Single Agent</span>
             </div>
-            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chats</button>
+            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chat</button>
             <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
             <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
             <a href="dashboard.html" id="dashboardBtn">📈 Dashboard</a>
@@ -1104,7 +1138,7 @@
             </div>
 
             <div class="sessions-search-container">
-                <button class="new-session-btn" onclick="startNewSession()" title="New Session">+</button>
+                <button class="new-session-btn" onclick="startNewSession()" title="New Chat">+</button>
                 <input type="text" id="sessionSearch" placeholder="Search chats..." oninput="filterSessions()">
             </div>
 
@@ -1251,11 +1285,11 @@
 
             if (sessionsSidebarOpen) {
                 sidebar.classList.add('open');
-                button.textContent = '✖ Chats';
+                button.textContent = '✖ Chat';
                 loadSessions();
             } else {
                 sidebar.classList.remove('open');
-                button.textContent = '💬 Chats';
+                button.textContent = '💬 Chat';
                 openMenuSessionId = null;
                 editingSessionId = null;
             }
@@ -1318,15 +1352,6 @@
                     input.className = 'session-edit-input';
                     input.value = session.name || 'Untitled Session';
                     input.onclick = (e) => e.stopPropagation();
-                    input.onkeydown = (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            saveSessionRename(session.id, input.value);
-                        } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            cancelSessionEdit();
-                        }
-                    };
 
                     const actions = document.createElement('div');
                     actions.className = 'session-edit-actions';
@@ -1789,6 +1814,20 @@
             ws.send(JSON.stringify({ type: "subscribe_system_stats" }));
 
             connectLogWebSocket();
+
+            // Load last session if exists
+            const savedSessionId = localStorage.getItem(CURRENT_SESSION_KEY);
+            if (savedSessionId && savedSessionId !== '') {
+                const sessionId = parseInt(savedSessionId);
+                if (!isNaN(sessionId)) {
+                    // Request session list first
+                    ws.send(JSON.stringify({ type: "list_sessions" }));
+                    // Then load the specific session
+                    setTimeout(() => {
+                        selectSession(sessionId);
+                    }, 100);
+                }
+            }
         };
 
         ws.onmessage = (event) => {
