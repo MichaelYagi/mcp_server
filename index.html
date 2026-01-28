@@ -43,7 +43,6 @@
             gap: 1rem;
         }
 
-        /* Multi-Agent Toggle Styles */
         .mode-toggle-container {
             display: flex;
             align-items: center;
@@ -52,18 +51,6 @@
             padding: 0.4rem 0.8rem;
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .mode-toggle-label {
-            font-size: 0.85rem;
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-        }
-
-        .mode-icon {
-            font-size: 1rem;
         }
 
         .toggle-switch {
@@ -137,7 +124,7 @@
             height: 38px;
         }
 
-        #logToggle, #monitorToggle, #dashboardBtn {
+        #logToggle, #monitorToggle, #dashboardBtn, #chatToggle {
             padding: 0.5rem 1rem;
             color: white;
             border: none;
@@ -151,6 +138,14 @@
             justify-content: center;
             text-decoration: none;
             line-height: 1;
+        }
+
+        #chatToggle {
+            background: #e67e22;
+        }
+
+        #chatToggle:hover {
+            background: #d35400;
         }
 
         #logToggle {
@@ -175,6 +170,121 @@
 
         #dashboardBtn:hover {
             background: #229954;
+        }
+
+        /* Sessions Sidebar */
+        #sessionsSidebar {
+            width: 0;
+            background: #34495e;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+            overflow: hidden;
+            border-right: 1px solid #2c3e50;
+        }
+
+        #sessionsSidebar.open {
+            width: 300px;
+        }
+
+        .sessions-header {
+            background: #2c3e50;
+            padding: 1rem;
+            border-bottom: 2px solid #1a252f;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sessions-header h2 {
+            color: white;
+            font-size: 1rem;
+        }
+
+        .sessions-search-container {
+            padding: 1rem;
+            background: #2c3e50;
+            border-bottom: 1px solid #1a252f;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .new-session-btn {
+            padding: 0.5rem;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            min-width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .new-session-btn:hover {
+            background: #229954;
+        }
+
+        #sessionSearch {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #4a5f7f;
+            border-radius: 6px;
+            background: #2c3e50;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        #sessionSearch::placeholder {
+            color: #95a5a6;
+        }
+
+        #sessionSearch:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .session-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: #2c3e50;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        .session-item:hover {
+            background: #3d5a80;
+        }
+
+        .session-item.active {
+            background: #3498db;
+        }
+
+        .session-close-btn {
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
+            background: #7f8c8d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .session-close-btn:hover {
+            background: #95a5a6;
         }
 
         #mainContainer {
@@ -228,7 +338,6 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        /* Multi-agent badge on messages */
         .assistant.multi-agent {
             border-left: 4px solid #8b5cf6;
             background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
@@ -338,17 +447,6 @@
             background: #c0392b;
         }
 
-        @media (hover: none) and (pointer: coarse) {
-            button, .log-btn, .filter-btn {
-                min-height: 44px;
-                touch-action: manipulation;
-            }
-
-            #sendBtn, #stopBtn {
-                min-width: 80px;
-            }
-        }
-
         #status {
             font-style: italic;
             color: #555;
@@ -382,7 +480,6 @@
             color: #475569;
         }
 
-        /* ... rest of existing styles ... */
         #logPanel {
             width: 0;
             background: #1e1e1e;
@@ -735,304 +832,21 @@
             background: #cbd5e1;
         }
 
-        #systemMonitor::-webkit-scrollbar {
+        .sessions-list::-webkit-scrollbar {
             width: 8px;
         }
 
-        #systemMonitor::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
+        .sessions-list::-webkit-scrollbar-track {
+            background: #2c3e50;
         }
 
-        #systemMonitor::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
+        .sessions-list::-webkit-scrollbar-thumb {
+            background: #4a5f7f;
             border-radius: 4px;
         }
 
-        #systemMonitor::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.4);
-        }
-
-        .monitor-content::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .monitor-content::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .monitor-content::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-
-        .monitor-content::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        /* Tablet */
-        @media (max-width: 1024px) {
-            #logPanel.open {
-                width: 400px;
-            }
-
-            #systemMonitor.open {
-                width: 280px;
-            }
-
-            .mode-toggle-container {
-                /*order: -1;*/
-                width: 100%;
-            }
-        }
-
-        /* Mobile */
-        @media (max-width: 768px) {
-            #header {
-                padding: 0.75rem 1rem;
-                flex-direction: column;
-                gap: 0.75rem;
-            }
-
-            #header h1 {
-                font-size: 1.1rem;
-                width: 100%;
-            }
-
-            #topBar {
-                gap: 0.5rem;
-                width: 100%;
-                flex-wrap: wrap;
-            }
-
-            .mode-toggle-container {
-                width: 100%;
-                display: flex !important;
-                align-items: center;
-                justify-content: flex-start;
-                gap: 0.75rem;
-                padding: 0.3rem 0.3rem;
-                /*order: -1;*/
-                background: rgba(255, 255, 255, 0.15);
-            }
-
-            .toggle-switch {
-                flex-shrink: 0;
-                width: 50px;
-                height: 26px;
-            }
-
-            .mode-status {
-                font-size: 0.85rem;
-                min-width: auto;
-                flex: 1;
-            }
-
-            #modelSelect {
-                font-size: 16px;
-            }
-
-            #chatContainer {
-                padding: 1rem;
-                padding-bottom: max(1rem, calc(1rem + env(safe-area-inset-bottom) + 10px));
-            }
-
-            .msg {
-                max-width: 85%;
-                font-size: 0.9rem;
-                padding: 0.6rem 0.8rem;
-            }
-
-            #input {
-                height: 90px;
-                min-height: 90px;
-                font-size: 16px;
-                padding: 0.6rem;
-            }
-
-            #sendBtn, #stopBtn {
-                padding: 0.6rem 1rem;
-                font-size: 0.95rem;
-                min-height: 90px;
-            }
-
-            #status {
-                margin-top: 0.75rem;
-                margin-bottom: 1.5rem;
-                font-size: 1rem;
-            }
-
-            #logPanel.open, #systemMonitor.open {
-                width: 100%;
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                height: 100%;
-                z-index: 1000;
-                border-left: none;
-            }
-
-            #logHeader, .monitor-header {
-                padding: 0.75rem;
-            }
-
-            #logHeader h2, .monitor-header h2 {
-                font-size: 0.95rem;
-            }
-
-            .mobile-close {
-                display: inline-block;
-            }
-
-            #logHeader .mobile-close {
-                width: 100%;
-            }
-
-            .log-btn, .monitor-btn {
-                padding: 0.3rem 0.6rem;
-                font-size: 0.75rem;
-                width: 100%;
-            }
-
-            #logFilters {
-                padding: 0.5rem;
-                gap: 0.4rem;
-            }
-
-            .filter-btn {
-                padding: 0.3rem 0.6rem;
-                font-size: 0.7rem;
-            }
-
-            #logContainer {
-                font-size: 0.75rem;
-            }
-
-            .log-entry {
-                padding: 0.3rem 0.5rem;
-                gap: 0.4rem;
-            }
-
-            .log-timestamp, .log-level {
-                font-size: 0.7rem;
-            }
-
-            .log-level {
-                min-width: 50px;
-            }
-
-            .log-status {
-                font-size: 0.75rem;
-            }
-
-            .monitor-content {
-                padding: 0.75rem;
-            }
-
-            .stat-group {
-                padding: 10px;
-                margin-bottom: 10px;
-            }
-
-            .stat-value {
-                font-size: 20px;
-            }
-        }
-
-        /* Extra small phones */
-        @media (max-width: 480px) {
-            #header h1 {
-                font-size: 1rem;
-            }
-
-            #topBar {
-                flex-wrap: wrap;
-                gap: 0.4rem;
-            }
-
-            #topBar label {
-                display: none;
-            }
-
-            #modelSelect {
-                width: 100%;
-                font-size: 0.8rem;
-                height: 36px;
-                min-height: 36px;
-                order: 1 !important;
-            }
-
-            .mode-toggle-container {
-                flex: 1 1 calc(50% - 0.2rem);
-                min-width: 0;
-                display: flex !important;
-                visibility: visible !important;
-                order: 2 !important;
-            }
-
-            #dashboardBtn {
-                flex: 1 1 calc(50% - 0.2rem);
-                min-width: 0;
-                font-size: 0.8rem;
-                height: 36px;
-                min-height: 36px;
-                order: 2 !important;
-            }
-
-            #logToggle {
-                flex: 1 1 calc(50% - 0.2rem);
-                min-width: 0;
-                font-size: 0.8rem;
-                height: 36px;
-                min-height: 36px;
-                order: 3 !important;
-            }
-
-            #monitorToggle {
-                flex: 1 1 calc(50% - 0.2rem);
-                min-width: 0;
-                font-size: 0.8rem;
-                height: 36px;
-                min-height: 36px;
-                order: 3 !important;
-            }
-
-            .toggle-switch {
-                flex-shrink: 0 !important;
-            }
-
-            .mode-status {
-                flex: 1;
-                text-align: left;
-            }
-
-            .msg {
-                max-width: 90%;
-                font-size: 0.85rem;
-            }
-
-            #input {
-                height: 80px;
-                min-height: 80px;
-            }
-
-            #sendBtn, #stopBtn {
-                min-height: 80px;
-            }
-
-            .log-controls, .monitor-controls {
-                width: 100%;
-            }
-
-            #logFilters {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .filter-btn, .log-status {
-                width: 100%;
-            }
+        .sessions-list::-webkit-scrollbar-thumb:hover {
+            background: #5a6f8f;
         }
 
         .toggle-switch {
@@ -1051,7 +865,6 @@
             <select id="modelSelect">
                 <option value="llama3.1:8b">Llama 3.1 8B</option>
             </select>
-            <!-- Multi-Agent Toggle -->
             <div class="mode-toggle-container">
                 <label class="toggle-switch">
                     <input type="checkbox" id="multiAgentToggle" onchange="toggleMultiAgent()">
@@ -1059,6 +872,7 @@
                 </label>
                 <span class="mode-status single" id="modeStatus">Single Agent</span>
             </div>
+            <button id="chatToggle" onclick="toggleSessionsSidebar()">💬 Chat</button>
             <button id="monitorToggle" onclick="toggleSystemMonitor()">📊 System</button>
             <button id="logToggle" onclick="toggleLogPanel()">📋 Logs</button>
             <a href="dashboard.html" id="dashboardBtn">📈 Dashboard</a>
@@ -1066,6 +880,20 @@
     </div>
 
     <div id="mainContainer">
+        <div id="sessionsSidebar">
+            <div class="sessions-header">
+                <h2>💬 Sessions</h2>
+                <button class="session-close-btn" onclick="toggleSessionsSidebar()">Close</button>
+            </div>
+
+            <div class="sessions-search-container">
+                <button class="new-session-btn" onclick="startNewSession()" title="New Session">+</button>
+                <input type="text" id="sessionSearch" placeholder="Search sessions..." oninput="filterSessions()">
+            </div>
+
+            <div class="sessions-list" id="sessionsList"></div>
+        </div>
+
         <div id="chatContainer">
             <div id="chat"></div>
 
@@ -1113,7 +941,6 @@
             </div>
 
             <div class="monitor-content">
-                <!-- CPU Stats -->
                 <div class="stat-group">
                     <div class="stat-label">🖥️ CPU</div>
                     <div class="stat-value">
@@ -1128,7 +955,6 @@
                     </div>
                 </div>
 
-                <!-- GPU Stats -->
                 <div id="gpuStats" class="stat-group" style="display: none;">
                     <div class="stat-label">🎮 GPU</div>
                     <div class="stat-value">
@@ -1143,7 +969,6 @@
                     </div>
                 </div>
 
-                <!-- Memory Stats -->
                 <div class="stat-group">
                     <div class="stat-label">💾 Memory</div>
                     <div class="stat-value">
@@ -1165,8 +990,8 @@
         const status = document.getElementById("status");
         status.textContent = "Connecting…";
 
-        const STORAGE_KEY = "mcp_chat_history";
         const MULTI_AGENT_KEY = "mcp_multi_agent_enabled";
+        const CURRENT_SESSION_KEY = "mcp_current_session";
         const chat = document.getElementById("chat");
         const input = document.getElementById("input");
         const sendBtn = document.getElementById("sendBtn");
@@ -1178,25 +1003,97 @@
         const modeStatus = document.getElementById("modeStatus");
 
         let isProcessing = false;
-        let chatHistory = loadHistory();
         let thinkingIndicator = null;
         let multiAgentEnabled = loadMultiAgentSetting();
         let lastResponseWasMultiAgent = false;
-        let lastSentMessage = null; // Track our own sent messages
+        let lastSentMessage = null;
+        let currentSessionId = null;
+        let allSessions = [];
+        let sessionsSidebarOpen = false;
 
-        // Initialize toggle state
         multiAgentToggle.checked = multiAgentEnabled;
         updateModeStatus();
 
-        // Log panel state
         let logPanelOpen = false;
         let logAutoscroll = true;
         let logFilters = new Set(['DEBUG', 'INFO', 'WARNING', 'ERROR']);
         let logWs = null;
 
-        // System monitor state
         let systemMonitorOpen = false;
         let systemStatsEnabled = true;
+
+        // -------------------------
+        // Session Management
+        // -------------------------
+        function toggleSessionsSidebar() {
+            sessionsSidebarOpen = !sessionsSidebarOpen;
+            const sidebar = document.getElementById('sessionsSidebar');
+            const button = document.getElementById('chatToggle');
+
+            if (sessionsSidebarOpen) {
+                sidebar.classList.add('open');
+                button.textContent = '✖ Chat';
+                loadSessions();
+            } else {
+                sidebar.classList.remove('open');
+                button.textContent = '💬 Chat';
+            }
+        }
+
+        function startNewSession() {
+            currentSessionId = null;
+            localStorage.setItem(CURRENT_SESSION_KEY, '');
+            chat.innerHTML = "";
+
+            // Tell server to start new session
+            ws.send(JSON.stringify({
+                type: "new_session"
+            }));
+        }
+
+        function loadSessions() {
+            ws.send(JSON.stringify({
+                type: "list_sessions"
+            }));
+        }
+
+        function renderSessions(sessions) {
+            const list = document.getElementById('sessionsList');
+            list.innerHTML = '';
+
+            sessions.forEach(session => {
+                const item = document.createElement('div');
+                item.className = 'session-item';
+                if (session.id === currentSessionId) {
+                    item.classList.add('active');
+                }
+                item.textContent = session.name || 'Untitled Session';
+                item.onclick = () => selectSession(session.id);
+                list.appendChild(item);
+            });
+        }
+
+        function filterSessions() {
+            const searchTerm = document.getElementById('sessionSearch').value;
+            if (!searchTerm) {
+                renderSessions(allSessions);
+                return;
+            }
+
+            const regex = new RegExp(searchTerm, 'i');
+            const filtered = allSessions.filter(s => regex.test(s.name));
+            renderSessions(filtered);
+        }
+
+        function selectSession(sessionId) {
+            ws.send(JSON.stringify({
+                type: "load_session",
+                session_id: sessionId
+            }));
+
+            currentSessionId = sessionId;
+            localStorage.setItem(CURRENT_SESSION_KEY, sessionId);
+        }
 
         // -------------------------
         // Multi-Agent Functions
@@ -1206,14 +1103,11 @@
             saveMultiAgentSetting(multiAgentEnabled);
             updateModeStatus();
 
-            // Send command to server
             const command = multiAgentEnabled ? ":multi on" : ":multi off";
             ws.send(JSON.stringify({
                 type: "user",
                 text: command
             }));
-
-            console.log(`Multi-agent mode: ${multiAgentEnabled ? 'ENABLED' : 'DISABLED'}`);
         }
 
         function updateModeStatus() {
@@ -1247,45 +1141,16 @@
             }
         }
 
-        // -------------------------
-        // Stop Processing Function
-        // -------------------------
         function stopProcessing() {
-            // Functionality handled by :stop command
         }
 
-        // -------------------------
-        // Utility Functions
-        // -------------------------
-        function isMobile() {
-            return window.innerWidth <= 768;
-        }
-
-        function updateMobileCloseButton() {
-            const logCloseBtn = document.querySelector('#logPanel .mobile-close');
-            const monitorCloseBtn = document.querySelector('#systemMonitor .mobile-close');
-            const mobile = isMobile();
-
-            if (logCloseBtn) {
-                logCloseBtn.style.display = mobile ? 'inline-block' : 'none';
-            }
-            if (monitorCloseBtn) {
-                monitorCloseBtn.style.display = mobile ? 'inline-block' : 'none';
-            }
-        }
-
-        window.addEventListener('resize', updateMobileCloseButton);
-
-        // -------------------------
-        // Local storage helpers
-        // -------------------------
-        function saveHistory(messages) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-        }
-
-        function loadHistory() {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            return raw ? JSON.parse(raw) : [];
+        function resetControlButtons() {
+            isProcessing = false;
+            sendBtn.style.display = 'flex';
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
+            sendBtn.style.cursor = 'pointer';
+            updateStatusWithMode();
         }
 
         // -------------------------
@@ -1299,7 +1164,6 @@
             if (logPanelOpen) {
                 panel.classList.add('open');
                 button.textContent = '✖ Logs';
-                updateMobileCloseButton();
             } else {
                 panel.classList.remove('open');
                 button.textContent = '📋 Logs';
@@ -1309,8 +1173,6 @@
         function connectLogWebSocket() {
             const hostname = window.location.hostname || 'localhost';
             const wsUrl = `ws://${hostname}:8766`;
-
-            console.log(`Attempting to connect to log WebSocket: ${wsUrl}`);
 
             try {
                 logWs = new WebSocket(wsUrl);
@@ -1322,7 +1184,6 @@
 
             logWs.onopen = () => {
                 updateLogStatus(true);
-                console.log('✅ Log WebSocket connected successfully to', wsUrl);
             };
 
             logWs.onmessage = (event) => {
@@ -1333,15 +1194,12 @@
             };
 
             logWs.onerror = (error) => {
-                console.error('❌ Log WebSocket error:', error);
                 updateLogStatus(false);
             };
 
             logWs.onclose = (event) => {
-                console.log('Log WebSocket closed. Code:', event.code);
                 updateLogStatus(false);
                 if (logPanelOpen) {
-                    console.log('Reconnecting in 3 seconds...');
                     setTimeout(connectLogWebSocket, 3000);
                 }
             };
@@ -1440,7 +1298,6 @@
             if (systemMonitorOpen) {
                 panel.classList.add('open');
                 button.textContent = '✖ System';
-                updateMobileCloseButton();
             } else {
                 panel.classList.remove('open');
                 button.textContent = '📊 System';
@@ -1487,22 +1344,6 @@
             }
         }
 
-        function resetControlButtons() {
-            // 1. Reset Boolean State
-            isProcessing = false;
-
-            // 2. Toggle Button Visibility
-            sendBtn.style.display = 'flex';
-
-            // 3. Re-enable the Send Button
-            sendBtn.disabled = false;
-            sendBtn.style.opacity = '1';
-            sendBtn.style.cursor = 'pointer';
-
-            // 4. Update the UI Status text
-            updateStatusWithMode();
-        }
-
         // -------------------------
         // Thinking indicator
         // -------------------------
@@ -1532,7 +1373,6 @@
         // -------------------------
         const hostname = window.location.hostname || 'localhost';
         const ws = new WebSocket(`ws://${hostname}:8765`);
-        console.log('Connecting to:', `ws://${hostname}:8765`);
 
         ws.onerror = (event) => {
             status.textContent = "WebSocket error";
@@ -1549,11 +1389,9 @@
             sendBtn.disabled = false;
             updateStatusWithMode();
 
-            ws.send(JSON.stringify({ type: "history_request" }));
             ws.send(JSON.stringify({ type: "list_models" }));
             ws.send(JSON.stringify({ type: "subscribe_system_stats" }));
 
-            // Connect to log websocket
             connectLogWebSocket();
         };
 
@@ -1566,18 +1404,39 @@
             }
 
             if (data.type === 'subscribed' && data.subscription === 'system_stats') {
-                console.log('✅ Subscribed to system stats');
                 return;
             }
 
-            // ═══════════════════════════════════════════════════════════
-            // Handle user messages - Only skip our own echoes
-            // ═══════════════════════════════════════════════════════════
+            // Session management responses
+            if (data.type === 'sessions_list') {
+                allSessions = data.sessions;
+                renderSessions(allSessions);
+                return;
+            }
+
+            if (data.type === 'session_loaded') {
+                chat.innerHTML = "";
+                currentSessionId = data.session_id;
+                localStorage.setItem(CURRENT_SESSION_KEY, currentSessionId);
+                data.messages.forEach(msg => {
+                    addMessage(msg.text, msg.role, false, false);
+                });
+                renderSessions(allSessions);
+                return;
+            }
+
+            if (data.type === 'session_created') {
+                currentSessionId = data.session_id;
+                localStorage.setItem(CURRENT_SESSION_KEY, currentSessionId);
+                if (sessionsSidebarOpen) {
+                    loadSessions();
+                }
+                return;
+            }
+
             if (data.type === "user_message") {
-                // If we just sent this message, skip the echo
                 if (data.text === lastSentMessage) {
-                    lastSentMessage = null; // Clear it
-                    // But still update processing state
+                    lastSentMessage = null;
                     if (!data.text.startsWith(":")) {
                         showThinking();
                         isProcessing = true;
@@ -1587,8 +1446,7 @@
                     return;
                 }
 
-                // This is from CLI - show it!
-                addMessage(data.text, "user");
+                addMessage(data.text, "user", false);
                 showThinking();
                 isProcessing = true;
                 sendBtn.disabled = true;
@@ -1599,16 +1457,12 @@
             if (data.type === "assistant_message") {
                 if (data.text.includes("🛑") || data.text.toLowerCase().includes("interrupted") || data.text.toLowerCase().includes("stopped")) {
                     hideThinking();
-
-                    // stop message
-                    addMessage(data.text, "assistant", false);
-
+                    addMessage(data.text, "assistant", false, false);
                     isProcessing = false;
                     resetControlButtons();
                     return;
                 }
 
-                // Check if it's a multi-agent command response
                 if (data.text.includes("Multi-agent mode")) {
                     if (data.text.includes("ENABLED")) {
                         multiAgentToggle.checked = true;
@@ -1624,10 +1478,9 @@
 
                 hideThinking();
 
-                // Check if this was a multi-agent response
                 lastResponseWasMultiAgent = data.multi_agent === true;
 
-                addMessage(data.text, "assistant", lastResponseWasMultiAgent);
+                addMessage(data.text, "assistant", false, lastResponseWasMultiAgent);
                 isProcessing = false;
                 sendBtn.style.display = 'flex';
                 sendBtn.disabled = false;
@@ -1638,7 +1491,6 @@
             }
 
             if (data.type === "complete") {
-                // Server says processing is complete
                 hideThinking();
                 isProcessing = false;
                 sendBtn.disabled = false;
@@ -1654,48 +1506,10 @@
             }
 
             if (data.type === "model_switched") {
-                chatHistory = [];
-                saveHistory(chatHistory);
-                chat.innerHTML = "";
                 updateStatusWithMode();
                 sendBtn.disabled = false;
                 isProcessing = false;
                 hideThinking();
-                return;
-            }
-
-            if (data.type === "history_sync") {
-                const history = data.history;
-
-                if (history.length === 0) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    chat.innerHTML = "";
-                    chatHistory = [];
-                    isProcessing = false;
-                    sendBtn.disabled = false;
-                    sendBtn.style.display = 'flex';
-                    updateStatusWithMode();
-                    hideThinking();
-                } else {
-                    chatHistory = history;
-                    saveHistory(chatHistory);
-                    chat.innerHTML = "";
-                    chatHistory.forEach(msg => addMessage(msg.text, msg.role));
-
-                    if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
-                        isProcessing = true;
-                        sendBtn.style.display = 'flex';
-                        sendBtn.disabled = true;
-                        status.textContent = "Processing…";
-                        showThinking();
-                    } else {
-                        isProcessing = false;
-                        sendBtn.disabled = false;
-                        sendBtn.style.display = 'flex';
-                        updateStatusWithMode();
-                        hideThinking();
-                    }
-                }
                 return;
             }
 
@@ -1741,23 +1555,18 @@
         // Message formatting
         // -------------------------
         function formatMessage(text) {
-            // Step 1: Escape HTML
             text = text
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
 
-            // Step 2: Process code blocks FIRST (before other markdown)
-            // Multi-line code blocks with language
             text = text.replace(/```(\w+)?\n([\s\S]+?)```/g, function(match, lang, code) {
                 const language = lang || 'code';
                 return `<pre><code class="language-${language}">${code.trim()}</code></pre>`;
             });
 
-            // Inline code (single backticks)
             text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-            // Step 3: Process markdown formatting
             text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
             text = text.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
             text = text.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
@@ -1765,42 +1574,31 @@
             text = text.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
             text = text.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
 
-            // Bold and italic
             text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
             text = text.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
             text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
             text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-            // Only match underscores with word boundaries (not in variable_names)
-            // This requires spaces or punctuation on both sides
             text = text.replace(/(\s|^)_([^_\s]+?)_(\s|$|[.,!?;:])/g, '$1<em>$2</em>$3');
 
-            // Strikethrough
             text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
 
-            // Links
             text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
-            // Images
             text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;">');
 
-            // Blockquotes
             text = text.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
             text = text.replace(/(<\/blockquote>)\s*(<blockquote>)/g, '<br>');
 
-            // Horizontal rules
             text = text.replace(/^([-*_]){3,}$/gm, '<hr>');
 
-            // Lists
             text = text.replace(/- /g, '&bull; ');
             text = text.replace(/\* /g, '&bull; ');
 
-            // Paragraphs
             text = text.replace(/\n\s*\n/g, '<br><br>');
             text = text.replace(/\n/g, '<br>');
 
-            // Clean up
             text = text.replace(/<br>(<pre>)/g, '$1');
             text = text.replace(/(<\/pre>)<br>/g, '$1');
             text = text.replace(/<br>(<blockquote>)/g, '$1');
@@ -1816,10 +1614,8 @@
         // -------------------------
         // Add message to UI
         // -------------------------
-        function addMessage(text, role, isMultiAgent = false) {
-            // Filter out raw TextContent strings
+        function addMessage(text, role, saveToDb = false, isMultiAgent = false) {
             if (text.startsWith("[TextContent(")) {
-                console.log("Skipping raw ToolMessage:", text.substring(0, 50));
                 return;
             }
 
@@ -1830,7 +1626,6 @@
             const div = document.createElement("div");
             div.className = `msg ${role}`;
 
-            // Add multi-agent class if this was from multi-agent execution
             if (role === "assistant" && isMultiAgent) {
                 div.className += " multi-agent";
             }
@@ -1842,11 +1637,11 @@
             }
 
             chat.appendChild(div);
-
-            chatHistory.push({role, text});
-            saveHistory(chatHistory);
-
             chat.scrollTop = chat.scrollHeight;
+
+            if (saveToDb) {
+                saveMessageToSession(role, text);
+            }
         }
 
         // -------------------------
@@ -1881,22 +1676,12 @@
                 return;
             }
 
-            // ═══════════════════════════════════════════════════════════
-            // Show ALL user input in chat (including commands)
-            // ═══════════════════════════════════════════════════════════
-            addMessage(text, "user");
+            addMessage(text, "user", false);
 
-            // Clear input immediately
             input.value = "";
 
-            // ═══════════════════════════════════════════════════════════
-            // Track what we sent to avoid showing echo
-            // ═══════════════════════════════════════════════════════════
             lastSentMessage = text;
 
-            // ═══════════════════════════════════════════════════════════
-            // Special handling for :stop command
-            // ═══════════════════════════════════════════════════════════
             if (text === ":stop") {
                 ws.send(JSON.stringify({
                     type: "user",
@@ -1912,30 +1697,24 @@
                 return;
             }
 
-            // ═══════════════════════════════════════════════════════════
-            // Handle commands that return quickly (don't show thinking)
-            // ═══════════════════════════════════════════════════════════
             const quickCommands = [':commands', ':tools', ':model', ':models', ':stats',
                                   ':multi', ':a2a', ':health', ':metrics', ':clear history'];
 
             const isQuickCommand = quickCommands.some(cmd => text.startsWith(cmd));
 
-            // ═══════════════════════════════════════════════════════════
-            // Normal message/command handling
-            // ═══════════════════════════════════════════════════════════
             isProcessing = true;
             sendBtn.disabled = true;
             status.textContent = "Processing…";
             lastResponseWasMultiAgent = false;
 
-            // Only show thinking for non-command queries
             if (!isQuickCommand) {
                 showThinking();
             }
 
             ws.send(JSON.stringify({
                 type: "user",
-                text
+                text,
+                session_id: currentSessionId
             }));
         }
 
@@ -1947,29 +1726,9 @@
         input.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-
-                // Special handling for :stop command
-                if (input.value.trim() === ":stop") {
-                    // Send stop signal
-                    send();
-                } else {
-                    // Normal message
-                    send();
-                }
+                send();
             }
         });
-
-        // -------------------------
-        // Render existing messages
-        // -------------------------
-        chatHistory.forEach(msg => {
-            const div = document.createElement("div");
-            div.className = `msg ${msg.role}`;
-            div.innerHTML = formatMessage(msg.text);
-            chat.appendChild(div);
-        });
-
-        chat.scrollTop = chat.scrollHeight;
     </script>
 
 </body>

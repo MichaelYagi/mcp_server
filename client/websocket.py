@@ -5,6 +5,7 @@ Uses asyncio.create_task to handle operations in background
 
 import asyncio
 import json
+import os
 import socket
 import websockets
 
@@ -35,7 +36,7 @@ async def broadcast_message(message_type, data):
         )
 
 
-async def process_query(websocket, prompt, original_prompt, agent_ref, conversation_state, run_agent_fn, logger, tools):
+async def process_query(websocket, prompt, original_prompt, agent_ref, conversation_state, run_agent_fn, logger, tools, session_manager=None, session_id=None):
     """
     Process a query in the background (as a task)
     This allows the WebSocket to continue receiving messages (like :stop)
@@ -43,6 +44,8 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
     Args:
         prompt: Sanitized prompt for LLM processing
         original_prompt: Original unsanitized prompt for display
+        session_manager: Optional session manager for saving messages
+        session_id: Optional current session ID
     """
     try:
         print(f"\n> {original_prompt}")  # Show original in CLI
@@ -55,6 +58,27 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
         assistant_text = final_message.content
 
         print("\n" + assistant_text + "\n")
+
+        # Save assistant message to session
+        if session_manager and session_id:
+            MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
+            session_manager.add_message(session_id, "assistant", assistant_text, MAX_MESSAGE_HISTORY)
+
+            # Generate session name if this is first exchange
+            messages = session_manager.get_session_messages(session_id)
+            if len(messages) <= 2:  # First user + assistant message
+                try:
+                    # Get first user message for summarization
+                    first_user_msg = next((m for m in messages if m['role'] == 'user'), None)
+                    if first_user_msg:
+                        # Generate a simple name from first message (truncated)
+                        text = first_user_msg['text']
+                        # Take first sentence or 50 chars
+                        name = text.split('.')[0] if '.' in text else text
+                        name = name[:50] + '...' if len(name) > 50 else name
+                        session_manager.update_session_name(session_id, name)
+                except Exception as e:
+                    logger.error(f"Failed to generate session name: {e}")
 
         await broadcast_message("assistant_message", {
             "text": assistant_text,
@@ -81,7 +105,7 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
 
 async def websocket_handler(websocket, agent_ref, tools, logger, conversation_state, run_agent_fn,
                             models_module, model_name, system_prompt, orchestrator=None,
-                            multi_agent_state=None, a2a_state=None, mcp_agent=None):
+                            multi_agent_state=None, a2a_state=None, mcp_agent=None, session_manager=None):
     """
     Handle WebSocket connections with TRUE concurrent processing
 
@@ -91,6 +115,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
     # Track current background task (if any)
     current_task = None
+    current_session_id = None
 
     try:
         async for raw in websocket:
@@ -102,6 +127,33 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 data = {"type": "user", "text": raw}
+
+            # ═══════════════════════════════════════════════════════════
+            # SESSION MANAGEMENT
+            # ═══════════════════════════════════════════════════════════
+
+            if data.get("type") == "list_sessions" and session_manager:
+                sessions = session_manager.get_all_sessions()
+                await websocket.send(json.dumps({
+                    "type": "sessions_list",
+                    "sessions": sessions
+                }))
+                continue
+
+            if data.get("type") == "load_session" and session_manager:
+                session_id = data.get("session_id")
+                messages = session_manager.get_session_messages(session_id)
+                current_session_id = session_id
+                await websocket.send(json.dumps({
+                    "type": "session_loaded",
+                    "session_id": session_id,
+                    "messages": messages
+                }))
+                continue
+
+            if data.get("type") == "new_session":
+                current_session_id = None
+                continue
 
             # ═══════════════════════════════════════════════════════════
             # IMMEDIATE STOP HANDLING - Always processed immediately
@@ -246,6 +298,10 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 original_prompt = data.get("text")  # Keep original for display
                 prompt = original_prompt  # Will be sanitized below
 
+                # Get session_id from message if provided
+                if data.get("session_id"):
+                    current_session_id = data.get("session_id")
+
                 # Sanitize user input to prevent parsing issues
                 from client.input_sanitizer import sanitize_user_input, sanitize_command
 
@@ -304,6 +360,20 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                         }))
                         continue
 
+                # Save user message to session
+                if session_manager and not prompt.startswith(":"):
+                    if not current_session_id:
+                        # Create new session on first message
+                        current_session_id = session_manager.create_session()
+                        await websocket.send(json.dumps({
+                            "type": "session_created",
+                            "session_id": current_session_id
+                        }))
+
+                    # Save user message
+                    MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
+                    session_manager.add_message(current_session_id, "user", prompt, MAX_MESSAGE_HISTORY)
+
                 # ═══════════════════════════════════════════════════════════
                 # Normal query - Run as BACKGROUND TASK
                 # This allows WebSocket to continue processing messages (like :stop)
@@ -317,7 +387,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 # Create background task for query processing
                 current_task = asyncio.create_task(
                     process_query(websocket, prompt, original_prompt, agent_ref, conversation_state,
-                                run_agent_fn, logger, tools)
+                                run_agent_fn, logger, tools, session_manager, current_session_id)
                 )
 
                 # Don't await - let it run in background!
@@ -334,8 +404,8 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
 
 async def start_websocket_server(agent, tools, logger, conversation_state, run_agent_fn, models_module,
                                  model_name, system_prompt, orchestrator=None, multi_agent_state=None,
-                                 a2a_state=None, mcp_agent=None, host="0.0.0.0", port=8765):
-    """Start the WebSocket server for chat (WITH MULTI-AGENT STATE + A2A)"""
+                                 a2a_state=None, mcp_agent=None, session_manager=None, host="0.0.0.0", port=8765):
+    """Start the WebSocket server for chat (WITH MULTI-AGENT STATE + A2A + SESSIONS)"""
 
     async def handler(websocket):
         try:
@@ -345,7 +415,8 @@ async def start_websocket_server(agent, tools, logger, conversation_state, run_a
                 orchestrator=orchestrator,
                 multi_agent_state=multi_agent_state,
                 a2a_state=a2a_state,
-                mcp_agent=mcp_agent
+                mcp_agent=mcp_agent,
+                session_manager=session_manager
             )
         except websockets.exceptions.ConnectionClosed:
             pass

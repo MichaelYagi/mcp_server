@@ -345,6 +345,10 @@ async def main():
     mcp_agent.debug = True
     await mcp_agent.initialize()
 
+    from client.session_manager import SessionManager
+    session_manager = SessionManager()
+    logger.info("💾 Session manager initialized")
+
     tools = mcp_agent._tools
     logger.info(f"🛠️  Local MCP tools loaded: {len(tools)}")
 
@@ -736,6 +740,7 @@ async def main():
         multi_agent_state=MULTI_AGENT_STATE,
         a2a_state=A2A_STATE,
         mcp_agent=mcp_agent,
+        session_manager=session_manager,
         host="0.0.0.0",
         port=8765
     )
