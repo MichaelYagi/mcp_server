@@ -25,6 +25,7 @@ from mcp.server.fastmcp import FastMCP
 from tools.plex.semantic_media_search import semantic_media_search
 from tools.plex.scene_locator import scene_locator
 from tools.plex.ingest import ingest_next_batch, ingest_batch_parallel_conservative, find_unprocessed_items, process_item_async
+from servers.plex.ml_recommender import get_recommender
 
 LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
