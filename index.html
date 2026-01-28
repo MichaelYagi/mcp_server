@@ -1246,11 +1246,11 @@
         const chat = document.getElementById("chat");
         const input = document.getElementById("input");
         const sendBtn = document.getElementById("sendBtn");
-        const stopBtn = document.getElementById("stopBtn");
+        // const stopBtn = document.getElementById("stopBtn");
         sendBtn.disabled = true;
 
         const modelSelect = document.getElementById("modelSelect");
-        const multiAgentToggle = document.getElementById("multiAgentToggle");
+        // const multiAgentToggle = document.getElementById("multiAgentToggle");
         const modeStatus = document.getElementById("modeStatus");
 
         let isProcessing = false;
@@ -1264,8 +1264,8 @@
         let openMenuSessionId = null;
         let editingSessionId = null;
 
-        multiAgentToggle.checked = multiAgentEnabled;
-        updateModeStatus();
+        // multiAgentToggle.checked = multiAgentEnabled;
+        // updateModeStatus();
 
         let logPanelOpen = false;
         let logAutoscroll = true;
@@ -1519,27 +1519,27 @@
         // -------------------------
         // Multi-Agent Functions
         // -------------------------
-        function toggleMultiAgent() {
-            multiAgentEnabled = multiAgentToggle.checked;
-            saveMultiAgentSetting(multiAgentEnabled);
-            updateModeStatus();
+        // function toggleMultiAgent() {
+        //     multiAgentEnabled = multiAgentToggle.checked;
+        //     saveMultiAgentSetting(multiAgentEnabled);
+        //     updateModeStatus();
+        //
+        //     const command = multiAgentEnabled ? ":multi on" : ":multi off";
+        //     ws.send(JSON.stringify({
+        //         type: "user",
+        //         text: command
+        //     }));
+        // }
 
-            const command = multiAgentEnabled ? ":multi on" : ":multi off";
-            ws.send(JSON.stringify({
-                type: "user",
-                text: command
-            }));
-        }
-
-        function updateModeStatus() {
-            if (multiAgentEnabled) {
-                modeStatus.textContent = "Multi-Agent";
-                modeStatus.className = "mode-status multi";
-            } else {
-                modeStatus.textContent = "Single Agent";
-                modeStatus.className = "mode-status single";
-            }
-        }
+        // function updateModeStatus() {
+        //     if (multiAgentEnabled) {
+        //         modeStatus.textContent = "Multi-Agent";
+        //         modeStatus.className = "mode-status multi";
+        //     } else {
+        //         modeStatus.textContent = "Single Agent";
+        //         modeStatus.className = "mode-status single";
+        //     }
+        // }
 
         function loadMultiAgentSetting() {
             const saved = localStorage.getItem(MULTI_AGENT_KEY);
@@ -1924,18 +1924,18 @@
                     return;
                 }
 
-                if (data.text.includes("Multi-agent mode")) {
-                    if (data.text.includes("ENABLED")) {
-                        multiAgentToggle.checked = true;
-                        multiAgentEnabled = true;
-                        saveMultiAgentSetting(true);
-                    } else if (data.text.includes("DISABLED")) {
-                        multiAgentToggle.checked = false;
-                        multiAgentEnabled = false;
-                        saveMultiAgentSetting(false);
-                    }
-                    updateModeStatus();
-                }
+                // if (data.text.includes("Multi-agent mode")) {
+                //     if (data.text.includes("ENABLED")) {
+                //         multiAgentToggle.checked = true;
+                //         multiAgentEnabled = true;
+                //         saveMultiAgentSetting(true);
+                //     } else if (data.text.includes("DISABLED")) {
+                //         multiAgentToggle.checked = false;
+                //         multiAgentEnabled = false;
+                //         saveMultiAgentSetting(false);
+                //     }
+                //     updateModeStatus();
+                // }
 
                 hideThinking();
 
