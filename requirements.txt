@@ -25,3 +25,5 @@ tzdata
 a2a-sdk
 fastapi
 uvicorn
+ruff
+black
