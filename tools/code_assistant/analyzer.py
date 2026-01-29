@@ -250,7 +250,7 @@ def run_linter(file_path: str, lang_config: LanguageConfig) -> Dict[str, Any]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             cwd=Path(file_path).parent
         )
 

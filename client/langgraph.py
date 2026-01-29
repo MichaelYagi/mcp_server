@@ -592,7 +592,7 @@ def create_langgraph_agent(llm_with_tools, tools):
             try:
                 response = await asyncio.wait_for(
                     base_llm.ainvoke(messages),
-                    timeout=30.0
+                    timeout=60.0
                 )
                 duration = time.time() - start_time
                 if METRICS_AVAILABLE:
@@ -610,10 +610,10 @@ def create_langgraph_agent(llm_with_tools, tools):
                 if METRICS_AVAILABLE:
                     metrics["llm_errors"] += 1
                     metrics["llm_times"].append((time.time(), duration))
-                logger.error(f"⏱️ LLM call timed out after 30s")
+                logger.error(f"⏱️ LLM call timed out after 60s")
 
                 # Return helpful timeout message instead of crashing
-                timeout_message = AIMessage(content="""⏱️ Request timed out after 30 seconds.
+                timeout_message = AIMessage(content="""⏱️ Request timed out after 60 seconds.
 
                 **The model is taking too long to respond.** This usually happens when:
                 - The model is processing too many tools (58 tools detected)
@@ -792,10 +792,10 @@ def create_langgraph_agent(llm_with_tools, tools):
 
         start_time = time.time()
         try:
-            # Add 30 second timeout to prevent hanging
+            # Add 60 second timeout to prevent hanging
             response = await asyncio.wait_for(
                 llm_to_use.ainvoke(messages),
-                timeout=30.0
+                timeout=60.0
             )
             duration = time.time() - start_time
 
@@ -832,13 +832,13 @@ Please answer the question using these search results."""
                         logger.warning("⚠️ LangSearch failed - using base LLM")
                         response = await asyncio.wait_for(
                             base_llm.ainvoke(messages),
-                            timeout=30.0
+                            timeout=60.0
                         )
                 else:
                     logger.warning("⚠️ LangSearch unavailable - using base LLM")
                     response = await asyncio.wait_for(
                         base_llm.ainvoke(messages),
-                        timeout=30.0
+                        timeout=60.0
                     )
 
             elif not has_tool_calls and has_content:
@@ -880,12 +880,12 @@ Please provide an updated answer using these search results."""
             if METRICS_AVAILABLE:
                 metrics["llm_errors"] += 1
                 metrics["llm_times"].append((time.time(), duration))
-            logger.error(f"⏱️ LLM call timed out after 30s")
+            logger.error(f"⏱️ LLM call timed out after 60s")
 
             # Return helpful timeout message instead of crashing
             return {
                 "messages": messages + [AIMessage(
-                    content="⏱️ Request timed out after 30 seconds. Please try:\n\n1. Rephrasing your question\n2. Breaking it into smaller parts\n3. Using a simpler query")],
+                    content="⏱️ Request timed out after 60 seconds. Please try:\n\n1. Rephrasing your question\n2. Breaking it into smaller parts\n3. Using a simpler query")],
                 "tools": state.get("tools", {}),
                 "llm": state.get("llm"),
                 "ingest_completed": state.get("ingest_completed", False),

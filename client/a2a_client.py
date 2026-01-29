@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 
 
 class A2AClient:
-    def __init__(self, base_url: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, timeout: float = 60.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.rpc_url = None

@@ -45,7 +45,7 @@ class MessageEnvelope:
     metadata: Dict[str, Any] = field(default_factory=dict)
     retry_count: int = 0
     max_retries: int = 3
-    timeout: float = 30.0
+    timeout: float = 60.0
 
     def __lt__(self, other):
         """For priority queue ordering"""

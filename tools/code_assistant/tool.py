@@ -257,7 +257,7 @@ def fix_code_file_impl(file_path: str, auto_fix: bool, backup: bool, dry_run: bo
     if lang.formatter_command and not dry_run and fixes_applied:
         try:
             cmd = [arg.format(file=file_path) for arg in lang.formatter_command]
-            result = subprocess.run(cmd, capture_output=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, timeout=60)
             formatted = result.returncode == 0
         except:
             pass

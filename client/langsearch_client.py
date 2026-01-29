@@ -26,7 +26,7 @@ class LangSearchClient:
         """Check if LangSearch is configured and available"""
         return bool(self.api_key)
 
-    async def search(self, query: str, timeout: float = 30.0) -> Dict[str, Any]:
+    async def search(self, query: str, timeout: float = 60.0) -> Dict[str, Any]:
         """
         Perform a web search using LangSearch API.
 
