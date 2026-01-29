@@ -54,6 +54,20 @@ SUPPORTED_LANGUAGES = {
         linter_command=["eslint", "{file}"],
         formatter_command=["prettier", "--write", "{file}"]
     ),
+    "java": LanguageConfig(
+        name="java",
+        extensions=[".java"],
+        comment_single="//",
+        linter_command=["checkstyle", "-c", "/google_checks.xml", "{file}"],
+        formatter_command=["google-java-format", "--replace", "{file}"]
+    ),
+    "kotlin": LanguageConfig(
+        name="kotlin",
+        extensions=[".kt", ".kts"],
+        comment_single="//",
+        linter_command=["ktlint", "{file}"],
+        formatter_command=["ktlint", "-F", "{file}"]
+    ),
 }
 
 
@@ -174,6 +188,199 @@ class PythonBugDetector:
 
 
 # ===========================================================================
+# JAVA BUG DETECTOR
+# ===========================================================================
+
+class JavaBugDetector:
+    """Simple Java code analyzer using regex patterns"""
+
+    @staticmethod
+    def analyze(file_path: str) -> List[Dict[str, Any]]:
+        issues = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            for i, line in enumerate(lines, 1):
+                line_stripped = line.strip()
+
+                # Check for missing @Override
+                if JavaBugDetector._is_override_method(line_stripped, i, lines):
+                    prev_line = lines[i-2].strip() if i > 1 else ""
+                    if "@Override" not in prev_line:
+                        issues.append({
+                            "severity": "warning",
+                            "type": "MissingOverride",
+                            "line": i,
+                            "message": "Method appears to override but missing @Override annotation",
+                            "suggestion": "Add @Override annotation above method"
+                        })
+
+                # Check for inefficient string concatenation in loops
+                if "+=" in line and "String" in "".join(lines[max(0, i-5):i]):
+                    issues.append({
+                        "severity": "warning",
+                        "type": "InefficientStringConcat",
+                        "line": i,
+                        "message": "String concatenation in loop is inefficient",
+                        "suggestion": "Use StringBuilder instead"
+                    })
+
+                # Check for potential null pointer dereference
+                if "." in line and "if" not in line and "null" in "".join(lines[max(0, i-3):i]):
+                    # Simple heuristic - could be improved
+                    if not any(check in line for check in ["!=", "==", "?"]):
+                        issues.append({
+                            "severity": "info",
+                            "type": "PotentialNullPointer",
+                            "line": i,
+                            "message": "Potential null pointer dereference",
+                            "suggestion": "Add null check before dereferencing"
+                        })
+
+                # Check for empty catch blocks
+                if line_stripped == "} catch" or line_stripped.startswith("} catch("):
+                    # Look ahead for empty catch
+                    next_idx = i
+                    while next_idx < len(lines):
+                        next_line = lines[next_idx].strip()
+                        if next_line == "{":
+                            if next_idx + 1 < len(lines) and lines[next_idx + 1].strip() == "}":
+                                issues.append({
+                                    "severity": "warning",
+                                    "type": "EmptyCatchBlock",
+                                    "line": i,
+                                    "message": "Empty catch block swallows exceptions",
+                                    "suggestion": "Add logging or re-throw exception"
+                                })
+                            break
+                        next_idx += 1
+
+        except Exception as e:
+            logger.error(f"Java analysis failed: {e}")
+            issues.append({
+                "severity": "error",
+                "type": "AnalysisError",
+                "line": 0,
+                "message": f"Failed to analyze: {str(e)}"
+            })
+
+        return issues
+
+    @staticmethod
+    def _is_override_method(line: str, line_num: int, lines: List[str]) -> bool:
+        """Check if this looks like a method that overrides"""
+        # Common override patterns
+        override_patterns = [
+            r'public\s+\w+\s+toString\s*\(',
+            r'public\s+boolean\s+equals\s*\(',
+            r'public\s+int\s+hashCode\s*\(',
+            r'public\s+int\s+compareTo\s*\(',
+        ]
+
+        for pattern in override_patterns:
+            if re.search(pattern, line):
+                return True
+        return False
+
+
+# ===========================================================================
+# KOTLIN BUG DETECTOR
+# ===========================================================================
+
+class KotlinBugDetector:
+    """Simple Kotlin code analyzer using regex patterns"""
+
+    @staticmethod
+    def analyze(file_path: str) -> List[Dict[str, Any]]:
+        issues = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            for i, line in enumerate(lines, 1):
+                line_stripped = line.strip()
+
+                # Check for !! (force unwrap) operator
+                if "!!" in line_stripped:
+                    issues.append({
+                        "severity": "warning",
+                        "type": "ForceUnwrap",
+                        "line": i,
+                        "message": "Using !! (force unwrap) can throw NullPointerException",
+                        "suggestion": "Use safe call (?.) or let/also/apply instead"
+                    })
+
+                # Check for mutable collections when immutable would work
+                if "mutableListOf" in line_stripped or "mutableMapOf" in line_stripped:
+                    # Check if it's reassigned in next few lines
+                    is_modified = False
+                    for j in range(i, min(i+10, len(lines))):
+                        if ".add(" in lines[j] or ".put(" in lines[j] or ".remove(" in lines[j]:
+                            is_modified = True
+                            break
+
+                    if not is_modified:
+                        issues.append({
+                            "severity": "info",
+                            "type": "UnnecessaryMutable",
+                            "line": i,
+                            "message": "Using mutable collection but appears to be immutable",
+                            "suggestion": "Use listOf() or mapOf() instead"
+                        })
+
+                # Check for Java-style iteration
+                if re.search(r'for\s*\(\s*\w+\s+\w+\s*:\s*\w+\s*\)', line_stripped):
+                    issues.append({
+                        "severity": "info",
+                        "type": "NonIdiomatic",
+                        "line": i,
+                        "message": "Using Java-style for loop",
+                        "suggestion": "Use Kotlin's for (item in collection) syntax"
+                    })
+
+                # Check for explicit type when type inference works
+                if re.search(r'val\s+\w+\s*:\s*\w+\s*=\s*\w+\(', line_stripped):
+                    issues.append({
+                        "severity": "info",
+                        "type": "RedundantTypeAnnotation",
+                        "line": i,
+                        "message": "Explicit type annotation may be redundant",
+                        "suggestion": "Let type inference work: val name = value()"
+                    })
+
+                # Check for empty when expression
+                if line_stripped.startswith("when") and "{" in line_stripped:
+                    next_idx = i
+                    while next_idx < len(lines):
+                        next_line = lines[next_idx].strip()
+                        if next_line == "}":
+                            # Check if empty
+                            content_lines = [lines[j].strip() for j in range(i, next_idx)]
+                            if not any(line for line in content_lines if "->" in line):
+                                issues.append({
+                                    "severity": "warning",
+                                    "type": "EmptyWhen",
+                                    "line": i,
+                                    "message": "Empty when expression",
+                                    "suggestion": "Add cases or remove when"
+                                })
+                            break
+                        next_idx += 1
+
+        except Exception as e:
+            logger.error(f"Kotlin analysis failed: {e}")
+            issues.append({
+                "severity": "error",
+                "type": "AnalysisError",
+                "line": 0,
+                "message": f"Failed to analyze: {str(e)}"
+            })
+
+        return issues
+
+
+# ===========================================================================
 # MAIN IMPLEMENTATION FUNCTIONS
 # ===========================================================================
 
@@ -186,8 +393,13 @@ def analyze_code_file_impl(file_path: str, language: str, deep_analysis: bool) -
     if not lang:
         return json.dumps({"error": "Could not detect language"}, indent=2)
 
+    # Run language-specific analysis
     if lang.name == "python" and deep_analysis:
         issues = PythonBugDetector.analyze(file_path)
+    elif lang.name == "java":
+        issues = JavaBugDetector.analyze(file_path)
+    elif lang.name == "kotlin":
+        issues = KotlinBugDetector.analyze(file_path)
     else:
         issues = []
 
@@ -302,6 +514,40 @@ def suggest_improvements_impl(file_path: str, context: str, focus: str) -> str:
                 "priority": "high"
             })
 
+    elif lang.name == "java":
+        if 'System.out.println' in code:
+            suggestions.append({
+                "type": "best_practice",
+                "message": "Use proper logging framework instead of System.out.println",
+                "reason": "Logging frameworks provide better control and production debugging",
+                "priority": "medium"
+            })
+
+        if '+=' in code and 'String' in code:
+            suggestions.append({
+                "type": "performance",
+                "message": "Consider using StringBuilder for string concatenation",
+                "reason": "String concatenation with + creates many temporary objects",
+                "priority": "medium"
+            })
+
+    elif lang.name == "kotlin":
+        if '!!' in code:
+            suggestions.append({
+                "type": "best_practice",
+                "message": "Minimize use of !! (force unwrap) operator",
+                "reason": "Can throw NullPointerException at runtime",
+                "priority": "high"
+            })
+
+        if 'mutableListOf' in code or 'mutableMapOf' in code:
+            suggestions.append({
+                "type": "best_practice",
+                "message": "Prefer immutable collections when possible",
+                "reason": "Immutable collections are safer and more thread-friendly",
+                "priority": "low"
+            })
+
     return json.dumps({
         "file": file_path,
         "language": lang.name,
@@ -339,11 +585,11 @@ def generate_code_impl(
 
     Args:
         description: What the code should do
-        language: Programming language (python, javascript, typescript, rust, go)
+        language: Programming language (python, javascript, typescript, java, kotlin, rust, go)
         style: Code style (function, class, module, script, api_endpoint)
         include_tests: Generate unit tests
         include_docstrings: Include documentation
-        framework: Optional framework (fastapi, flask, react, express)
+        framework: Optional framework (fastapi, flask, react, spring, ktor, express)
         output_file: Optional file path to save generated code
 
     Returns:
@@ -493,6 +739,28 @@ def _build_code_generation_prompt(
             "- Use readonly where applicable",
             "- Handle null/undefined explicitly"
         ],
+        "java": [
+            "- Follow Java naming conventions (CamelCase for classes, camelCase for methods)",
+            "- Use proper access modifiers (private, protected, public)",
+            "- Include JavaDoc comments for public methods" if include_docstrings else "- Skip JavaDoc",
+            "- Use @Override annotation for overridden methods",
+            "- Prefer immutable objects when possible",
+            "- Use StringBuilder for string concatenation in loops",
+            "- Handle exceptions properly with try-catch",
+            "- Close resources with try-with-resources",
+            "- Use Optional<T> for nullable return types"
+        ],
+        "kotlin": [
+            "- Follow Kotlin conventions (camelCase, no semicolons)",
+            "- Use val for immutable variables, var for mutable",
+            "- Use data classes for POJOs",
+            "- Prefer nullable types (?) over platform types (!!)",
+            "- Use safe call operator (?.) and elvis operator (?:)",
+            "- Include KDoc comments for public APIs" if include_docstrings else "- Skip KDoc",
+            "- Use when instead of switch",
+            "- Leverage extension functions when appropriate",
+            "- Use scope functions (let, apply, run, also, with) idiomatically"
+        ],
         "rust": [
             "- Follow Rust idioms and conventions",
             "- Use Result<T, E> for error handling",
@@ -522,6 +790,8 @@ def _build_code_generation_prompt(
             "python": "pytest with fixtures and edge cases",
             "javascript": "Jest with describe/it blocks",
             "typescript": "Jest with proper typing",
+            "java": "JUnit 5 with @Test annotations and assertions",
+            "kotlin": "Kotest with StringSpec or FunSpec style",
             "rust": "Built-in #[test] with assertions",
             "go": "testing package with table-driven tests"
         }
@@ -529,7 +799,7 @@ def _build_code_generation_prompt(
         framework_instruction = test_frameworks.get(language_lower, "appropriate test framework")
         prompt_parts.append(f"\n**Include unit tests using {framework_instruction}:**")
         prompt_parts.append("- Test normal cases")
-        prompt_parts.append("- Test edge cases (empty, None, invalid)")
+        prompt_parts.append("- Test edge cases (empty, null, invalid)")
         prompt_parts.append("- Test error conditions")
 
     # Framework-specific instructions
@@ -558,6 +828,20 @@ def _build_code_generation_prompt(
                 "- Include proper error handling",
                 "- Use async/await for route handlers",
                 "- Return proper HTTP status codes"
+            ],
+            "spring": [
+                "- Use Spring Boot annotations (@RestController, @Service, etc.)",
+                "- Use @Autowired for dependency injection",
+                "- Include @Valid for request validation",
+                "- Return ResponseEntity with proper HTTP status",
+                "- Use @ExceptionHandler for error handling"
+            ],
+            "ktor": [
+                "- Use Ktor routing DSL",
+                "- Use suspend functions for async operations",
+                "- Include proper content negotiation",
+                "- Use call.respond() for responses",
+                "- Handle exceptions with status pages"
             ]
         }
 
@@ -750,6 +1034,183 @@ class GeneratedClass {{
 }}
 
 export {{ GeneratedClass }};
+'''
+
+    # Java templates
+    elif language == "java":
+        if style == "function":
+            return f'''/**
+ * {description}
+ * 
+ * @param param Input parameter
+ * @return Processed result
+ */
+public static String generatedFunction(String param) {{
+    // TODO: Implement actual logic
+    return param;
+}}
+'''
+
+        elif style == "class":
+            return f'''/**
+ * {description}
+ */
+public class GeneratedClass {{
+    private String value;
+    
+    /**
+     * Constructor
+     * 
+     * @param value Initial value
+     */
+    public GeneratedClass(String value) {{
+        this.value = value;
+    }}
+    
+    /**
+     * Process data
+     * 
+     * @param data Data to process
+     * @return Processed result
+     */
+    public String process(String data) {{
+        // TODO: Implement actual logic
+        return value + ": " + data;
+    }}
+    
+    public String getValue() {{
+        return value;
+    }}
+    
+    public void setValue(String value) {{
+        this.value = value;
+    }}
+}}
+'''
+
+        elif style == "api_endpoint" and framework == "spring":
+            return f'''import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import javax.validation.Valid;
+
+/**
+ * {description}
+ */
+@RestController
+@RequestMapping("/api")
+public class GeneratedController {{
+    
+    @PostMapping("/endpoint")
+    public ResponseEntity<ResponseModel> generatedEndpoint(
+            @Valid @RequestBody RequestModel request) {{
+        
+        // TODO: Implement actual logic
+        String result = "Processed: " + request.getName() + " - " + request.getValue();
+        
+        ResponseModel response = new ResponseModel();
+        response.setResult(result);
+        response.setStatus("success");
+        
+        return ResponseEntity.ok(response);
+    }}
+}}
+
+class RequestModel {{
+    private String name;
+    private String value;
+    
+    // Getters and setters
+    public String getName() {{ return name; }}
+    public void setName(String name) {{ this.name = name; }}
+    public String getValue() {{ return value; }}
+    public void setValue(String value) {{ this.value = value; }}
+}}
+
+class ResponseModel {{
+    private String result;
+    private String status;
+    
+    // Getters and setters
+    public String getResult() {{ return result; }}
+    public void setResult(String result) {{ this.result = result; }}
+    public String getStatus() {{ return status; }}
+    public void setStatus(String status) {{ this.status = status; }}
+}}
+'''
+
+    # Kotlin templates
+    elif language == "kotlin":
+        if style == "function":
+            return f'''/**
+ * {description}
+ * 
+ * @param param Input parameter
+ * @return Processed result
+ */
+fun generatedFunction(param: String): String {{
+    // TODO: Implement actual logic
+    return param
+}}
+'''
+
+        elif style == "class":
+            return f'''/**
+ * {description}
+ * 
+ * @property value Initial value
+ */
+class GeneratedClass(private var value: String) {{
+    
+    /**
+     * Process data
+     * 
+     * @param data Data to process
+     * @return Processed result
+     */
+    fun process(data: String): String {{
+        // TODO: Implement actual logic
+        return "$value: $data"
+    }}
+}}
+'''
+
+        elif style == "api_endpoint" and framework == "ktor":
+            return f'''import io.ktor.server.application.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.http.*
+
+/**
+ * {description}
+ */
+fun Application.configureRouting() {{
+    routing {{
+        post("/api/endpoint") {{
+            val request = call.receive<RequestModel>()
+            
+            // TODO: Implement actual logic
+            val result = "Processed: ${{request.name}} - ${{request.value}}"
+            
+            val response = ResponseModel(
+                result = result,
+                status = "success"
+            )
+            
+            call.respond(HttpStatusCode.OK, response)
+        }}
+    }}
+}}
+
+data class RequestModel(
+    val name: String,
+    val value: String
+)
+
+data class ResponseModel(
+    val result: String,
+    val status: String
+)
 '''
 
     # Generic fallback

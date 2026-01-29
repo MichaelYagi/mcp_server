@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,24 @@ SUPPORTED_LANGUAGES = {
         comment_multi_end="*/",
         linter_command=["eslint", "{file}"],
         formatter_command=["prettier", "--write", "{file}"]
+    ),
+    "java": LanguageConfig(
+        name="java",
+        extensions=[".java"],
+        comment_single="//",
+        comment_multi_start="/*",
+        comment_multi_end="*/",
+        linter_command=["checkstyle", "-c", "/google_checks.xml", "{file}"],
+        formatter_command=["google-java-format", "--replace", "{file}"]
+    ),
+    "kotlin": LanguageConfig(
+        name="kotlin",
+        extensions=[".kt", ".kts"],
+        comment_single="//",
+        comment_multi_start="/*",
+        comment_multi_end="*/",
+        linter_command=["ktlint", "{file}"],
+        formatter_command=["ktlint", "-F", "{file}"]
     ),
 }
 
@@ -236,6 +255,367 @@ class PythonBugDetector:
 
 
 # ============================================================================
+# JAVA ANALYZER
+# ============================================================================
+
+class JavaBugDetector:
+    """Detect common Java bugs using pattern matching"""
+
+    @staticmethod
+    def analyze_file(file_path: str) -> List[Dict[str, Any]]:
+        """Analyze Java file for common bugs"""
+        issues = []
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                code = ''.join(lines)
+
+            # Run various checks
+            issues.extend(JavaBugDetector._check_missing_override(lines))
+            issues.extend(JavaBugDetector._check_string_concatenation(lines))
+            issues.extend(JavaBugDetector._check_null_pointer(lines))
+            issues.extend(JavaBugDetector._check_empty_catch(lines))
+            issues.extend(JavaBugDetector._check_system_out(lines))
+            issues.extend(JavaBugDetector._check_equals_hashcode(code, lines))
+
+        except Exception as e:
+            logger.error(f"Java analysis failed: {e}")
+            issues.append({
+                "severity": "error",
+                "type": "AnalysisError",
+                "line": 0,
+                "message": f"Failed to analyze: {str(e)}"
+            })
+
+        return issues
+
+    @staticmethod
+    def _check_missing_override(lines: List[str]) -> List[Dict]:
+        """Check for missing @Override annotations"""
+        issues = []
+        override_patterns = [
+            r'\bpublic\s+\w+\s+toString\s*\(',
+            r'\bpublic\s+boolean\s+equals\s*\(',
+            r'\bpublic\s+int\s+hashCode\s*\(',
+            r'\bpublic\s+int\s+compareTo\s*\(',
+        ]
+
+        for i, line in enumerate(lines, 1):
+            for pattern in override_patterns:
+                if re.search(pattern, line):
+                    # Check if previous line has @Override
+                    prev_line = lines[i-2].strip() if i > 1 else ""
+                    if "@Override" not in prev_line:
+                        issues.append({
+                            "severity": "warning",
+                            "type": "MissingOverride",
+                            "line": i,
+                            "message": "Method appears to override but missing @Override annotation",
+                            "suggestion": "Add @Override annotation above method declaration"
+                        })
+                    break
+
+        return issues
+
+    @staticmethod
+    def _check_string_concatenation(lines: List[str]) -> List[Dict]:
+        """Check for inefficient string concatenation in loops"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if '+=' in line and 'String' in ''.join(lines[max(0, i-10):i]):
+                # Check if we're in a loop
+                context = ''.join(lines[max(0, i-20):i])
+                if any(keyword in context for keyword in ['for (', 'while (', 'do {']):
+                    issues.append({
+                        "severity": "warning",
+                        "type": "InefficientStringConcat",
+                        "line": i,
+                        "message": "String concatenation in loop is inefficient",
+                        "suggestion": "Use StringBuilder.append() instead of += for better performance"
+                    })
+
+        return issues
+
+    @staticmethod
+    def _check_null_pointer(lines: List[str]) -> List[Dict]:
+        """Check for potential null pointer dereferences"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            # Simple heuristic: method call without null check
+            if '.' in line and '(' in line:
+                # Skip if it's a null check itself
+                if any(check in line for check in ['!= null', '== null', 'Objects.requireNonNull']):
+                    continue
+
+                # Look for variables that might be null
+                context = ''.join(lines[max(0, i-5):i])
+                if 'null' in context or 'return null' in context:
+                    issues.append({
+                        "severity": "info",
+                        "type": "PotentialNullPointer",
+                        "line": i,
+                        "message": "Potential null pointer dereference",
+                        "suggestion": "Add null check or use Optional<T> to handle nullable values safely"
+                    })
+
+        return issues
+
+    @staticmethod
+    def _check_empty_catch(lines: List[str]) -> List[Dict]:
+        """Check for empty catch blocks"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if 'catch' in line and '(' in line:
+                # Look for empty catch block
+                j = i
+                while j < len(lines):
+                    next_line = lines[j].strip()
+                    if next_line == '{':
+                        if j + 1 < len(lines) and lines[j + 1].strip() == '}':
+                            issues.append({
+                                "severity": "warning",
+                                "type": "EmptyCatchBlock",
+                                "line": i,
+                                "message": "Empty catch block swallows exceptions silently",
+                                "suggestion": "Add logging or re-throw exception, or at minimum add a comment explaining why it's empty"
+                            })
+                        break
+                    elif '{' in next_line:
+                        break
+                    j += 1
+
+        return issues
+
+    @staticmethod
+    def _check_system_out(lines: List[str]) -> List[Dict]:
+        """Check for System.out.println usage"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if 'System.out.print' in line:
+                issues.append({
+                    "severity": "info",
+                    "type": "SystemOut",
+                    "line": i,
+                    "message": "Using System.out for logging",
+                    "suggestion": "Use a proper logging framework (SLF4J, Log4j2, java.util.logging)"
+                })
+
+        return issues
+
+    @staticmethod
+    def _check_equals_hashcode(code: str, lines: List[str]) -> List[Dict]:
+        """Check if equals is overridden without hashCode"""
+        issues = []
+
+        has_equals = 'public boolean equals(' in code
+        has_hashcode = 'public int hashCode(' in code
+
+        if has_equals and not has_hashcode:
+            # Find line number of equals method
+            for i, line in enumerate(lines, 1):
+                if 'public boolean equals(' in line:
+                    issues.append({
+                        "severity": "error",
+                        "type": "EqualsWithoutHashCode",
+                        "line": i,
+                        "message": "equals() overridden but hashCode() is not",
+                        "suggestion": "Always override hashCode() when overriding equals() to maintain contract"
+                    })
+                    break
+
+        return issues
+
+
+# ============================================================================
+# KOTLIN ANALYZER
+# ============================================================================
+
+class KotlinBugDetector:
+    """Detect common Kotlin anti-patterns"""
+
+    @staticmethod
+    def analyze_file(file_path: str) -> List[Dict[str, Any]]:
+        """Analyze Kotlin file for common issues"""
+        issues = []
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                code = ''.join(lines)
+
+            # Run various checks
+            issues.extend(KotlinBugDetector._check_force_unwrap(lines))
+            issues.extend(KotlinBugDetector._check_mutable_collections(lines))
+            issues.extend(KotlinBugDetector._check_java_style(lines))
+            issues.extend(KotlinBugDetector._check_redundant_types(lines))
+            issues.extend(KotlinBugDetector._check_empty_when(lines))
+            issues.extend(KotlinBugDetector._check_platform_types(lines))
+
+        except Exception as e:
+            logger.error(f"Kotlin analysis failed: {e}")
+            issues.append({
+                "severity": "error",
+                "type": "AnalysisError",
+                "line": 0,
+                "message": f"Failed to analyze: {str(e)}"
+            })
+
+        return issues
+
+    @staticmethod
+    def _check_force_unwrap(lines: List[str]) -> List[Dict]:
+        """Check for !! (force unwrap) operator"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if '!!' in line:
+                # Exclude comments
+                if '//' in line and line.index('//') < line.index('!!'):
+                    continue
+
+                issues.append({
+                    "severity": "warning",
+                    "type": "ForceUnwrap",
+                    "line": i,
+                    "message": "Using !! (force unwrap) can throw NullPointerException at runtime",
+                    "suggestion": "Use safe call (?.), let/also/apply, or elvis operator (?:) instead"
+                })
+
+        return issues
+
+    @staticmethod
+    def _check_mutable_collections(lines: List[str]) -> List[Dict]:
+        """Check for unnecessary mutable collections"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if any(mut in line for mut in ['mutableListOf', 'mutableMapOf', 'mutableSetOf']):
+                # Check if collection is actually modified
+                is_modified = False
+                for j in range(i, min(i+15, len(lines))):
+                    if any(op in lines[j] for op in ['.add(', '.put(', '.remove(', '.clear()']):
+                        is_modified = True
+                        break
+
+                if not is_modified:
+                    issues.append({
+                        "severity": "info",
+                        "type": "UnnecessaryMutable",
+                        "line": i,
+                        "message": "Using mutable collection but it appears to be immutable",
+                        "suggestion": "Use listOf(), mapOf(), or setOf() for immutable collections"
+                    })
+
+        return issues
+
+    @staticmethod
+    def _check_java_style(lines: List[str]) -> List[Dict]:
+        """Check for Java-style syntax in Kotlin"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            # Java-style for loop
+            if re.search(r'for\s*\(\s*\w+\s+\w+\s*:\s*\w+\s*\)', line):
+                issues.append({
+                    "severity": "info",
+                    "type": "NonIdiomatic",
+                    "line": i,
+                    "message": "Using Java-style for loop syntax",
+                    "suggestion": "Use Kotlin's 'for (item in collection)' syntax"
+                })
+
+            # Java-style getter/setter
+            if re.search(r'\.(get|set)[A-Z]\w+\(', line):
+                issues.append({
+                    "severity": "info",
+                    "type": "NonIdiomatic",
+                    "line": i,
+                    "message": "Using Java-style getter/setter",
+                    "suggestion": "Use Kotlin property access syntax (obj.property instead of obj.getProperty())"
+                })
+
+        return issues
+
+    @staticmethod
+    def _check_redundant_types(lines: List[str]) -> List[Dict]:
+        """Check for redundant explicit type annotations"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            # val name: Type = Constructor()
+            match = re.search(r'val\s+\w+\s*:\s*(\w+)\s*=\s*\1\(', line)
+            if match:
+                issues.append({
+                    "severity": "info",
+                    "type": "RedundantTypeAnnotation",
+                    "line": i,
+                    "message": "Explicit type annotation is redundant",
+                    "suggestion": "Let Kotlin's type inference work: val name = Type()"
+                })
+
+        return issues
+
+    @staticmethod
+    def _check_empty_when(lines: List[str]) -> List[Dict]:
+        """Check for empty when expressions"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            if 'when' in line and '{' in line:
+                # Look ahead for empty when
+                j = i
+                has_cases = False
+                while j < len(lines) and j < i + 20:
+                    if '->' in lines[j]:
+                        has_cases = True
+                        break
+                    if lines[j].strip() == '}':
+                        if not has_cases:
+                            issues.append({
+                                "severity": "warning",
+                                "type": "EmptyWhen",
+                                "line": i,
+                                "message": "Empty when expression",
+                                "suggestion": "Add cases or remove when expression"
+                            })
+                        break
+                    j += 1
+
+        return issues
+
+    @staticmethod
+    def _check_platform_types(lines: List[str]) -> List[Dict]:
+        """Check for potential platform type issues"""
+        issues = []
+
+        for i, line in enumerate(lines, 1):
+            # Look for Java interop without null safety
+            if 'import java.' in line or 'import javax.' in line:
+                # This is just a heuristic
+                for j in range(i, min(i+30, len(lines))):
+                    if '!!' in lines[j]:
+                        # Already flagged by force unwrap check
+                        continue
+                    # Look for method calls on potentially null Java objects
+                    if re.search(r'\w+\.\w+\(', lines[j]) and '?.' not in lines[j]:
+                        issues.append({
+                            "severity": "info",
+                            "type": "PlatformType",
+                            "line": j + 1,
+                            "message": "Calling method on potentially null Java object",
+                            "suggestion": "Use safe call (?.) or explicit null check when working with Java APIs"
+                        })
+                        break
+
+        return issues
+
+
+# ============================================================================
 # GENERIC ANALYZER (for non-Python)
 # ============================================================================
 
@@ -268,7 +648,7 @@ def run_linter(file_path: str, lang_config: LanguageConfig) -> Dict[str, Any]:
             "message": f"Linter '{lang_config.linter_command[0]}' not found. Install it first."
         }
     except subprocess.TimeoutExpired:
-        return {"status": "timeout", "message": "Linter timed out after 30 seconds"}
+        return {"status": "timeout", "message": "Linter timed out after 60 seconds"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -319,6 +699,10 @@ def analyze_code_file(file_path: str, language: str = "auto") -> Dict[str, Any]:
     try:
         if lang_config.name == "python":
             issues = PythonBugDetector.analyze_file(file_path)
+        elif lang_config.name == "java":
+            issues = JavaBugDetector.analyze_file(file_path)
+        elif lang_config.name == "kotlin":
+            issues = KotlinBugDetector.analyze_file(file_path)
         else:
             # Use external linter
             linter_result = run_linter(file_path, lang_config)

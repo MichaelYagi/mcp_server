@@ -2,7 +2,7 @@
 name: code_assistant
 description: >
   Automated code analysis, bug detection, fixing, and generation using AST analysis.
-  Supports Python (deep analysis), JavaScript, TypeScript, Rust, and Go.
+  Supports Python (deep analysis), JavaScript, TypeScript, Java, Kotlin, Rust, and Go.
   Detects mutable defaults, bare except clauses, identity comparisons, unused imports.
   Generates code from natural language, creates tests, suggests improvements, and refactors.
 tags:
@@ -10,6 +10,8 @@ tags:
   - python
   - javascript
   - typescript
+  - java
+  - kotlin
   - debugging
   - fixing
   - analysis
@@ -45,6 +47,8 @@ Complete code analysis, bug fixing, and generation toolkit powered by AST analys
 **Supported Languages:**
 - **Python** - Deep AST analysis (mutable defaults, bare except, etc.)
 - **JavaScript/TypeScript** - Linter integration
+- **Java** - Linter integration (checkstyle, spotbugs)
+- **Kotlin** - Linter integration (ktlint, detekt)
 - **Rust** - Basic analysis
 - **Go** - Basic analysis
 
@@ -66,7 +70,7 @@ User asks to:
 ```python
 analyze_code_file(
     file_path="path/to/file.py",
-    language="auto",           # or "python", "javascript", etc.
+    language="auto",           # or "python", "javascript", "java", "kotlin", etc.
     deep_analysis=True         # Use AST for Python
 )
 ```
@@ -135,7 +139,7 @@ Agent: fix_code_file("server.py", backup=True)
 
 #### 🔴 ERRORS (Critical)
 
-**Mutable Default Arguments**
+**Mutable Default Arguments** (Python)
 ```python
 # ❌ DANGEROUS - shared between calls
 def add_item(items=[]):
@@ -150,7 +154,7 @@ def add_item(items=None):
     return items
 ```
 
-**Identity Comparison with Literals**
+**Identity Comparison with Literals** (Python)
 ```python
 # ❌ WRONG - checks object identity
 if x is 5:
@@ -165,9 +169,23 @@ if x is None:
 if x is True:
 ```
 
+**Null Pointer Dereference** (Java/Kotlin)
+```java
+// ❌ DANGEROUS - can throw NullPointerException
+String result = obj.toString();
+
+// ✅ SAFE - null check
+if (obj != null) {
+    String result = obj.toString();
+}
+
+// ✅ KOTLIN - safe call
+val result = obj?.toString()
+```
+
 #### ⚠️  WARNINGS (Important)
 
-**Bare Except**
+**Bare Except** (Python)
 ```python
 # ❌ TOO BROAD - catches SystemExit, KeyboardInterrupt
 try:
@@ -180,6 +198,35 @@ try:
     risky()
 except Exception as e:
     logger.error(f"Failed: {e}")
+```
+
+**Missing Override Annotation** (Java)
+```java
+// ❌ MISSING - can break if parent changes
+public String toString() {
+    return "MyClass";
+}
+
+// ✅ CORRECT
+@Override
+public String toString() {
+    return "MyClass";
+}
+```
+
+**Inefficient String Concatenation** (Java)
+```java
+// ❌ INEFFICIENT - creates many String objects
+String result = "";
+for (String s : list) {
+    result += s;
+}
+
+// ✅ EFFICIENT
+StringBuilder result = new StringBuilder();
+for (String s : list) {
+    result.append(s);
+}
 ```
 
 #### ℹ️  INFO (Nice to Have)
@@ -359,36 +406,6 @@ explain_code(
 - Code review explanations
 - Documentation generation
 
-### Example
-
-```
-User: "explain what this code does" [uploads algorithm.py]
-
-Agent: explain_code("algorithm.py", detail_level="detailed")
-
-Agent: "This code implements a binary search algorithm using recursion.
-
-**What it does:**
-Searches for a target value in a sorted array by repeatedly dividing 
-the search space in half.
-
-**Key concepts:**
-- Recursion: Function calls itself
-- Divide-and-conquer: Splits problem into smaller pieces
-- Base case: Returns when array is empty or target found
-
-**Complexity:** O(log n) - very efficient for large datasets
-
-**How it works:**
-1. Finds middle element
-2. If target equals middle, return index
-3. If target < middle, search left half
-4. If target > middle, search right half
-5. Repeat until found or array exhausted
-
-**Dependencies:** Uses typing module for type hints"
-```
-
 ---
 
 ## 🧪 Part 5: Test Generation
@@ -398,7 +415,7 @@ the search space in half.
 ```python
 generate_tests(
     file_path="utils.py",
-    test_framework="auto",        # or "pytest", "unittest", "jest"
+    test_framework="auto",        # or "pytest", "unittest", "jest", "junit", "kotest"
     coverage_target="functions"   # or "classes", "all"
 )
 ```
@@ -421,44 +438,6 @@ generate_tests(
 - Includes edge cases
 - Follows framework conventions
 - Generates fixtures and mocks
-
-### Example
-
-```
-User: "generate tests for my email validator"
-
-Agent: generate_tests("validator.py", test_framework="pytest")
-
-Agent: "Generated comprehensive test suite:
-
-```python
-import pytest
-from validator import validate_email
-
-def test_valid_email():
-    assert validate_email("user@example.com") == True
-    
-def test_valid_with_plus():
-    assert validate_email("user+tag@example.com") == True
-    
-def test_missing_at_symbol():
-    assert validate_email("invalid.com") == False
-    
-def test_missing_domain():
-    assert validate_email("user@") == False
-    
-def test_missing_local_part():
-    assert validate_email("@example.com") == False
-    
-def test_no_domain_dot():
-    assert validate_email("user@localhost") == False
-```
-
-Coverage: ~85% of function logic
-Framework: pytest
-
-Would you like me to save this to test_validator.py?"
-```
 
 ---
 
@@ -485,84 +464,6 @@ refactor_code(
 | `modernize` | Use latest syntax | f-strings, type hints |
 | `optimize` | Performance improvements | List comp, generators |
 
-**Returns:**
-```json
-{
-  "refactor_type": "modernize",
-  "changes": [
-    "Converted % formatting to f-strings",
-    "Added type hints to 5 functions",
-    "Replaced dict.has_key() with 'in' operator"
-  ],
-  "preview": "def process(data: List[str]) -> int:...",
-  "applied": false,
-  "backup_path": null
-}
-```
-
-### Examples
-
-**Modernize Legacy Code**
-```
-User: "modernize my old Python 2 code"
-
-Agent: refactor_code("legacy.py", "modernize", preview=True)
-
-Agent: "Preview of changes:
-
-BEFORE:
-```python
-def process(data):
-    return "Result: %s" % data
-```
-
-AFTER:
-```python
-def process(data: List[str]) -> str:
-    return f"Result: {data}"
-```
-
-Changes:
-• Converted % formatting to f-strings
-• Added type hints
-• Used modern string formatting
-
-Apply these changes?"
-
-User: "yes"
-
-Agent: refactor_code("legacy.py", "modernize", preview=False)
-```
-
-**Extract Function**
-```
-User: "this function is too long, extract lines 45-67"
-
-Agent: refactor_code("app.py", "extract_function", target="lines:45-67")
-
-Agent: "Extracted complex logic into new function:
-
-```python
-def validate_and_process_user(user_data: dict) -> bool:
-    '''Validate user data and process registration'''
-    # Lines 45-67 moved here
-    ...
-    return True
-
-def register_user(request):
-    user_data = request.json
-    if validate_and_process_user(user_data):
-        ...
-```
-
-This improves:
-• Readability - Single responsibility
-• Testability - Can unit test separately
-• Reusability - Can use elsewhere
-
-Apply changes?"
-```
-
 ---
 
 ## ✨ Part 7: Code Generation
@@ -572,11 +473,11 @@ Apply changes?"
 ```python
 generate_code(
     description="Calculate factorial recursively with error handling",
-    language="python",         # "javascript", "typescript", "rust", "go"
+    language="python",         # "javascript", "typescript", "java", "kotlin", "rust", "go"
     style="function",          # "class", "module", "script", "api_endpoint"
     include_tests=False,
     include_docstrings=True,
-    framework="",              # "fastapi", "flask", "react", "express"
+    framework="",              # "fastapi", "flask", "react", "spring", "ktor"
     output_file=""             # Optional: save to file
 )
 ```
@@ -605,259 +506,77 @@ User says:
 - "calculate X recursively"
 - "implement Y algorithm"
 
-### Description Tips
+### Language-Specific Examples
 
-**Good descriptions are:**
-- ✅ Specific about inputs/outputs
-- ✅ Mention edge cases
-- ✅ Include constraints
-- ✅ Provide examples
-
-**Examples:**
-
-✅ **GOOD:**
-```
-"Create a function that validates email addresses. 
-Returns True/False. Handles edge cases like missing @ or domain. 
-Allows + in local part. Raises ValueError for None input."
-```
-
-❌ **BAD:**
-```
-"email validator"
-```
-
-### Workflow
-
-**STEP 1: Get Requirements**
-```
-User: "Use the generate_code tool to calculate factorial recursively"
-
-Agent: "I'll generate that. Should I:
-1. Include error handling for negative numbers?
-2. Add type hints?
-3. Include unit tests?
-4. Add memoization for performance?"
-```
-
-**STEP 2: Generate**
-```
-Agent: generate_code(
-    description="Calculate factorial recursively. Handle n=0 returns 1, 
-                 negative n raises ValueError. Include type hints and docstring.",
-    language="python",
-    style="function",
-    include_tests=True,
-    include_docstrings=True
-)
-```
-
-**STEP 3: Review & Iterate**
-```
-Agent: "Generated factorial function with tests:
-
-```python
-def factorial(n: int) -> int:
-    """
-    Calculate factorial recursively.
-    
-    Args:
-        n: Non-negative integer
-        
-    Returns:
-        Factorial of n (n!)
-        
-    Raises:
-        ValueError: If n is negative
-        
-    Examples:
-        >>> factorial(5)
-        120
-        >>> factorial(0)
-        1
-    """
-    if n < 0:
-        raise ValueError("Factorial not defined for negative numbers")
-    if n == 0:
-        return 1
-    return n * factorial(n - 1)
-
-
-# Unit Tests
-import pytest
-
-def test_factorial_positive():
-    assert factorial(5) == 120
-    assert factorial(3) == 6
-    
-def test_factorial_zero():
-    assert factorial(0) == 1
-    
-def test_factorial_negative():
-    with pytest.raises(ValueError):
-        factorial(-1)
-```
-
-Would you like me to:
-1. Add iterative version for comparison?
-2. Add memoization (caching)?
-3. Save to a file?
-4. Make any changes?"
-```
-
-### Examples by Style
-
-#### Function
-```python
+#### Java
+```java
+// Generate Spring Boot REST endpoint
 generate_code(
-    "Validate phone number in (XXX) XXX-XXXX format",
-    language="python",
-    style="function"
-)
-```
-
-#### Class
-```python
-generate_code(
-    "User authentication manager with login, logout, password hashing",
-    language="python",
-    style="class",
-    include_tests=True
-)
-```
-
-#### API Endpoint
-```python
-generate_code(
-    "FastAPI POST endpoint to create user with email, password. 
-     Hash password with bcrypt, return user_id",
-    language="python",
+    "REST endpoint to create user with email validation",
+    language="java",
     style="api_endpoint",
-    framework="fastapi"
+    framework="spring"
 )
+
+// Output:
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    
+    @PostMapping
+    public ResponseEntity<User> createUser(@Valid @RequestBody UserRequest request) {
+        // Email validation
+        if (!isValidEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Invalid email format");
+        }
+        
+        User user = userService.createUser(request);
+        return ResponseEntity.ok(user);
+    }
+    
+    private boolean isValidEmail(String email) {
+        return email != null && email.matches("^[A-Za-z0-9+_.-]+@(.+)$");
+    }
+}
 ```
 
-#### React Component
-```python
+#### Kotlin
+```kotlin
+// Generate data class with validation
 generate_code(
-    "Counter component with increment/decrement buttons",
-    language="javascript",
-    style="module",
-    framework="react"
-)
-```
-
----
-
-## 📚 Complete Workflow Examples
-
-### Example 1: Fix Bugs Pipeline
-
-```
-User: "analyze api.py and fix any bugs"
-
-Agent: 
-STEP 1: analyze_code_file("api.py")
-
-Found 4 issues:
-- 2 errors (fixable)
-- 2 warnings
-
-STEP 2: Present findings and get approval
-
-Agent: "Found 4 issues, 2 are auto-fixable. Fix them?"
-
-User: "yes"
-
-STEP 3: fix_code_file("api.py", backup=True)
-
-Agent: "✅ Fixed 2 issues, backup saved"
-```
-
-### Example 2: Generate & Test Pipeline
-
-```
-User: "Generate an email validator and create tests for it"
-
-Agent:
-STEP 1: generate_code(
-    "Email validator with comprehensive checks",
-    style="function",
-    include_tests=False  # We'll generate separately
+    "User data class with email validation and builder",
+    language="kotlin",
+    style="class"
 )
 
-STEP 2: Save generated code
-Agent: "Saved to validator.py"
-
-STEP 3: generate_tests("validator.py")
-
-Agent: "Generated 8 test cases covering edge cases"
-
-STEP 4: analyze_code_file("validator.py")
-
-Agent: "Code looks good! No issues found."
+// Output:
+data class User(
+    val id: Long,
+    val email: String,
+    val name: String
+) {
+    init {
+        require(email.isNotBlank()) { "Email cannot be blank" }
+        require(email.matches(Regex("^[A-Za-z0-9+_.-]+@(.+)$"))) { "Invalid email format" }
+    }
+    
+    companion object {
+        fun builder() = UserBuilder()
+    }
+    
+    class UserBuilder {
+        private var id: Long = 0
+        private var email: String = ""
+        private var name: String = ""
+        
+        fun id(id: Long) = apply { this.id = id }
+        fun email(email: String) = apply { this.email = email }
+        fun name(name: String) = apply { this.name = name }
+        
+        fun build() = User(id, email, name)
+    }
+}
 ```
-
-### Example 3: Legacy Code Modernization
-
-```
-User: "Modernize my old Python 2 code and fix any bugs"
-
-Agent:
-STEP 1: analyze_code_file("legacy.py")
-
-Agent: "Found 12 issues including:
-- Outdated string formatting
-- Missing type hints
-- Bare except clauses"
-
-STEP 2: refactor_code("legacy.py", "modernize", preview=True)
-
-Agent: "Preview shows updates to f-strings, type hints, etc."
-
-User: "looks good"
-
-STEP 3: refactor_code("legacy.py", "modernize", preview=False)
-
-Agent: "✅ Modernized code"
-
-STEP 4: fix_code_file("legacy.py", backup=True)
-
-Agent: "✅ Fixed remaining bugs"
-
-STEP 5: generate_tests("legacy.py")
-
-Agent: "✅ Generated test suite"
-```
-
----
-
-## 🎓 Best Practices
-
-### For Analysis:
-1. ✅ Always analyze before fixing
-2. ✅ Present findings grouped by severity
-3. ✅ Explain WHY something is wrong
-4. ✅ Get user approval before modifying
-
-### For Fixing:
-1. ✅ Always create backups (unless user says no)
-2. ✅ Validate syntax after fixes
-3. ✅ Show what was changed
-4. ✅ Keep original for reference
-
-### For Generation:
-1. ✅ Ask clarifying questions first
-2. ✅ Be specific in descriptions
-3. ✅ Show generated code before saving
-4. ✅ Offer tests and improvements
-5. ✅ Iterate based on feedback
-
-### For Refactoring:
-1. ✅ Always preview first (default)
-2. ✅ Explain what will change and why
-3. ✅ Get approval before applying
-4. ✅ Create backup when applying
 
 ---
 
@@ -865,7 +584,7 @@ Agent: "✅ Generated test suite"
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `analyze_code_file` | Find bugs | `file_path`, `deep_analysis` |
+| `analyze_code_file` | Find bugs | `file_path`, `deep_analysis`, `language` |
 | `fix_code_file` | Auto-fix bugs | `file_path`, `backup`, `dry_run` |
 | `suggest_improvements` | Get recommendations | `file_path`, `focus` |
 | `explain_code` | Understand code | `file_path`, `detail_level` |
@@ -884,8 +603,10 @@ Agent: "✅ Generated test suite"
 - Can be reverted using backups
 
 **Language Support:**
-- **Python**: Full AST analysis (deep bug detection)
-- **JavaScript/TypeScript**: Linter integration
+- **Python**: Full AST analysis (deepest)
+- **JavaScript/TypeScript**: Linter integration (ESLint)
+- **Java**: Linter integration (Checkstyle, SpotBugs)
+- **Kotlin**: Linter integration (ktlint, detekt)
 - **Rust/Go**: Basic analysis
 
 **Limitations:**
@@ -907,6 +628,8 @@ Agent: "✅ Generated test suite"
 **Analyze:**
 ```python
 analyze_code_file("myapp/server.py")
+analyze_code_file("src/UserService.java")
+analyze_code_file("app/User.kt")
 ```
 
 **Fix:**
@@ -922,11 +645,27 @@ generate_code(
     style="function",
     include_tests=True
 )
+
+generate_code(
+    "Spring Boot REST controller for user management",
+    language="java",
+    style="api_endpoint",
+    framework="spring"
+)
+
+generate_code(
+    "Ktor REST endpoint with coroutines",
+    language="kotlin",
+    style="api_endpoint",
+    framework="ktor"
+)
 ```
 
 **Test:**
 ```python
 generate_tests("utils.py", test_framework="pytest")
+generate_tests("UserService.java", test_framework="junit")
+generate_tests("UserRepository.kt", test_framework="kotest")
 ```
 
 **Refactor:**
