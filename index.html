@@ -2018,58 +2018,78 @@
         // Message formatting
         // -------------------------
         function formatMessage(text) {
-            text = text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+            const blocks = [];
+            const inline = [];
 
-            text = text.replace(/```(\w+)?\n([\s\S]+?)```/g, function(match, lang, code) {
-                const language = lang || 'code';
-                return `<pre><code class="language-${language}">${code.trim()}</code></pre>`;
+            // --- Extract fenced code blocks ---
+            text = text.replace(/```(\w+)?\s*\n?([\s\S]*?)```/g, (m, lang, code) => {
+                const i = blocks.length;
+                blocks.push({ lang: lang || "code", code });
+                return `@@CODEBLOCK_${i}@@`;
             });
 
-            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+            // --- Extract triple-quoted blocks ---
+            text = text.replace(/'''([\s\S]*?)'''/g, (m, code) => {
+                const i = blocks.length;
+                blocks.push({ lang: "code", code });
+                return `@@CODEBLOCK_${i}@@`;
+            });
 
-            text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
-            text = text.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
-            text = text.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
-            text = text.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-            text = text.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
-            text = text.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+            // --- Extract inline code ---
+            text = text.replace(/`([^`]+)`/g, (m, code) => {
+                const i = inline.length;
+                inline.push(code);
+                return `@@INLINE_${i}@@`;
+            });
 
-            text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-            text = text.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
-            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-            text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
-            text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            // --- Escape HTML ---
+            text = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
 
-            text = text.replace(/(\s|^)_([^_\s]+?)_(\s|$|[.,!?;:])/g, '$1<em>$2</em>$3');
+            // --- Markdown formatting ---
+            text = text.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
+            text = text.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
+            text = text.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
+            text = text.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
+            text = text.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
+            text = text.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
 
-            text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+            text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+            text = text.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
+            text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+            text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
+            text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
+            text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
 
-            text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            text = text.replace(/^>\s+(.+)$/gm, "<blockquote>$1</blockquote>");
+            text = text.replace(/^([-*_]){3,}$/gm, "<hr>");
 
-            text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;">');
+            text = text.replace(/^- /gm, "&bull; ");
+            text = text.replace(/^\* /gm, "&bull; ");
 
-            text = text.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
-            text = text.replace(/(<\/blockquote>)\s*(<blockquote>)/g, '<br>');
+            text = text.replace(/\n\s*\n/g, "<br><br>");
+            text = text.replace(/\n/g, "<br>");
 
-            text = text.replace(/^([-*_]){3,}$/gm, '<hr>');
+            // --- Restore inline code ---
+            text = text.replace(/@@INLINE_(\d+)@@/g, (m, i) => {
+                const code = inline[i]
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+                return `<code>${code}</code>`;
+            });
 
-            text = text.replace(/- /g, '&bull; ');
-            text = text.replace(/\* /g, '&bull; ');
-
-            text = text.replace(/\n\s*\n/g, '<br><br>');
-            text = text.replace(/\n/g, '<br>');
-
-            text = text.replace(/<br>(<pre>)/g, '$1');
-            text = text.replace(/(<\/pre>)<br>/g, '$1');
-            text = text.replace(/<br>(<blockquote>)/g, '$1');
-            text = text.replace(/(<\/blockquote>)<br>/g, '$1');
-            text = text.replace(/<br>(<hr>)/g, '$1');
-            text = text.replace(/(<hr>)<br>/g, '$1');
-            text = text.replace(/<br>(<code>)/g, '$1');
-            text = text.replace(/(<\/code>)<br>/g, '$1');
+            // --- Restore code blocks ---
+            text = text.replace(/@@CODEBLOCK_(\d+)@@/g, (m, i) => {
+                const block = blocks[i];
+                const escaped = block.code
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+                return `<pre><code class="language-${block.lang}">${escaped.trim()}</code></pre>`;
+            });
 
             return text;
         }
