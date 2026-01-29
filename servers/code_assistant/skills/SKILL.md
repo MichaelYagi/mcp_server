@@ -26,6 +26,9 @@ tools:
   - generate_tests
   - refactor_code
   - generate_code
+  - analyze_project
+  - get_project_dependencies
+  - scan_project_structure
   - list_skills
   - read_skill
 ---
@@ -578,6 +581,306 @@ data class User(
 }
 ```
 
+## 📊 Part 8: Project Analysis
+
+### Purpose
+
+**Analyze codebases to determine tech stack WITHOUT HALLUCINATING.**
+
+### When to Use
+
+User asks:
+- "What's the tech stack?"
+- "What languages are used?"
+- "Show me the project structure"
+- "What dependencies does this have?"
+- "What frameworks are being used?"
+- "Analyze this project"
+- "What's in requirements.txt?"
+
+### Tool: `analyze_project`
+
+```python
+analyze_project(
+    project_path=".",              # Current directory
+    include_dependencies=True,     # Parse requirements.txt, package.json
+    include_structure=True,        # Include directory tree
+    max_depth=3                    # How deep to scan
+)
+```
+
+**Returns:**
+```json
+{
+  "project_name": "mcp_a2a",
+  "languages": {
+    "Python": {
+      "files": 45,
+      "lines": 12453,
+      "extension": ".py"
+    },
+    "JavaScript": {
+      "files": 12,
+      "lines": 3041,
+      "extension": ".js"
+    }
+  },
+  "frameworks": [
+    "FastAPI",
+    "LangChain (Ollama)",
+    "Model Context Protocol",
+    "Pandas",
+    "scikit-learn"
+  ],
+  "dependencies": {
+    "python": ["fastapi", "langchain", "mcp", "pandas", "..."],
+    "node": ["react", "websockets", "..."]
+  },
+  "tech_stack": [
+    "Python (45 files, 12,453 lines)",
+    "JavaScript (12 files, 3,041 lines)",
+    "FastAPI",
+    "LangChain (Ollama)",
+    "Model Context Protocol",
+    "Python packages: fastapi, langchain, mcp, pandas, numpy"
+  ],
+  "structure": {
+    "client/": {...},
+    "servers/": {...},
+    "tools/": {...}
+  }
+}
+```
+
+### Workflow
+
+**CRITICAL: NEVER HALLUCINATE TECH STACK!**
+
+```
+❌ BAD (hallucinating):
+User: "What's the tech stack?"
+Agent: "This project uses Flask, PostgreSQL, Bootstrap..."
+         ↑ WRONG - didn't check actual files
+
+✅ GOOD (using tool):
+User: "What's the tech stack?"
+Agent: analyze_project()
+Agent: "I analyzed the project. Here's what I found:
+
+**Primary Language:** Python (45 files, 12,453 lines)
+
+**Frameworks:**
+- FastAPI (web framework)
+- LangChain (LLM orchestration)  
+- Model Context Protocol (MCP)
+
+**Key Libraries:**
+- Data: pandas, numpy, scikit-learn
+- ML: sentence-transformers, ollama
+- Database: lancedb
+
+**Also includes:** JavaScript for web UI (12 files)
+
+This is an AI agent system with MCP integration."
+```
+
+### Example Interactions
+
+#### Example 1: Basic Tech Stack
+
+```
+User: "What's the tech stack for this project?"
+
+Agent: analyze_project()
+
+Agent: "I scanned the project. Here's the tech stack:
+
+**Languages:**
+• Python: 45 files, ~12,000 lines (primary)
+• JavaScript: 12 files, ~3,000 lines (web UI)
+
+**Frameworks & Libraries:**
+• FastAPI - Web framework
+• LangChain - LLM orchestration
+• Model Context Protocol (MCP) - Agent framework
+• LanceDB - Vector database
+• Sentence Transformers - Embeddings
+
+**Key Dependencies:**
+• Python: fastapi, langchain-ollama, mcp-use, pandas, numpy
+• Node.js: react, websockets
+
+This is an MCP-based AI agent system with multi-tool support."
+```
+
+#### Example 2: Dependency Details
+
+```
+User: "What version of FastAPI are we using?"
+
+Agent: get_project_dependencies(dep_type="python")
+
+Agent: "Looking at requirements.txt:
+• fastapi - no specific version pinned (latest)
+
+Would you like me to:
+1. Check what's currently installed?
+2. Suggest pinning to a specific version?"
+```
+
+#### Example 3: Project Structure
+
+```
+User: "Show me the project structure"
+
+Agent: scan_project_structure(max_depth=3)
+
+Agent: "Here's the project structure:
+
+```
+mcp_a2a/
+├── client/
+│   ├── langgraph.py
+│   ├── llm_backend.py
+│   └── models.py
+├── servers/
+│   ├── code_assistant/
+│   ├── plex/
+│   └── todo/
+├── tools/
+│   ├── code_assistant/
+│   ├── plex/
+│   └── todo/
+└── requirements.txt
+```
+
+The project follows an MCP architecture with:
+- `client/` - Agent orchestration (LangGraph)
+- `servers/` - MCP servers (FastMCP)
+- `tools/` - Tool implementations"
+```
+
+### Additional Tools
+
+#### `get_project_dependencies`
+
+Get detailed dependency information:
+
+```python
+get_project_dependencies(
+    project_path=".",
+    dep_type="all"         # or "python", "node"
+)
+```
+
+Use for:
+- "What Python packages?"
+- "List all dependencies"
+- "What's in requirements.txt?"
+
+#### `scan_project_structure`
+
+Get directory tree:
+
+```python
+scan_project_structure(
+    project_path=".",
+    max_depth=3
+)
+```
+
+Use for:
+- "Show structure"
+- "What directories exist?"
+- "Project layout?"
+
+### Important Rules
+
+#### ❌ NEVER Hallucinate
+
+```
+❌ "This project uses Flask and PostgreSQL"
+   (without checking files)
+
+✅ Use analyze_project() to check actual files
+```
+
+#### ❌ NEVER Guess Versions
+
+```
+❌ "You're using FastAPI 0.104.1"
+   (without checking)
+
+✅ Use get_project_dependencies() for actual versions
+```
+
+#### ✅ ALWAYS Use Tools
+
+For ANY question about:
+- Tech stack → `analyze_project()`
+- Dependencies → `get_project_dependencies()`
+- Structure → `scan_project_structure()`
+- Specific files → Use file viewing tools
+
+### Edge Cases
+
+**Empty Project**
+```
+User: "What's the tech stack?"
+Agent: analyze_project()
+Result: Only 2 files found
+
+Agent: "I only found 2 files. Are you in the project root?
+
+Current directory: /home/user/Desktop
+
+If this isn't the project root, specify the path:
+analyze_project('/path/to/project')"
+```
+
+**No Dependency Files**
+```
+User: "What dependencies?"
+Agent: get_project_dependencies()
+Result: No requirements.txt or package.json
+
+Agent: "I don't see standard dependency files (requirements.txt, package.json).
+
+This might be:
+1. A project without external dependencies
+2. Using a different package manager (Poetry, Pipenv)
+3. Dependencies specified elsewhere
+
+Would you like me to scan the code for import statements instead?"
+```
+
+### Best Practices
+
+1. **Start with `analyze_project()`** for general questions
+2. **Be specific** about what was found vs. guessed
+3. **Explain frameworks** if user might not know them
+4. **Suggest actions** based on findings
+5. **Never make assumptions** - always scan files
+
+### Quick Commands
+
+```python
+# Full analysis
+analyze_project()
+
+# Dependencies only
+get_project_dependencies()
+
+# Python deps only
+get_project_dependencies(dep_type="python")
+
+# Structure only
+scan_project_structure()
+
+# Deep structure scan
+scan_project_structure(max_depth=5)
+```
+
 ---
 
 ## 🛠️  Tool Reference
@@ -591,6 +894,9 @@ data class User(
 | `generate_tests` | Create unit tests | `file_path`, `test_framework` |
 | `refactor_code` | Modernize/optimize | `refactor_type`, `preview` |
 | `generate_code` | Create new code | `description`, `style`, `framework` |
+| `analyze_project` | Scan tech stack | `project_path`, `include_dependencies` |
+| `get_project_dependencies` | Get package versions | `project_path`, `dep_type` |
+| `scan_project_structure` | Directory tree | `project_path`, `max_depth` |
 
 ---
 

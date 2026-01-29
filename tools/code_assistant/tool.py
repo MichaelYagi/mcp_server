@@ -10,11 +10,13 @@ import ast
 import json
 import shutil
 import subprocess
+import logging
+import re
+import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
-import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -469,7 +471,7 @@ def fix_code_file_impl(file_path: str, auto_fix: bool, backup: bool, dry_run: bo
     if lang.formatter_command and not dry_run and fixes_applied:
         try:
             cmd = [arg.format(file=file_path) for arg in lang.formatter_command]
-            result = subprocess.run(cmd, capture_output=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
             formatted = result.returncode == 0
         except:
             pass
@@ -1220,3 +1222,350 @@ data class ResponseModel(
 // Style: {style}
 // TODO: Implement in {language} using {style} style
 '''
+
+
+def analyze_project_impl(
+        project_path: str = ".",
+        include_dependencies: bool = True,
+        include_structure: bool = True,
+        max_depth: int = 3
+) -> str:
+    """
+    Analyze project structure and tech stack.
+
+    Args:
+        project_path: Root path of project (default: current directory)
+        include_dependencies: Parse requirements.txt, package.json, etc.
+        include_structure: Include directory structure
+        max_depth: Maximum directory depth to scan
+
+    Returns:
+        JSON with project analysis
+    """
+    project_root = Path(project_path).resolve()
+
+    if not project_root.exists():
+        return json.dumps({
+            "error": f"Project path not found: {project_path}",
+            "status": "not_found"
+        }, indent=2)
+
+    analysis = {
+        "project_root": str(project_root),
+        "project_name": project_root.name,
+        "languages": {},
+        "frameworks": [],
+        "dependencies": {},
+        "file_counts": {},
+        "structure": {},
+        "tech_stack": []
+    }
+
+    # Scan project files
+    file_extensions = defaultdict(int)
+    total_lines = defaultdict(int)
+
+    try:
+        for root, dirs, files in os.walk(project_root):
+            # Skip common ignore directories
+            dirs[:] = [d for d in dirs if d not in {
+                '.git', '.venv', 'venv', 'node_modules', '__pycache__',
+                '.pytest_cache', '.mypy_cache', 'dist', 'build', '.idea',
+                'logs', 'tmp', 'temp'
+            }]
+
+            # Check depth
+            depth = len(Path(root).relative_to(project_root).parts)
+            if depth > max_depth:
+                continue
+
+            for file in files:
+                file_path = Path(root) / file
+                ext = file_path.suffix.lower()
+
+                if ext:
+                    file_extensions[ext] += 1
+
+                    # Count lines for code files
+                    if ext in {'.py', '.js', '.jsx', '.ts', '.tsx', '.rs', '.go', '.java', '.kt', '.c', '.cpp', '.h'}:
+                        try:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                lines = len(f.readlines())
+                                total_lines[ext] += lines
+                        except:
+                            pass
+
+    except Exception as e:
+        return json.dumps({
+            "error": f"Failed to scan project: {str(e)}",
+            "status": "scan_failed"
+        }, indent=2)
+
+    # Determine primary languages
+    language_map = {
+        '.py': 'Python',
+        '.js': 'JavaScript',
+        '.jsx': 'JavaScript (React)',
+        '.ts': 'TypeScript',
+        '.tsx': 'TypeScript (React)',
+        '.rs': 'Rust',
+        '.go': 'Go',
+        '.java': 'Java',
+        '.kt': 'Kotlin',
+        '.kts': 'Kotlin Script',
+        '.c': 'C',
+        '.cpp': 'C++',
+        '.rb': 'Ruby',
+        '.php': 'PHP'
+    }
+
+    for ext, count in sorted(file_extensions.items(), key=lambda x: x[1], reverse=True):
+        if ext in language_map:
+            lang_name = language_map[ext]
+            analysis['languages'][lang_name] = {
+                "files": count,
+                "lines": total_lines.get(ext, 0),
+                "extension": ext
+            }
+
+    analysis['file_counts'] = dict(sorted(file_extensions.items(), key=lambda x: x[1], reverse=True)[:20])
+
+    # Detect dependencies and frameworks
+    if include_dependencies:
+        # Python dependencies
+        req_file = project_root / "requirements.txt"
+        if req_file.exists():
+            python_deps = _parse_requirements(req_file)
+            analysis['dependencies']['python'] = python_deps
+            analysis['frameworks'].extend(_detect_python_frameworks(python_deps))
+
+        # Node.js dependencies
+        package_file = project_root / "package.json"
+        if package_file.exists():
+            node_deps = _parse_package_json(package_file)
+            analysis['dependencies']['node'] = node_deps
+            analysis['frameworks'].extend(_detect_node_frameworks(node_deps))
+
+    # Build tech stack summary
+    tech_stack = []
+
+    # Add languages
+    for lang, info in analysis['languages'].items():
+        tech_stack.append(f"{lang} ({info['files']} files, {info['lines']:,} lines)")
+
+    # Add frameworks
+    tech_stack.extend(analysis['frameworks'])
+
+    # Add key dependencies
+    for lang_type, deps in analysis['dependencies'].items():
+        key_deps = deps[:5] if isinstance(deps, list) else list(deps.keys())[:5]
+        if key_deps:
+            tech_stack.append(f"{lang_type.title()} packages: {', '.join(key_deps)}")
+
+    analysis['tech_stack'] = tech_stack
+
+    # Project structure (simplified tree)
+    if include_structure:
+        analysis['structure'] = _build_directory_tree(project_root, max_depth=2)
+
+    return json.dumps(analysis, indent=2)
+
+
+def get_project_dependencies_impl(project_path: str = ".", dep_type: str = "all") -> str:
+    """
+    Get detailed project dependencies.
+
+    Args:
+        project_path: Root path of project
+        dep_type: Type of dependencies ("python", "node", "rust", "all")
+
+    Returns:
+        JSON with dependencies
+    """
+    project_root = Path(project_path).resolve()
+
+    dependencies = {}
+
+    if dep_type in ["python", "all"]:
+        req_file = project_root / "requirements.txt"
+        if req_file.exists():
+            dependencies['python'] = _parse_requirements_detailed(req_file)
+
+    if dep_type in ["node", "all"]:
+        package_file = project_root / "package.json"
+        if package_file.exists():
+            dependencies['node'] = _parse_package_json_detailed(package_file)
+
+    return json.dumps({
+        "project_root": str(project_root),
+        "dependencies": dependencies
+    }, indent=2)
+
+
+def scan_project_structure_impl(project_path: str = ".", max_depth: int = 3) -> str:
+    """
+    Get detailed project directory structure.
+
+    Args:
+        project_path: Root path of project
+        max_depth: Maximum depth to scan
+
+    Returns:
+        JSON with directory tree
+    """
+    project_root = Path(project_path).resolve()
+
+    structure = _build_directory_tree(project_root, max_depth)
+
+    return json.dumps({
+        "project_root": str(project_root),
+        "structure": structure
+    }, indent=2)
+
+
+# ===========================================================================
+# HELPER FUNCTIONS FOR PROJECT ANALYSIS
+# ===========================================================================
+
+def _parse_requirements(req_file: Path) -> List[str]:
+    """Parse requirements.txt and return package names"""
+    packages = []
+    try:
+        with open(req_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    # Extract package name (before ==, >=, etc.)
+                    match = re.match(r'^([a-zA-Z0-9\-_]+)', line)
+                    if match:
+                        packages.append(match.group(1))
+    except:
+        pass
+    return packages
+
+
+def _parse_requirements_detailed(req_file: Path) -> Dict[str, str]:
+    """Parse requirements.txt with versions"""
+    packages = {}
+    try:
+        with open(req_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    if '==' in line:
+                        name, version = line.split('==', 1)
+                        packages[name.strip()] = version.strip()
+                    elif '>=' in line:
+                        name, version = line.split('>=', 1)
+                        packages[name.strip()] = f">={version.strip()}"
+                    else:
+                        packages[line] = "latest"
+    except:
+        pass
+    return packages
+
+
+def _parse_package_json(package_file: Path) -> List[str]:
+    """Parse package.json and return package names"""
+    try:
+        with open(package_file, 'r') as f:
+            data = json.load(f)
+            deps = list(data.get('dependencies', {}).keys())
+            dev_deps = list(data.get('devDependencies', {}).keys())
+            return deps + dev_deps
+    except:
+        return []
+
+
+def _parse_package_json_detailed(package_file: Path) -> Dict[str, Any]:
+    """Parse package.json with full details"""
+    try:
+        with open(package_file, 'r') as f:
+            data = json.load(f)
+            return {
+                "dependencies": data.get('dependencies', {}),
+                "devDependencies": data.get('devDependencies', {}),
+                "scripts": data.get('scripts', {})
+            }
+    except:
+        return {}
+
+
+def _detect_python_frameworks(packages: List[str]) -> List[str]:
+    """Detect Python frameworks from package list"""
+    frameworks = []
+    framework_map = {
+        'fastapi': 'FastAPI',
+        'flask': 'Flask',
+        'django': 'Django',
+        'pytorch': 'PyTorch',
+        'tensorflow': 'TensorFlow',
+        'langchain': 'LangChain',
+        'langchain-ollama': 'LangChain (Ollama)',
+        'mcp': 'Model Context Protocol',
+        'mcp-use': 'MCP Use',
+        'sqlalchemy': 'SQLAlchemy',
+        'pandas': 'Pandas',
+        'numpy': 'NumPy',
+        'scikit-learn': 'scikit-learn',
+        'lancedb': 'LanceDB',
+        'sentence-transformers': 'Sentence Transformers',
+        'ollama': 'Ollama'
+    }
+
+    for pkg in packages:
+        pkg_lower = pkg.lower()
+        if pkg_lower in framework_map:
+            frameworks.append(framework_map[pkg_lower])
+
+    return frameworks
+
+
+def _detect_node_frameworks(packages: List[str]) -> List[str]:
+    """Detect Node.js frameworks from package list"""
+    frameworks = []
+    framework_map = {
+        'react': 'React',
+        'vue': 'Vue.js',
+        'next': 'Next.js',
+        'express': 'Express',
+        'nestjs': 'NestJS',
+        'typescript': 'TypeScript'
+    }
+
+    for pkg in packages:
+        pkg_lower = pkg.lower()
+        if pkg_lower in framework_map:
+            frameworks.append(framework_map[pkg_lower])
+
+    return frameworks
+
+
+def _build_directory_tree(root_path: Path, max_depth: int, current_depth: int = 0) -> Dict:
+    """Build a nested directory tree"""
+    if current_depth >= max_depth:
+        return {}
+
+    tree = {}
+
+    try:
+        items = sorted(root_path.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+
+        for item in items:
+            # Skip hidden and ignored directories
+            if item.name.startswith('.') or item.name in {
+                'node_modules', '__pycache__', 'venv', '.venv', 'logs',
+                'tmp', 'temp', 'dist', 'build', '.idea'
+            }:
+                continue
+
+            if item.is_dir():
+                subtree = _build_directory_tree(item, max_depth, current_depth + 1)
+                if subtree or current_depth < max_depth - 1:
+                    tree[f"{item.name}/"] = subtree
+            else:
+                tree[item.name] = None  # File (no children)
+    except:
+        pass
+
+    return tree

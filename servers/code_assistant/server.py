@@ -26,7 +26,10 @@ from tools.code_assistant.tool import (
     explain_code_impl,
     generate_tests_impl,
     refactor_code_impl,
-    generate_code_impl
+    generate_code_impl,
+    analyze_project_impl,
+    get_project_dependencies_impl,
+    scan_project_structure_impl
 )
 
 # Import tool control if available (optional)
@@ -363,6 +366,130 @@ def generate_code(
     logger.info(f"✨ [TOOL] generate_code called: {description[:50]}...")
     return generate_code_impl(description, language, style, include_tests, include_docstrings, framework, output_file)
 
+
+@mcp.tool()
+@check_tool_enabled(category="code_assistant")
+def analyze_project(
+        project_path: str = ".",
+        include_dependencies: bool = True,
+        include_structure: bool = True,
+        max_depth: int = 3
+) -> str:
+    """
+    Analyze project structure, tech stack, and dependencies.
+
+    Scans the project to determine:
+    - Programming languages used (with file counts and line counts)
+    - Frameworks and libraries detected
+    - Dependencies from requirements.txt, package.json, etc.
+    - Project structure overview
+    - Tech stack summary
+
+    Args:
+        project_path (str): Root path of project (default: current directory ".")
+        include_dependencies (bool): Parse dependency files (default: True)
+        include_structure (bool): Include directory tree (default: True)
+        max_depth (int): Maximum directory depth to scan (default: 3)
+
+    Returns:
+        JSON with:
+        - project_name: Name of the project
+        - languages: Languages used with file/line counts
+        - frameworks: Detected frameworks (FastAPI, LangChain, MCP, etc.)
+        - dependencies: Parsed from requirements.txt, package.json
+        - file_counts: Count of each file type
+        - structure: Directory tree
+        - tech_stack: Human-readable tech stack summary
+
+    Examples:
+        analyze_project()                                    # Analyze current directory
+        analyze_project("/path/to/project")                 # Analyze specific path
+        analyze_project(".", max_depth=5)                   # Deeper scan
+        analyze_project(".", include_structure=False)       # Skip structure
+
+    Use cases:
+        - "What's the tech stack for this project?"
+        - "What languages are used in this codebase?"
+        - "Show me the project structure"
+        - "What dependencies does this project have?"
+        - "Analyze the project I'm working on"
+        - "What frameworks are being used?"
+
+    IMPORTANT: Always use this tool to answer tech stack questions.
+    Never guess or hallucinate the tech stack - scan the actual files.
+    """
+    logger.info(f"📊 [TOOL] analyze_project called: {project_path}")
+    return analyze_project_impl(project_path, include_dependencies, include_structure, max_depth)
+
+
+@mcp.tool()
+@check_tool_enabled(category="code_assistant")
+def get_project_dependencies(project_path: str = ".", dep_type: str = "all") -> str:
+    """
+    Get detailed list of project dependencies with versions.
+
+    Parses dependency files and returns detailed information about packages.
+
+    Args:
+        project_path (str): Root path of project (default: current directory)
+        dep_type (str): Type of dependencies to get:
+            - "all": All dependencies (default)
+            - "python": Only Python (requirements.txt)
+            - "node": Only Node.js (package.json)
+
+    Returns:
+        JSON with:
+        - dependencies: Dict of dependencies by type
+          - python: {package: version}
+          - node: {dependencies, devDependencies, scripts}
+
+    Examples:
+        get_project_dependencies()                          # All dependencies
+        get_project_dependencies(".", dep_type="python")   # Python only
+        get_project_dependencies("/path", "node")          # Node only
+
+    Use cases:
+        - "What Python packages does this use?"
+        - "List all dependencies"
+        - "Show me the Node.js dependencies"
+        - "What version of FastAPI is installed?"
+        - "What packages are in requirements.txt?"
+    """
+    logger.info(f"📦 [TOOL] get_project_dependencies called: {project_path} ({dep_type})")
+    return get_project_dependencies_impl(project_path, dep_type)
+
+
+@mcp.tool()
+@check_tool_enabled(category="code_assistant")
+def scan_project_structure(project_path: str = ".", max_depth: int = 3) -> str:
+    """
+    Get detailed project directory structure as a tree.
+
+    Args:
+        project_path (str): Root path of project (default: current directory)
+        max_depth (int): Maximum depth to scan (default: 3)
+
+    Returns:
+        JSON with:
+        - project_root: Absolute path to project
+        - structure: Nested dict representing directory tree
+          - Directories end with "/"
+          - Files have None value
+
+    Examples:
+        scan_project_structure()                           # Current directory, depth 3
+        scan_project_structure(".", max_depth=5)          # Deeper scan
+        scan_project_structure("/path/to/project", 2)     # Shallow scan
+
+    Use cases:
+        - "Show me the project structure"
+        - "What's the directory layout?"
+        - "List all directories in this project"
+        - "What files are in the project?"
+        - "Show me the folder structure"
+    """
+    logger.info(f"🗂️  [TOOL] scan_project_structure called: {project_path}")
+    return scan_project_structure_impl(project_path, max_depth)
 
 # Skill management tools
 skill_registry = None

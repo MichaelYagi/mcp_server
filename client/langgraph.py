@@ -126,10 +126,10 @@ INTENT_PATTERNS = {
             r'|\blint\b'
             
             # Analysis with file extensions
-            r'|\banalyze.*\.(py|js|jsx|ts|tsx|rs|go)\b'
-            r'|\bcheck.*\.(py|js|jsx|ts|tsx|rs|go)\b'
-            r'|\breview.*\.(py|js|jsx|ts|tsx|rs|go)\b'
-            r'|\binspect.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\banalyze.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            r'|\bcheck.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            r'|\breview.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            r'|\binspect.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
             
             # Fix requests
             r'|\bfix.*bug\b'
@@ -138,7 +138,7 @@ INTENT_PATTERNS = {
             r'|\bfix.*code\b'
             r'|\bfix\s+this\b'
             r'|\bfix\s+my\b'
-            r'|\bfix.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\bfix.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
             
             # Quality/improvement
             r'|\bcode.*quality\b'
@@ -151,7 +151,7 @@ INTENT_PATTERNS = {
             r'|\bfind.*bug\b'
             r'|\bdetect.*bug\b'
             r'|\banti.?pattern\b'
-            r'|\bwhat.*wrong\s+with.*code\b'
+            r'|\bwhat\'?s?\s+wrong\s+with.*code\b'
             r'|\bissues?\s+in.*code\b'
             
             # Testing
@@ -160,38 +160,38 @@ INTENT_PATTERNS = {
             r'|\bcreate.*test\b'
             
             # Direct file analysis
-            r'|\banalyze.*my.*\.(py|js|jsx|ts|tsx|rs|go)\b'
-            r'|\bcheck.*my.*\.(py|js|jsx|ts|tsx|rs|go)\b'
+            r'|\banalyze.*my.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            r'|\bcheck.*my.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
             
-            # CODE GENERATION - Explicit tool mentions
-            r'|\buse\s+the\s+generate_code\s+tool\b'
-            r'|\bgenerate_code\s+tool\b'
-            r'|\bcall\s+generate_code\b'
-            r'|\binvoke\s+generate_code\b'
+            # CODE GENERATION
+            r'|\bgenerate.*code\b'
+            r'|\bcreate.*(function|class|module|script|component)\b'
+            r'|\bwrite.*(function|class|code)\b'
+            r'|\bmake.*(function|class|component)\b'
+            r'|\bbuild.*(function|class|component)\b'
+            r'|\bcode\s+(for|that)\b'
+            r'|\bfunction\s+that\b'
+            r'|\bclass\s+that\b'
+            r'|\bscript\s+(that|to)\b'
+            r'|\bcomponent\s+that\b'
             
-            # CODE GENERATION - Natural language
-            r'|\bgenerate\s+(me\s+)?(a\s+|some\s+)?code\b'
-            r'|\bwrite\s+(me\s+)?(a\s+|some\s+)?code\b'
-            r'|\bcreate\s+(me\s+)?(a\s+|some\s+)?code\b'
-            r'|\bmake\s+(me\s+)?(a\s+|some\s+)?code\b'
-            r'|\bbuild\s+(me\s+)?(a\s+|some\s+)?code\b'
-            
-            # CODE GENERATION - Specific constructs
-            r'|\bgenerate\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
-            r'|\bwrite\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
-            r'|\bcreate\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
-            r'|\bmake\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
-            r'|\bbuild\s+(a\s+|an\s+)?(function|class|module|script|component)\b'
-            
-            # CODE GENERATION - Task-based
-            r'|\b(function|class|script|component)\s+(that|to|for)\b'
-            r'|\bcode\s+(that|to|for)\b'
-            r'|\bprogram\s+(that|to|for)\b'
-            
-            # CODE GENERATION - "Calculate/compute" patterns
-            r'|\bcalculate\s+\w+\s+(recursively|iteratively|using)\b'
-            r'|\bcompute\s+\w+\s+(recursively|iteratively|using)\b'
-            r'|\bimplement\s+\w+\s+(algorithm|function|method)\b'
+            # PROJECT ANALYSIS (NEW!)
+            r'|\btech\s+stack\b'
+            r'|\btechnology\s+stack\b'
+            r'|\bwhat.*tech\b'
+            r'|\bwhat.*technologies\b'
+            r'|\bwhat.*languages\b'
+            r'|\bwhat.*frameworks?\b'
+            r'|\bwhat.*dependencies\b'
+            r'|\bproject\s+structure\b'
+            r'|\banalyze.*project\b'
+            r'|\bscan.*project\b'
+            r'|\blist.*dependencies\b'
+            r'|\bshow.*structure\b'
+            r'|\bdirectory\s+structure\b'
+            r'|\bfolder\s+structure\b'
+            r'|\bwhat\'?s?\s+in\s+requirements\b'
+            r'|\bwhat\'?s?\s+in\s+package\.json\b'
         ),
         "tools": [
             "analyze_code_file",
@@ -200,7 +200,10 @@ INTENT_PATTERNS = {
             "explain_code",
             "generate_tests",
             "refactor_code",
-            "generate_code"
+            "generate_code",
+            "analyze_project",
+            "get_project_dependencies",
+            "scan_project_structure"
         ],
         "priority": 2
     },
@@ -592,7 +595,7 @@ def create_langgraph_agent(llm_with_tools, tools):
             try:
                 response = await asyncio.wait_for(
                     base_llm.ainvoke(messages),
-                    timeout=60.0
+                    timeout=300.0
                 )
                 duration = time.time() - start_time
                 if METRICS_AVAILABLE:
@@ -610,10 +613,10 @@ def create_langgraph_agent(llm_with_tools, tools):
                 if METRICS_AVAILABLE:
                     metrics["llm_errors"] += 1
                     metrics["llm_times"].append((time.time(), duration))
-                logger.error(f"⏱️ LLM call timed out after 60s")
+                logger.error(f"⏱️ LLM call timed out after 5m")
 
                 # Return helpful timeout message instead of crashing
-                timeout_message = AIMessage(content="""⏱️ Request timed out after 60 seconds.
+                timeout_message = AIMessage(content="""⏱️ Request timed out after 5 minutes.
 
                 **The model is taking too long to respond.** This usually happens when:
                 - The model is processing too many tools (58 tools detected)
@@ -792,10 +795,10 @@ def create_langgraph_agent(llm_with_tools, tools):
 
         start_time = time.time()
         try:
-            # Add 60 second timeout to prevent hanging
+            # Add 5 minutes timeout to prevent hanging
             response = await asyncio.wait_for(
                 llm_to_use.ainvoke(messages),
-                timeout=60.0
+                timeout=300.0
             )
             duration = time.time() - start_time
 
@@ -832,13 +835,13 @@ Please answer the question using these search results."""
                         logger.warning("⚠️ LangSearch failed - using base LLM")
                         response = await asyncio.wait_for(
                             base_llm.ainvoke(messages),
-                            timeout=60.0
+                            timeout=300.0
                         )
                 else:
                     logger.warning("⚠️ LangSearch unavailable - using base LLM")
                     response = await asyncio.wait_for(
                         base_llm.ainvoke(messages),
-                        timeout=60.0
+                        timeout=300.0
                     )
 
             elif not has_tool_calls and has_content:
@@ -880,12 +883,12 @@ Please provide an updated answer using these search results."""
             if METRICS_AVAILABLE:
                 metrics["llm_errors"] += 1
                 metrics["llm_times"].append((time.time(), duration))
-            logger.error(f"⏱️ LLM call timed out after 60s")
+            logger.error(f"⏱️ LLM call timed out after 5m")
 
             # Return helpful timeout message instead of crashing
             return {
                 "messages": messages + [AIMessage(
-                    content="⏱️ Request timed out after 60 seconds. Please try:\n\n1. Rephrasing your question\n2. Breaking it into smaller parts\n3. Using a simpler query")],
+                    content="⏱️ Request timed out after 5 minutes. Please try:\n\n1. Rephrasing your question\n2. Breaking it into smaller parts\n3. Using a simpler query")],
                 "tools": state.get("tools", {}),
                 "llm": state.get("llm"),
                 "ingest_completed": state.get("ingest_completed", False),

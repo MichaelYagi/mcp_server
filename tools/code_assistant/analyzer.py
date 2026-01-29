@@ -630,7 +630,7 @@ def run_linter(file_path: str, lang_config: LanguageConfig) -> Dict[str, Any]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=300,
             cwd=Path(file_path).parent
         )
 
@@ -648,7 +648,7 @@ def run_linter(file_path: str, lang_config: LanguageConfig) -> Dict[str, Any]:
             "message": f"Linter '{lang_config.linter_command[0]}' not found. Install it first."
         }
     except subprocess.TimeoutExpired:
-        return {"status": "timeout", "message": "Linter timed out after 60 seconds"}
+        return {"status": "timeout", "message": "Linter timed out after 5 minutes"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
