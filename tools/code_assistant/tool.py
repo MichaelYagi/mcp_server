@@ -1374,6 +1374,7 @@ def analyze_project_impl(
         "project_root": str(project_root),
         "project_name": project_root.name,
         "project_intro": "",
+        "project_purpose": "",
         "architecture": {
             "type": "unknown",
             "patterns": [],
@@ -1518,51 +1519,89 @@ def analyze_project_impl(
 
     # Detect Android/Kotlin architecture
     elif any('src/main/kotlin' in str(d) or 'src/main/java' in str(d) for d in all_dirs):
-        analysis['architecture']['type'] = 'Android/Kotlin Application'
+
+        # Check if it's actually Android (not just Kotlin)
+        is_android = False
+
+        # Simple check: AndroidManifest.xml exists
+        if (project_root / 'AndroidManifest.xml').exists():
+            is_android = True
+        elif (project_root / 'app' / 'src' / 'main' / 'AndroidManifest.xml').exists():
+            is_android = True
+        elif (project_root / 'src' / 'main' / 'AndroidManifest.xml').exists():
+            is_android = True
+
+        # Check build.gradle for android plugin
+        if not is_android:
+            for gradle_file in ['build.gradle', 'build.gradle.kts', 'app/build.gradle', 'app/build.gradle.kts']:
+                gradle_path = project_root / gradle_file
+                if gradle_path.exists():
+                    try:
+                        content = gradle_path.read_text(encoding='utf-8', errors='ignore')
+                        if 'com.android.application' in content or 'com.android.library' in content:
+                            is_android = True
+                            break
+                    except:
+                        pass
+
+        # Set architecture type based on what we found
+        if is_android:
+            analysis['architecture']['type'] = 'Android/Kotlin Application'
+        else:
+            analysis['architecture']['type'] = 'Kotlin Application'
+
         analysis['architecture']['patterns'] = []
 
-        # Detect patterns
-        has_ui = any(name in dir_names for name in ['ui', 'view', 'activity', 'fragment'])
-        has_data = any(name in dir_names for name in ['data', 'repository', 'dao', 'database'])
-        has_domain = any(name in dir_names for name in ['domain', 'usecase', 'model'])
-        has_di = any(name in dir_names for name in ['di', 'injection', 'module', 'koin', 'hilt'])
+        # Only do Android-specific detection if it's actually Android
+        if is_android:
+            # Detect patterns
+            has_ui = any(name in dir_names for name in ['ui', 'view', 'activity', 'fragment'])
+            has_data = any(name in dir_names for name in ['data', 'repository', 'dao', 'database'])
+            has_domain = any(name in dir_names for name in ['domain', 'usecase', 'model'])
+            has_di = any(name in dir_names for name in ['di', 'injection', 'module', 'koin', 'hilt'])
 
-        layers = {}
+            layers = {}
 
-        if has_ui and has_data and has_domain:
-            analysis['architecture']['patterns'].append('Clean Architecture')
-            layers = {
-                'presentation': 'UI layer with Activities, Fragments, and ViewModels',
-                'domain': 'Business logic layer with use cases and domain models',
-                'data': 'Data layer with repositories and data sources'
-            }
-        elif has_ui and has_data:
-            analysis['architecture']['patterns'].append('MVVM (Model-View-ViewModel)')
-            layers = {
-                'presentation': 'Views and ViewModels for UI logic',
-                'data': 'Data repositories and sources'
-            }
+            if has_ui and has_data and has_domain:
+                analysis['architecture']['patterns'].append('Clean Architecture')
+                layers = {
+                    'presentation': 'UI layer with Activities, Fragments, and ViewModels',
+                    'domain': 'Business logic layer with use cases and domain models',
+                    'data': 'Data layer with repositories and data sources'
+                }
+            elif has_ui and has_data:
+                analysis['architecture']['patterns'].append('MVVM (Model-View-ViewModel)')
+                layers = {
+                    'presentation': 'Views and ViewModels for UI logic',
+                    'data': 'Data repositories and sources'
+                }
 
-        if has_di:
-            analysis['architecture']['patterns'].append('Dependency Injection')
+            if has_di:
+                analysis['architecture']['patterns'].append('Dependency Injection')
 
-        # Check for Jetpack Compose
-        if any('compose' in str(f).lower() for f in all_files):
-            analysis['architecture']['patterns'].append('Jetpack Compose (declarative UI)')
+            # Check for Jetpack Compose
+            if any('compose' in str(f).lower() for f in all_files):
+                analysis['architecture']['patterns'].append('Jetpack Compose (declarative UI)')
 
-        # Check for Coroutines
-        if any('coroutine' in str(f).lower() for f in all_files):
-            analysis['architecture']['patterns'].append('Kotlin Coroutines (async)')
+            # Check for Coroutines
+            if any('coroutine' in str(f).lower() for f in all_files):
+                analysis['architecture']['patterns'].append('Kotlin Coroutines (async)')
 
-        analysis['architecture']['layers'] = layers
+            analysis['architecture']['layers'] = layers
 
-        pattern_desc = ' and '.join(analysis['architecture']['patterns']) if analysis['architecture'][
-            'patterns'] else 'standard Android patterns'
-        analysis['architecture']['description'] = (
-            f"Android application using {pattern_desc}. "
-            f"Follows Android best practices with clear separation of concerns across "
-            f"{len(layers)} architectural layers."
-        )
+            pattern_desc = ' and '.join(analysis['architecture']['patterns']) if analysis['architecture'][
+                'patterns'] else 'standard Android patterns'
+            analysis['architecture']['description'] = (
+                f"Android application using {pattern_desc}. "
+                f"Follows Android best practices with clear separation of concerns."
+            )
+        else:
+            # It's Kotlin but NOT Android
+            analysis['architecture']['patterns'] = ['Kotlin/JVM application']
+            analysis['architecture']['description'] = (
+                "Kotlin application (not Android). "
+                "Standard JVM or server-side Kotlin project."
+            )
 
     # Detect microservices
     elif 'services' in dir_names or 'microservices' in dir_names:
@@ -1699,6 +1738,34 @@ def analyze_project_impl(
     # Project structure (simplified tree)
     if include_structure:
         analysis['structure'] = _build_directory_tree(project_root, max_depth=2)
+
+    def ensure_no_none(obj):
+        '''Recursively replace None with appropriate defaults'''
+        if isinstance(obj, dict):
+            return {k: ensure_no_none(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [ensure_no_none(item) for item in obj]
+        elif obj is None:
+            return ""
+        else:
+            return obj
+
+    analysis = ensure_no_none(analysis)
+
+    # Double-check critical fields
+    if not analysis.get('project_intro'):
+        analysis['project_intro'] = f"{analysis['project_name']} project"
+
+    if not analysis.get('project_purpose'):
+        analysis['project_purpose'] = ""
+
+    if not analysis['architecture'].get('description'):
+        analysis['architecture']['description'] = "Architecture not clearly identified."
+
+    if not analysis['architecture'].get('type'):
+        analysis['architecture']['type'] = "unknown"
+
+    return json.dumps(analysis, indent=2)
 
     return json.dumps(analysis, indent=2)
 
