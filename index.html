@@ -2048,7 +2048,7 @@
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;");
 
-            // --- Markdown formatting ---
+            // --- Headings ---
             text = text.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
             text = text.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
             text = text.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
@@ -2056,6 +2056,7 @@
             text = text.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
             text = text.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
 
+            // --- Bold / italic / strike ---
             text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
             text = text.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
             text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
@@ -2063,12 +2064,53 @@
             text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
             text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
 
+            // --- Blockquotes ---
             text = text.replace(/^>\s+(.+)$/gm, "<blockquote>$1</blockquote>");
+            text = text.replace(/(<\/blockquote>)\s*(<blockquote>)/g, "<br>");
+
+            // --- Horizontal rules ---
             text = text.replace(/^([-*_]){3,}$/gm, "<hr>");
 
+            // --- Lists ---
             text = text.replace(/^- /gm, "&bull; ");
             text = text.replace(/^\* /gm, "&bull; ");
 
+            // --- TABLES (must run BEFORE line-break conversion) ---
+            text = text.replace(
+                /^(\|.+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|.*\|\s*\n?)*)/gm,
+                (match, header, divider, rows) => {
+                    const makeRow = row =>
+                        "<tr>" +
+                        row
+                            .trim()
+                            .slice(1, -1)
+                            .split("|")
+                            .map(cell => `<td>${cell.trim()}</td>`)
+                            .join("") +
+                        "</tr>";
+
+                    const thead =
+                        "<thead>" +
+                        makeRow(header)
+                            .replace(/<td>/g, "<th>")
+                            .replace(/<\/td>/g, "</th>") +
+                        "</thead>";
+
+                    const tbody =
+                        "<tbody>" +
+                        rows
+                            .trim()
+                            .split("\n")
+                            .filter(r => r.trim().startsWith("|"))
+                            .map(makeRow)
+                            .join("") +
+                        "</tbody>";
+
+                    return `<table>${thead}${tbody}</table>`;
+                }
+            );
+
+            // --- Line breaks (must run AFTER tables) ---
             text = text.replace(/\n\s*\n/g, "<br><br>");
             text = text.replace(/\n/g, "<br>");
 
