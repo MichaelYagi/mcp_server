@@ -1224,6 +1224,126 @@ data class ResponseModel(
 '''
 
 
+def _extract_project_description_from_docs(project_root: Path) -> dict:
+    """
+    Extract project description from README and documentation files.
+
+    Returns:
+        dict with 'description' and 'purpose' if found
+    """
+    result = {
+        "description": "",
+        "purpose": ""
+    }
+
+    # Files to check (in priority order)
+    doc_files = [
+        'README.md',
+        'README.txt',
+        'README',
+        'readme.md',
+        'readme.txt',
+        'DESCRIPTION.md',
+        'ABOUT.md',
+        'docs/README.md',
+        'doc/README.md'
+    ]
+
+    content = ""
+
+    # Find and read first available doc file
+    for doc_file in doc_files:
+        file_path = project_root / doc_file
+        if file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    break
+            except:
+                continue
+
+    if not content:
+        return result
+
+    # Extract first meaningful paragraph (skip title and empty lines)
+    lines = content.split('\n')
+    description_lines = []
+    in_code_block = False
+    skip_lines = 0
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Skip code blocks
+        if stripped.startswith('```'):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+
+        # Skip title lines (# Title, ===, ---)
+        if stripped.startswith('#') or stripped == '=' * len(stripped) or stripped == '-' * len(stripped):
+            skip_lines = i + 1
+            continue
+
+        # Skip empty lines at start
+        if i <= skip_lines and not stripped:
+            skip_lines = i + 1
+            continue
+
+        # Start collecting after title
+        if i > skip_lines and stripped:
+            # Stop at next major section
+            if stripped.startswith('##') or (stripped.startswith('#') and len(description_lines) > 0):
+                break
+
+            # Don't include installation/usage headers
+            if any(keyword in stripped.lower() for keyword in
+                   ['installation', 'usage', 'getting started', 'quickstart', 'table of contents']):
+                break
+
+            description_lines.append(stripped)
+
+            # Limit to ~300 characters (2-4 sentences)
+            current_text = ' '.join(description_lines)
+            if len(current_text) > 300:
+                # Trim to last complete sentence
+                sentences = current_text.split('. ')
+                if len(sentences) > 1:
+                    result['description'] = '. '.join(sentences[:-1]) + '.'
+                else:
+                    result['description'] = current_text[:300] + '...'
+                break
+
+    if description_lines and not result['description']:
+        result['description'] = ' '.join(description_lines)
+
+    # Look for purpose/overview sections
+    import re
+
+    # Check for "Purpose", "What is", "About", "Overview" sections
+    purpose_patterns = [
+        (r'##?\s*Purpose[:\s]*\n+(.*?)(?=\n##|$)', 'Purpose'),
+        (r'##?\s*What is[^#\n]*[:\s]*\n+(.*?)(?=\n##|$)', 'What is'),
+        (r'##?\s*About[:\s]*\n+(.*?)(?=\n##|$)', 'About'),
+        (r'##?\s*Overview[:\s]*\n+(.*?)(?=\n##|$)', 'Overview'),
+    ]
+
+    for pattern, name in purpose_patterns:
+        match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+        if match:
+            purpose_text = match.group(1).strip()
+            # Clean up and limit length
+            purpose_lines = [line.strip() for line in purpose_text.split('\n') if
+                             line.strip() and not line.strip().startswith('```')]
+            purpose_text = ' '.join(purpose_lines[:3])  # First 3 lines
+            if len(purpose_text) > 250:
+                purpose_text = purpose_text[:250] + '...'
+            result['purpose'] = purpose_text
+            break
+
+    return result
+
 def analyze_project_impl(
         project_path: str = ".",
         include_dependencies: bool = True,
@@ -1515,35 +1635,45 @@ def analyze_project_impl(
         )
 
     # ========================================================================
-    # NEW: PROJECT INTRO
+    # PROJECT INTRO
     # ========================================================================
 
     # Generate intro based on what we found
-    primary_lang = list(analysis['languages'].keys())[0] if analysis['languages'] else "Unknown"
-    total_files = sum(file_extensions.values())
-    total_code_lines = sum(total_lines.values())
+    # Extract description from README/docs
+    doc_info = _extract_project_description_from_docs(project_root)
 
-    intro_parts = [f"{analysis['project_name']} is a"]
+    # If README has a description, use it
+    if doc_info['description']:
+        analysis['project_intro'] = doc_info['description']
+        if doc_info['purpose']:
+            analysis['project_purpose'] = doc_info['purpose']
+    else:
+        # Fallback: Generate intro based on what we found
+        primary_lang = list(analysis['languages'].keys())[0] if analysis['languages'] else "Unknown"
+        total_files = sum(file_extensions.values())
+        total_code_lines = sum(total_lines.values())
 
-    # Add architecture type
-    if analysis['architecture']['type'] != 'unknown':
-        intro_parts.append(f"{analysis['architecture']['type']}")
+        intro_parts = [f"{analysis['project_name']} is a"]
 
-    # Add primary language
-    if primary_lang != "Unknown":
-        intro_parts.append(f"written primarily in {primary_lang}")
+        # Add architecture type
+        if analysis['architecture']['type'] != 'unknown':
+            intro_parts.append(f"{analysis['architecture']['type']}")
 
-    # Add framework info
-    if analysis['frameworks']:
-        main_frameworks = analysis['frameworks'][:3]  # Top 3
-        intro_parts.append(f"using {', '.join(main_frameworks)}")
+        # Add primary language
+        if primary_lang != "Unknown":
+            intro_parts.append(f"written primarily in {primary_lang}")
 
-    # Add scale
-    intro_parts.append(f"with {total_files:,} files")
-    if total_code_lines > 0:
-        intro_parts.append(f"and ~{total_code_lines:,} lines of code")
+        # Add framework info
+        if analysis['frameworks']:
+            main_frameworks = analysis['frameworks'][:3]  # Top 3
+            intro_parts.append(f"using {', '.join(main_frameworks)}")
 
-    analysis['project_intro'] = ' '.join(intro_parts) + "."
+        # Add scale
+        intro_parts.append(f"with {total_files:,} files")
+        if total_code_lines > 0:
+            intro_parts.append(f"and ~{total_code_lines:,} lines of code")
+
+        analysis['project_intro'] = ' '.join(intro_parts) + "."
 
     # ========================================================================
     # Build tech stack summary
