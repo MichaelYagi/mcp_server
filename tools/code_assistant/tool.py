@@ -1228,7 +1228,7 @@ def analyze_project_impl(
         project_path: str = ".",
         include_dependencies: bool = True,
         include_structure: bool = True,
-        max_depth: int = 8
+        max_depth: int = 6
 ) -> str:
     """
     Analyze project structure and tech stack.
@@ -1240,7 +1240,7 @@ def analyze_project_impl(
         max_depth: Maximum directory depth to scan
 
     Returns:
-        JSON with project analysis
+        JSON with project analysis including intro and architecture description
     """
     project_root = Path(project_path).resolve()
 
@@ -1253,6 +1253,13 @@ def analyze_project_impl(
     analysis = {
         "project_root": str(project_root),
         "project_name": project_root.name,
+        "project_intro": "",
+        "architecture": {
+            "type": "unknown",
+            "patterns": [],
+            "layers": {},
+            "description": ""
+        },
         "languages": {},
         "frameworks": [],
         "dependencies": {},
@@ -1264,6 +1271,8 @@ def analyze_project_impl(
     # Scan project files
     file_extensions = defaultdict(int)
     total_lines = defaultdict(int)
+    all_dirs = set()
+    all_files = []
 
     try:
         for root, dirs, files in os.walk(project_root):
@@ -1279,12 +1288,16 @@ def analyze_project_impl(
             if depth > max_depth:
                 continue
 
+            rel_root = Path(root).relative_to(project_root)
+            all_dirs.add(str(rel_root))
+
             for file in files:
                 file_path = Path(root) / file
                 ext = file_path.suffix.lower()
 
                 if ext:
                     file_extensions[ext] += 1
+                    all_files.append(str(rel_root / file))
 
                     # Count lines for code files
                     if ext in {'.py', '.js', '.jsx', '.ts', '.tsx', '.rs', '.go', '.java', '.kt', '.c', '.cpp', '.h'}:
@@ -1312,7 +1325,6 @@ def analyze_project_impl(
         '.go': 'Go',
         '.java': 'Java',
         '.kt': 'Kotlin',
-        '.kts': 'Kotlin Script',
         '.c': 'C',
         '.cpp': 'C++',
         '.rb': 'Ruby',
@@ -1346,7 +1358,197 @@ def analyze_project_impl(
             analysis['dependencies']['node'] = node_deps
             analysis['frameworks'].extend(_detect_node_frameworks(node_deps))
 
+    # ========================================================================
+    # NEW: ARCHITECTURE ANALYSIS
+    # ========================================================================
+
+    dir_names = {Path(d).name.lower() for d in all_dirs if d != '.'}
+
+    # Detect MCP architecture
+    if 'servers' in dir_names and 'tools' in dir_names and 'client' in dir_names:
+        analysis['architecture']['type'] = 'MCP (Model Context Protocol)'
+        analysis['architecture']['patterns'] = [
+            'Agent-based architecture',
+            'Tool-based extensibility',
+            'Server-client pattern'
+        ]
+
+        # Count servers and tools
+        servers_dir = project_root / 'servers'
+        tools_dir = project_root / 'tools'
+
+        server_count = len([d for d in servers_dir.iterdir() if
+                            d.is_dir() and not d.name.startswith('.')]) if servers_dir.exists() else 0
+        tool_count = len(
+            [d for d in tools_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]) if tools_dir.exists() else 0
+
+        analysis['architecture']['layers'] = {
+            'client': 'Agent orchestration layer - manages LLM interactions and tool routing',
+            'servers': f'MCP server layer - {server_count} servers exposing tools via stdio',
+            'tools': f'Tool implementation layer - {tool_count} tool modules with business logic'
+        }
+
+        analysis['architecture']['description'] = (
+            f"MCP-based multi-agent system with {server_count} specialized servers. "
+            f"The client layer orchestrates LLM tool calls through LangGraph, "
+            f"routing requests to appropriate MCP servers via stdio transport. "
+            f"Each server exposes domain-specific tools (code analysis, knowledge base, etc.) "
+            f"with implementations separated into the tools layer for modularity and testability."
+        )
+
+    # Detect Android/Kotlin architecture
+    elif any('src/main/kotlin' in str(d) or 'src/main/java' in str(d) for d in all_dirs):
+        analysis['architecture']['type'] = 'Android/Kotlin Application'
+        analysis['architecture']['patterns'] = []
+
+        # Detect patterns
+        has_ui = any(name in dir_names for name in ['ui', 'view', 'activity', 'fragment'])
+        has_data = any(name in dir_names for name in ['data', 'repository', 'dao', 'database'])
+        has_domain = any(name in dir_names for name in ['domain', 'usecase', 'model'])
+        has_di = any(name in dir_names for name in ['di', 'injection', 'module', 'koin', 'hilt'])
+
+        layers = {}
+
+        if has_ui and has_data and has_domain:
+            analysis['architecture']['patterns'].append('Clean Architecture')
+            layers = {
+                'presentation': 'UI layer with Activities, Fragments, and ViewModels',
+                'domain': 'Business logic layer with use cases and domain models',
+                'data': 'Data layer with repositories and data sources'
+            }
+        elif has_ui and has_data:
+            analysis['architecture']['patterns'].append('MVVM (Model-View-ViewModel)')
+            layers = {
+                'presentation': 'Views and ViewModels for UI logic',
+                'data': 'Data repositories and sources'
+            }
+
+        if has_di:
+            analysis['architecture']['patterns'].append('Dependency Injection')
+
+        # Check for Jetpack Compose
+        if any('compose' in str(f).lower() for f in all_files):
+            analysis['architecture']['patterns'].append('Jetpack Compose (declarative UI)')
+
+        # Check for Coroutines
+        if any('coroutine' in str(f).lower() for f in all_files):
+            analysis['architecture']['patterns'].append('Kotlin Coroutines (async)')
+
+        analysis['architecture']['layers'] = layers
+
+        pattern_desc = ' and '.join(analysis['architecture']['patterns']) if analysis['architecture'][
+            'patterns'] else 'standard Android patterns'
+        analysis['architecture']['description'] = (
+            f"Android application using {pattern_desc}. "
+            f"Follows Android best practices with clear separation of concerns across "
+            f"{len(layers)} architectural layers."
+        )
+
+    # Detect microservices
+    elif 'services' in dir_names or 'microservices' in dir_names:
+        analysis['architecture']['type'] = 'Microservices'
+        analysis['architecture']['patterns'] = ['Microservices architecture', 'Service-oriented']
+
+        services_dir = project_root / 'services' if (
+                    project_root / 'services').exists() else project_root / 'microservices'
+        service_names = []
+        if services_dir.exists():
+            service_names = [d.name for d in services_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]
+
+        analysis['architecture']['layers'] = {
+            'services': f'{len(service_names)} independent services',
+            'api': 'Service communication layer (REST/gRPC)',
+        }
+
+        analysis['architecture']['description'] = (
+            f"Microservices architecture with {len(service_names)} independently deployable services. "
+            f"Each service owns its domain and communicates via APIs. "
+            f"Promotes scalability, fault isolation, and independent deployment."
+        )
+
+    # Detect MVC/web framework
+    elif all(d in dir_names for d in ['models', 'views', 'controllers']):
+        analysis['architecture']['type'] = 'MVC (Model-View-Controller)'
+        analysis['architecture']['patterns'] = ['MVC pattern', 'Web application']
+
+        analysis['architecture']['layers'] = {
+            'models': 'Data models and business logic',
+            'views': 'UI templates and presentation',
+            'controllers': 'Request handlers and routing logic'
+        }
+
+        analysis['architecture']['description'] = (
+            "Classic MVC web application with strict separation of concerns. "
+            "Models handle data/business logic, views render UI, controllers "
+            "orchestrate request/response flow."
+        )
+
+    # Detect layered architecture
+    elif any(d in dir_names for d in ['api', 'service', 'repository', 'domain']):
+        analysis['architecture']['type'] = 'Layered Architecture'
+        analysis['architecture']['patterns'] = ['Layered architecture', 'N-tier']
+
+        layers = {}
+        if 'api' in dir_names or 'controllers' in dir_names:
+            layers['api'] = 'API/presentation layer - HTTP endpoints and request handling'
+        if 'service' in dir_names or 'business' in dir_names:
+            layers['service'] = 'Business logic layer - core application logic'
+        if 'repository' in dir_names or 'data' in dir_names or 'persistence' in dir_names:
+            layers['data'] = 'Data access layer - database operations'
+        if 'domain' in dir_names or 'models' in dir_names:
+            layers['domain'] = 'Domain layer - business entities and rules'
+
+        analysis['architecture']['layers'] = layers
+
+        analysis['architecture']['description'] = (
+            f"Layered architecture with {len(layers)} distinct layers. "
+            f"Each layer has specific responsibilities and depends only on layers below it, "
+            f"promoting separation of concerns and maintainability."
+        )
+
+    else:
+        # Generic/monolithic
+        analysis['architecture']['type'] = 'Monolithic'
+        analysis['architecture']['description'] = (
+            "Project follows a straightforward structure without clear architectural patterns. "
+            "May benefit from organizing into defined layers as complexity grows."
+        )
+
+    # ========================================================================
+    # NEW: PROJECT INTRO
+    # ========================================================================
+
+    # Generate intro based on what we found
+    primary_lang = list(analysis['languages'].keys())[0] if analysis['languages'] else "Unknown"
+    total_files = sum(file_extensions.values())
+    total_code_lines = sum(total_lines.values())
+
+    intro_parts = [f"{analysis['project_name']} is a"]
+
+    # Add architecture type
+    if analysis['architecture']['type'] != 'unknown':
+        intro_parts.append(f"{analysis['architecture']['type']}")
+
+    # Add primary language
+    if primary_lang != "Unknown":
+        intro_parts.append(f"written primarily in {primary_lang}")
+
+    # Add framework info
+    if analysis['frameworks']:
+        main_frameworks = analysis['frameworks'][:3]  # Top 3
+        intro_parts.append(f"using {', '.join(main_frameworks)}")
+
+    # Add scale
+    intro_parts.append(f"with {total_files:,} files")
+    if total_code_lines > 0:
+        intro_parts.append(f"and ~{total_code_lines:,} lines of code")
+
+    analysis['project_intro'] = ' '.join(intro_parts) + "."
+
+    # ========================================================================
     # Build tech stack summary
+    # ========================================================================
+
     tech_stack = []
 
     # Add languages
@@ -1369,7 +1571,6 @@ def analyze_project_impl(
         analysis['structure'] = _build_directory_tree(project_root, max_depth=2)
 
     return json.dumps(analysis, indent=2)
-
 
 def get_project_dependencies_impl(project_path: str = ".", dep_type: str = "all") -> str:
     """
