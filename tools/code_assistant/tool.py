@@ -1228,7 +1228,7 @@ def analyze_project_impl(
         project_path: str = ".",
         include_dependencies: bool = True,
         include_structure: bool = True,
-        max_depth: int = 3
+        max_depth: int = 8
 ) -> str:
     """
     Analyze project structure and tech stack.

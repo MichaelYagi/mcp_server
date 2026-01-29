@@ -118,67 +118,11 @@ INTENT_PATTERNS = {
     },
     "code_assistant": {
         "pattern": (
-            # Analysis with "code" keyword
-            r'\banalyze.*code\b'
-            r'|\bcheck.*code\b'
-            r'|\breview.*code\b'
-            r'|\binspect.*code\b'
-            r'|\blint\b'
-            
-            # Analysis with file extensions
-            r'|\banalyze.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            r'|\bcheck.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            r'|\breview.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            r'|\binspect.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            
-            # Fix requests
-            r'|\bfix.*bug\b'
-            r'|\bfix.*error\b'
-            r'|\bfix.*issue\b'
-            r'|\bfix.*code\b'
-            r'|\bfix\s+this\b'
-            r'|\bfix\s+my\b'
-            r'|\bfix.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            
-            # Quality/improvement
-            r'|\bcode.*quality\b'
-            r'|\bcode.*smell\b'
-            r'|\bimprove.*code\b'
-            r'|\brefactor\b'
-            r'|\boptimize.*code\b'
-            
-            # Detection
-            r'|\bfind.*bug\b'
-            r'|\bdetect.*bug\b'
-            r'|\banti.?pattern\b'
-            r'|\bwhat\'?s?\s+wrong\s+with.*code\b'
-            r'|\bissues?\s+in.*code\b'
-            
-            # Testing
-            r'|\bgenerate.*test\b'
-            r'|\bwrite.*test\b'
-            r'|\bcreate.*test\b'
-            
-            # Direct file analysis
-            r'|\banalyze.*my.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            r'|\bcheck.*my.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
-            
-            # CODE GENERATION
-            r'|\bgenerate.*code\b'
-            r'|\bcreate.*(function|class|module|script|component)\b'
-            r'|\bwrite.*(function|class|code)\b'
-            r'|\bmake.*(function|class|component)\b'
-            r'|\bbuild.*(function|class|component)\b'
-            r'|\bcode\s+(for|that)\b'
-            r'|\bfunction\s+that\b'
-            r'|\bclass\s+that\b'
-            r'|\bscript\s+(that|to)\b'
-            r'|\bcomponent\s+that\b'
-            
-            # PROJECT ANALYSIS (NEW!)
-            r'|\btech\s+stack\b'
+            # Tech stack queries (CRITICAL!)
+            r'\btech\s+stack\b'
             r'|\btechnology\s+stack\b'
             r'|\bwhat.*tech\b'
+            r'|\bwhat.*stack\b'
             r'|\bwhat.*technologies\b'
             r'|\bwhat.*languages\b'
             r'|\bwhat.*frameworks?\b'
@@ -186,24 +130,44 @@ INTENT_PATTERNS = {
             r'|\bproject\s+structure\b'
             r'|\banalyze.*project\b'
             r'|\bscan.*project\b'
-            r'|\blist.*dependencies\b'
             r'|\bshow.*structure\b'
-            r'|\bdirectory\s+structure\b'
-            r'|\bfolder\s+structure\b'
-            r'|\bwhat\'?s?\s+in\s+requirements\b'
-            r'|\bwhat\'?s?\s+in\s+package\.json\b'
+            r'|\blist.*dependencies\b'
+            
+            # Code analysis
+            r'|\banalyze.*code\b'
+            r'|\bcheck.*code\b'
+            r'|\breview.*code\b'
+            r'|\blint\b'
+            
+            # File extensions
+            r'|\banalyze.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            r'|\bcheck.*\.(py|js|jsx|ts|tsx|rs|go|java|kt)\b'
+            
+            # Bug fixing
+            r'|\bfix.*bug\b'
+            r'|\bfix.*error\b'
+            r'|\bfix.*issue\b'
+            r'|\bfix.*code\b'
+            
+            # Code generation
+            r'|\bgenerate.*code\b'
+            r'|\bcreate.*(function|class|module|component)\b'
+            r'|\bwrite.*(function|class)\b'
         ),
         "tools": [
+            # PROJECT ANALYSIS (ADD THESE!)
+            "analyze_project",
+            "get_project_dependencies",
+            "scan_project_structure",
+
+            # CODE ANALYSIS
             "analyze_code_file",
             "fix_code_file",
             "suggest_improvements",
             "explain_code",
             "generate_tests",
             "refactor_code",
-            "generate_code",
-            "analyze_project",
-            "get_project_dependencies",
-            "scan_project_structure"
+            "generate_code"
         ],
         "priority": 2
     },
