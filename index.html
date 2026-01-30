@@ -1009,6 +1009,30 @@
             position: relative !important;
         }
 
+        .model-badge {
+            display: inline-block;
+            margin-top: 25px;
+            padding: 3px 8px;
+            font-size: 0.7rem;
+            color: #888;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            font-family: monospace;
+            text-align: right;
+            opacity: 0.7;
+            float: right;
+            clear: both;
+        }
+
+        .assistant .model-badge {
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        .assistant.multi-agent .model-badge {
+            background: rgba(139, 92, 246, 0.15);
+            color: #7c3aed;
+        }
+
         /* Mobile */
         @media (max-width: 768px) {
             #header {
@@ -1856,7 +1880,7 @@
                 currentSessionId = data.session_id;
                 localStorage.setItem(CURRENT_SESSION_KEY, currentSessionId);
                 data.messages.forEach(msg => {
-                    addMessage(msg.text, msg.role, false, false);
+                    addMessage(msg.text, msg.role, false, false, msg.model);
                 });
                 renderSessions(allSessions);
                 return;
@@ -1920,30 +1944,17 @@
             if (data.type === "assistant_message") {
                 if (data.text.includes("🛑") || data.text.toLowerCase().includes("interrupted") || data.text.toLowerCase().includes("stopped")) {
                     hideThinking();
-                    addMessage(data.text, "assistant", false, false);
+                    addMessage(data.text, "assistant", false, false, data.model);
                     isProcessing = false;
                     resetControlButtons();
                     return;
                 }
 
-                // if (data.text.includes("Multi-agent mode")) {
-                //     if (data.text.includes("ENABLED")) {
-                //         multiAgentToggle.checked = true;
-                //         multiAgentEnabled = true;
-                //         saveMultiAgentSetting(true);
-                //     } else if (data.text.includes("DISABLED")) {
-                //         multiAgentToggle.checked = false;
-                //         multiAgentEnabled = false;
-                //         saveMultiAgentSetting(false);
-                //     }
-                //     updateModeStatus();
-                // }
-
                 hideThinking();
 
                 lastResponseWasMultiAgent = data.multi_agent === true;
 
-                addMessage(data.text, "assistant", false, lastResponseWasMultiAgent);
+                addMessage(data.text, "assistant", false, lastResponseWasMultiAgent, data.model);
                 isProcessing = false;
                 sendBtn.style.display = 'flex';
                 sendBtn.disabled = false;
@@ -2139,7 +2150,7 @@
         // -------------------------
         // Add message to UI
         // -------------------------
-        function addMessage(text, role, saveToDb = false, isMultiAgent = false) {
+        function addMessage(text, role, saveToDb = false, isMultiAgent = false, modelName = null) {
             if (text.startsWith("[TextContent(")) {
                 return;
             }
@@ -2159,6 +2170,14 @@
                 div.textContent = text;
             } else {
                 div.innerHTML = formatMessage(text);
+
+                // Add model name badge
+                if (modelName) {
+                    const modelBadge = document.createElement("div");
+                    modelBadge.className = "model-badge";
+                    modelBadge.textContent = modelName;
+                    div.appendChild(modelBadge);
+                }
             }
 
             chat.appendChild(div);

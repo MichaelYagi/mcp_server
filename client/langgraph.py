@@ -396,7 +396,7 @@ class AgentState(TypedDict):
     llm: object
     ingest_completed: bool
     stopped: bool
-
+    current_model: str
 
 def router(state):
     """
@@ -755,7 +755,18 @@ def create_langgraph_agent(llm_with_tools, tools):
         else:
             llm_to_use = llm_with_tools
 
+        if hasattr(llm_to_use, 'model'):
+            current_model = llm_to_use.model
+        elif hasattr(llm_to_use, 'model_name'):
+            current_model = llm_to_use.model_name
+        elif hasattr(llm_to_use, 'model_path'):
+            from pathlib import Path
+            current_model = Path(llm_to_use.model_path).stem
+        else:
+            current_model = "unknown"
+
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
+        logger.info(f"🤖 Model: {current_model}")
 
         start_time = time.time()
         try:
@@ -839,7 +850,8 @@ Please provide an updated answer using these search results."""
                 "tools": state.get("tools", {}),
                 "llm": state.get("llm"),
                 "ingest_completed": state.get("ingest_completed", False),
-                "stopped": state.get("stopped", False)
+                "stopped": state.get("stopped", False),
+                "current_model": current_model
             }
 
         except asyncio.TimeoutError:
@@ -856,7 +868,8 @@ Please provide an updated answer using these search results."""
                 "tools": state.get("tools", {}),
                 "llm": state.get("llm"),
                 "ingest_completed": state.get("ingest_completed", False),
-                "stopped": state.get("stopped", False)
+                "stopped": state.get("stopped", False),
+                "current_model": current_model
             }
 
         except Exception as e:
@@ -1072,9 +1085,19 @@ async def run_agent(agent, conversation_state, user_message, logger, tools, syst
         if METRICS_AVAILABLE:
             duration = time.time() - start_time
             metrics["agent_times"].append((time.time(), duration))
-            logger.info(f"✅ Agent run completed in {duration:.2f}s")
 
-        return {"messages": conversation_state["messages"]}
+            # Extract model name from final state
+        final_model = result.get("current_model", "unknown")
+
+        if METRICS_AVAILABLE:
+            logger.info(f"✅ Agent run completed in {duration:.2f}s (Model: {final_model})")
+        else:
+            logger.info(f"✅ Agent run completed (Model: {final_model})")
+
+        return {
+            "messages": conversation_state["messages"],
+            "current_model": final_model  # ← ADD THIS
+        }
 
     except ValueError as e:
         # Handle context window overflow gracefully

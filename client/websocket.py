@@ -1,5 +1,5 @@
 """
-WebSocket Module with TRUE Concurrent Processing
+WebSocket Module with Concurrent Processing
 Uses asyncio.create_task to handle operations in background
 """
 
@@ -59,15 +59,17 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
 
         print("\n" + assistant_text + "\n")
 
-        # Save assistant message to session
+        # Save assistant message to session with model name
         if session_manager and session_id:
             MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
-            session_manager.add_message(session_id, "assistant", assistant_text, MAX_MESSAGE_HISTORY)
+            model_name = result.get("current_model", "unknown")
+            session_manager.add_message(session_id, "assistant", assistant_text, MAX_MESSAGE_HISTORY, model_name)
 
         await broadcast_message("assistant_message", {
             "text": assistant_text,
             "multi_agent": result.get("multi_agent", False),
-            "a2a": result.get("a2a", False)
+            "a2a": result.get("a2a", False),
+            "model": result.get("current_model", "unknown")
         })
 
         await websocket.send(json.dumps({
@@ -376,9 +378,9 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                             "session_id": current_session_id
                         }))
 
-                    # Save user message
+                    # Save user message (user messages don't have model, pass None)
                     MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
-                    session_manager.add_message(current_session_id, "user", prompt, MAX_MESSAGE_HISTORY)
+                    session_manager.add_message(current_session_id, "user", prompt, MAX_MESSAGE_HISTORY, model=None)
 
                     # Generate session name immediately after first user message
                     messages = session_manager.get_session_messages(current_session_id)

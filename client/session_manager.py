@@ -36,10 +36,17 @@ class SessionManager:
                 session_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                model TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
             )
         ''')
+
+        # Check if model column exists (for migration from old schema)
+        cursor.execute("PRAGMA table_info(messages)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'model' not in columns:
+            cursor.execute('ALTER TABLE messages ADD COLUMN model TEXT')
 
         # Create indexes
         cursor.execute('''
@@ -84,16 +91,16 @@ class SessionManager:
         conn.commit()
         conn.close()
 
-    def add_message(self, session_id: int, role: str, content: str, max_history: int = 30):
+    def add_message(self, session_id: int, role: str, content: str, max_history: int = 30, model: str = None):
         """Add a message to a session and enforce message limit"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Insert new message
+        # Insert new message with model name
         cursor.execute('''
-            INSERT INTO messages (session_id, role, content) 
-            VALUES (?, ?, ?)
-        ''', (session_id, role, content))
+            INSERT INTO messages (session_id, role, content, model) 
+            VALUES (?, ?, ?, ?)
+        ''', (session_id, role, content, model))
 
         # Update session timestamp
         cursor.execute('''
@@ -131,7 +138,7 @@ class SessionManager:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT role, content, created_at 
+            SELECT role, content, model, created_at 
             FROM messages 
             WHERE session_id = ? 
             ORDER BY created_at ASC
@@ -142,7 +149,8 @@ class SessionManager:
             messages.append({
                 'role': row[0],
                 'text': row[1],
-                'timestamp': row[2]
+                'model': row[2],  # ← ADD THIS
+                'timestamp': row[3]
             })
 
         conn.close()
