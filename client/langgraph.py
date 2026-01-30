@@ -768,6 +768,25 @@ def create_langgraph_agent(llm_with_tools, tools):
         logger.info(f"🧠 Calling LLM with {len(messages)} messages")
         logger.info(f"🤖 Model: {current_model}")
 
+        sanitized_messages = []
+        for msg in messages:
+            content = msg.content if msg.content is not None else ""
+            content = str(content) if not isinstance(content, str) else content
+
+            if isinstance(msg, HumanMessage):
+                sanitized_messages.append(HumanMessage(content=content))
+            elif isinstance(msg, AIMessage):
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    sanitized_messages.append(AIMessage(content=content, tool_calls=msg.tool_calls))
+                else:
+                    sanitized_messages.append(AIMessage(content=content))
+            elif isinstance(msg, ToolMessage):
+                sanitized_messages.append(ToolMessage(content=content, tool_call_id=msg.tool_call_id))
+            elif isinstance(msg, SystemMessage):
+                sanitized_messages.append(SystemMessage(content=content))
+            else:
+                sanitized_messages.append(msg)
+
         start_time = time.time()
         try:
             # Add 5 minutes timeout to prevent hanging

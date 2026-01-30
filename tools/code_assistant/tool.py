@@ -1228,6 +1228,11 @@ def _extract_project_description_from_docs(project_root: Path) -> dict:
     """
     Extract project description from README and documentation files.
 
+    Handles common README structures:
+    - # Title
+      Description immediately after title
+    - ## Purpose / ## About / ## Description sections
+
     Returns:
         dict with 'description' and 'purpose' if found
     """
@@ -1265,84 +1270,118 @@ def _extract_project_description_from_docs(project_root: Path) -> dict:
     if not content:
         return result
 
-    # Extract first meaningful paragraph (skip title and empty lines)
     lines = content.split('\n')
-    description_lines = []
-    in_code_block = False
-    skip_lines = 0
+
+    # Strategy 1: Look for description after main title
+    # Example:
+    #   # Project Name
+    #   Description here.
+    description = None
+    title_found = False
 
     for i, line in enumerate(lines):
         stripped = line.strip()
 
-        # Skip code blocks
-        if stripped.startswith('```'):
-            in_code_block = not in_code_block
-            continue
-        if in_code_block:
+        # Skip badges (lines starting with [![ or <img)
+        if stripped.startswith('[![') or stripped.startswith('<img'):
             continue
 
-        # Skip title lines (# Title, ===, ---)
-        if stripped.startswith('#') or stripped == '=' * len(stripped) or stripped == '-' * len(stripped):
-            skip_lines = i + 1
+        # Main title (single # at start, not ##)
+        if stripped.startswith('# ') and not stripped.startswith('## '):
+            title_found = True
             continue
 
-        # Skip empty lines at start
-        if i <= skip_lines and not stripped:
-            skip_lines = i + 1
-            continue
+        # If we're after title, get first meaningful line
+        if title_found and stripped:
+            # Skip if it's another header or badge
+            if stripped.startswith('#') or stripped.startswith('!') or stripped.startswith('<'):
+                continue
 
-        # Start collecting after title
-        if i > skip_lines and stripped:
-            # Stop at next major section
-            if stripped.startswith('##') or (stripped.startswith('#') and len(description_lines) > 0):
-                break
-
-            # Don't include installation/usage headers
-            if any(keyword in stripped.lower() for keyword in
-                   ['installation', 'usage', 'getting started', 'quickstart', 'table of contents']):
-                break
-
-            description_lines.append(stripped)
-
-            # Limit to ~300 characters (2-4 sentences)
-            current_text = ' '.join(description_lines)
-            if len(current_text) > 300:
-                # Trim to last complete sentence
-                sentences = current_text.split('. ')
-                if len(sentences) > 1:
-                    result['description'] = '. '.join(sentences[:-1]) + '.'
-                else:
-                    result['description'] = current_text[:300] + '...'
-                break
-
-    if description_lines and not result['description']:
-        result['description'] = ' '.join(description_lines)
-
-    # Look for purpose/overview sections
-    import re
-
-    # Check for "Purpose", "What is", "About", "Overview" sections
-    purpose_patterns = [
-        (r'##?\s*Purpose[:\s]*\n+(.*?)(?=\n##|$)', 'Purpose'),
-        (r'##?\s*What is[^#\n]*[:\s]*\n+(.*?)(?=\n##|$)', 'What is'),
-        (r'##?\s*About[:\s]*\n+(.*?)(?=\n##|$)', 'About'),
-        (r'##?\s*Overview[:\s]*\n+(.*?)(?=\n##|$)', 'Overview'),
-    ]
-
-    for pattern, name in purpose_patterns:
-        match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
-        if match:
-            purpose_text = match.group(1).strip()
-            # Clean up and limit length
-            purpose_lines = [line.strip() for line in purpose_text.split('\n') if
-                             line.strip() and not line.strip().startswith('```')]
-            purpose_text = ' '.join(purpose_lines[:3])  # First 3 lines
-            if len(purpose_text) > 250:
-                purpose_text = purpose_text[:250] + '...'
-            result['purpose'] = purpose_text
+            # This is likely the description
+            description = stripped
             break
 
+    # Clean up markdown formatting from description
+    if description:
+        import re
+        # Remove [text](url) -> text
+        description = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', description)
+        # Remove **bold** -> bold
+        description = re.sub(r'\*\*([^\*]+)\*\*', r'\1', description)
+        # Remove *italic* -> italic
+        description = re.sub(r'\*([^\*]+)\*', r'\1', description)
+        description = description.strip()
+
+        result['description'] = description
+
+    # Strategy 2: Look for explicit purpose/description sections
+    # Common patterns: ## Purpose, ## Description, ## About, ## What is X
+    import re
+
+    purpose_keywords = [
+        'purpose', 'description', 'about', 'overview',
+        'what is', 'introduction', 'summary'
+    ]
+
+    purpose = None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip().lower()
+
+        # Check if this is a section header with purpose keywords
+        if stripped.startswith('##') or stripped.startswith('###'):
+            header_text = stripped.lstrip('#').strip()
+
+            if any(keyword in header_text for keyword in purpose_keywords):
+                # Get the next meaningful line(s)
+                for j in range(i + 1, min(i + 10, len(lines))):
+                    next_line = lines[j].strip()
+                    if next_line and not next_line.startswith('#'):
+                        # Found content under the purpose section
+                        purpose = next_line
+                        break
+
+                if purpose:
+                    break
+
+    # Clean up purpose
+    if purpose:
+        purpose = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', purpose)
+        purpose = re.sub(r'\*\*([^\*]+)\*\*', r'\1', purpose)
+        purpose = re.sub(r'\*([^\*]+)\*', r'\1', purpose)
+        purpose = purpose.strip()
+
+        result['purpose'] = purpose
+
+    # If we found description but not purpose, use description as purpose
+    if description and not purpose:
+        result['purpose'] = description
+
     return result
+
+
+def ensure_no_none(obj):
+    """
+    Recursively replace None with appropriate defaults to prevent Jinja2 errors.
+
+    This is critical for GGUF models which use Jinja2 templates for chat formatting.
+    If ANY value in the result is None, Jinja2 will crash with:
+    "TypeError: can only concatenate str (not 'NoneType') to str"
+
+    Args:
+        obj: Any object (dict, list, str, None, etc.)
+
+    Returns:
+        Same structure with None replaced by ""
+    """
+    if isinstance(obj, dict):
+        return {k: ensure_no_none(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [ensure_no_none(item) for item in obj]
+    elif obj is None:
+        return ""  # Replace None with empty string
+    else:
+        return obj
 
 def analyze_project_impl(
         project_path: str = ".",
@@ -1681,11 +1720,10 @@ def analyze_project_impl(
     # Extract description from README/docs
     doc_info = _extract_project_description_from_docs(project_root)
 
-    # If README has a description, use it
-    if doc_info['description']:
-        analysis['project_intro'] = doc_info['description']
-        if doc_info['purpose']:
-            analysis['project_purpose'] = doc_info['purpose']
+    # Use README content if available
+    if doc_info.get('description') or doc_info.get('purpose'):
+        analysis['project_intro'] = doc_info.get('description') or doc_info.get('purpose') or "Project"
+        analysis['project_purpose'] = doc_info.get('purpose') or doc_info.get('description') or "Not specified."
     else:
         # Fallback: Generate intro based on what we found
         primary_lang = list(analysis['languages'].keys())[0] if analysis['languages'] else "Unknown"
@@ -1713,6 +1751,7 @@ def analyze_project_impl(
             intro_parts.append(f"and ~{total_code_lines:,} lines of code")
 
         analysis['project_intro'] = ' '.join(intro_parts) + "."
+        analysis['project_purpose'] = "Not specified."
 
     # ========================================================================
     # Build tech stack summary
@@ -1739,33 +1778,22 @@ def analyze_project_impl(
     if include_structure:
         analysis['structure'] = _build_directory_tree(project_root, max_depth=2)
 
-    def ensure_no_none(obj):
-        '''Recursively replace None with appropriate defaults'''
-        if isinstance(obj, dict):
-            return {k: ensure_no_none(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [ensure_no_none(item) for item in obj]
-        elif obj is None:
-            return ""
-        else:
-            return obj
-
+    # CRITICAL: Replace ALL None values with empty strings
+    # This prevents Jinja2 template errors in GGUF models
     analysis = ensure_no_none(analysis)
 
-    # Double-check critical fields
+    # Double-check critical fields have non-None values
     if not analysis.get('project_intro'):
         analysis['project_intro'] = f"{analysis['project_name']} project"
 
     if not analysis.get('project_purpose'):
-        analysis['project_purpose'] = ""
+        analysis['project_purpose'] = "Not specified."
 
     if not analysis['architecture'].get('description'):
         analysis['architecture']['description'] = "Architecture not clearly identified."
 
     if not analysis['architecture'].get('type'):
         analysis['architecture']['type'] = "unknown"
-
-    return json.dumps(analysis, indent=2)
 
     return json.dumps(analysis, indent=2)
 
