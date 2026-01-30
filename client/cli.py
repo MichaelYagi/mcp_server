@@ -46,6 +46,18 @@ async def cli_input_loop(agent, logger, tools, model_name, conversation_state, r
         while True:
             await asyncio.sleep(0.01)  # Fast polling
 
+            # Check if model changed (from Web UI switch)
+            current_last_model = models_module.load_last_model()
+            if current_last_model and current_last_model != model_name:
+                logger.info(f"🔄 Detected model change: {model_name} → {current_last_model}")
+                new_agent, new_model = await models_module.reload_current_model(
+                    tools, logger, create_agent_fn, a2a_state
+                )
+                if new_agent:
+                    agent = new_agent
+                    model_name = new_model
+                    logger.info(f"✅ CLI synced to: {model_name}")
+
             if not input_queue.empty():
                 query = input_queue.get().strip()
 

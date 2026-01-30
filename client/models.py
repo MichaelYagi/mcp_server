@@ -249,3 +249,54 @@ def print_all_models():
 
     print("💡 Switch: :model <name>")
     print("   (Backend switches automatically)\n")
+
+
+async def reload_current_model(tools, logger, create_agent_fn, a2a_state=None):
+    """
+    Reload agent based on last_model.txt
+
+    This ensures CLI and Web UI stay in sync by reading the authoritative state file.
+
+    Returns:
+        (agent, model_name) tuple, or (None, None) if failed
+    """
+    from client.llm_backend import LLMBackendManager
+
+    model_name = load_last_model()
+
+    if not model_name:
+        logger.warning("⚠️ No last_model.txt found")
+        return None, None
+
+    backend = detect_backend(model_name)
+
+    if not backend:
+        logger.error(f"❌ Model '{model_name}' in last_model.txt not found")
+        return None, None
+
+    # Set backend
+    os.environ["LLM_BACKEND"] = backend
+
+    try:
+        logger.info(f"🔄 Reloading model from last_model.txt: {backend}/{model_name}")
+
+        # Create LLM
+        llm = LLMBackendManager.create_llm(model_name, temperature=0)
+
+        # Bind tools and create agent
+        llm_with_tools = llm.bind_tools(tools)
+        agent = create_agent_fn(llm_with_tools, tools)
+
+        # Re-register A2A tools if needed
+        if a2a_state and hasattr(a2a_state, "register_a2a_tools"):
+            try:
+                await a2a_state.register_a2a_tools(agent)
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to re-register A2A tools: {e}")
+
+        logger.info(f"✅ Reloaded: {backend}/{model_name}")
+        return agent, model_name
+
+    except Exception as e:
+        logger.error(f"❌ Failed to reload model: {e}")
+        return None, None

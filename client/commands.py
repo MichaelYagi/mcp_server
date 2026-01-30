@@ -19,6 +19,7 @@ def get_commands_list():
         ":model - List all available models (Ollama + GGUF)",
         ":model <model> - Switch to model (auto-detects backend)",
         ":models - List available models (legacy)",
+        ":sync - Sync agent to model in last_model.txt",
         ":gguf add <path> - Register a GGUF model",
         ":gguf remove <alias> - Remove a GGUF model",
         ":gguf list - List registered GGUF models",
@@ -452,6 +453,23 @@ async def handle_command(
         result = "\n".join(get_commands_list())
         return (True, result, None, None)
 
+    # Sync with last_model.txt
+    if command == ":sync":
+        last_model = models_module.load_last_model()
+        if not last_model:
+            return (True, "❌ No last_model.txt found", None, None)
+
+        logger.info(f"🔄 Syncing to last_model.txt: {last_model}")
+
+        new_agent, new_model = await models_module.reload_current_model(
+            tools, logger, create_langgraph_agent, a2a_state
+        )
+
+        if new_agent:
+            return (True, f"✅ Synced to model: {new_model}", new_agent, new_model)
+        else:
+            return (True, f"❌ Failed to sync to: {last_model}", None, None)
+
     # Stop command
     if command == ":stop":
         from client.stop_signal import request_stop
@@ -616,10 +634,26 @@ async def handle_command(
                 return (True, f"Tool: {tool.name}\n\n{tool.description}", None, None)
         return (True, f"Tool '{tool_name}' not found", None, None)
 
-    # Model commands (UPDATED - now shows all models from both backends)
+    # Model commands - show sync status
     if command == ":model":
+        last_model = models_module.load_last_model()
+        current_backend = models_module.detect_backend(last_model) if last_model else "unknown"
+
+        output = []
+        output.append(f"\n📌 Current Model (from last_model.txt):")
+        output.append(f"   {current_backend}/{last_model}")
+        output.append("")
+
         models_module.print_all_models()
-        return (True, "", None, None)
+
+        # Show if current agent might be out of sync
+        if model_name != last_model:
+            output.append(f"\n⚠️  WARNING: Agent might be out of sync!")
+            output.append(f"   Active: {model_name}")
+            output.append(f"   Should be: {last_model}")
+            output.append(f"   Run ':sync' to synchronize")
+
+        return (True, "\n".join(output) if output else "", None, None)
 
     if command == ":models":
         # Legacy - show all models

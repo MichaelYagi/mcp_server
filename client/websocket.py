@@ -103,6 +103,18 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
     current_task = None
     current_session_id = None
 
+    # Sync with last_model.txt on connection
+    last_model = models_module.load_last_model()
+    if last_model and last_model != model_name:
+        logger.info(f"🔄 WebSocket syncing to last_model.txt: {last_model}")
+        new_agent, new_model = await models_module.reload_current_model(
+            tools, logger, create_langgraph_agent, a2a_state
+        )
+        if new_agent:
+            agent_ref[0] = new_agent
+            model_name = new_model
+            logger.info(f"✅ WebSocket synced to: {model_name}")
+
     try:
         async for raw in websocket:
 
