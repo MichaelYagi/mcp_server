@@ -818,6 +818,7 @@ def create_langgraph_agent(llm_with_tools, tools):
 
         sanitized_messages = []
         for msg in messages:
+            # Handle None content
             content = msg.content if msg.content is not None else ""
             content = str(content) if not isinstance(content, str) else content
 
@@ -829,7 +830,7 @@ def create_langgraph_agent(llm_with_tools, tools):
                 else:
                     sanitized_messages.append(AIMessage(content=content))
             elif isinstance(msg, ToolMessage):
-                sanitized_messages.append(ToolMessage(content=content, tool_call_id=msg.tool_call_id))
+                sanitized_messages.append(ToolMessage(content=content, tool_call_id=msg.tool_call_id, name=msg.name))
             elif isinstance(msg, SystemMessage):
                 sanitized_messages.append(SystemMessage(content=content))
             else:
@@ -839,7 +840,7 @@ def create_langgraph_agent(llm_with_tools, tools):
         try:
             # Add 5 minutes timeout to prevent hanging
             response = await asyncio.wait_for(
-                llm_to_use.ainvoke(messages),
+                llm_to_use.ainvoke(sanitized_messages),
                 timeout=300.0
             )
             duration = time.time() - start_time
