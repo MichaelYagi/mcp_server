@@ -1026,7 +1026,7 @@ Please provide an updated answer using these search results."""
         context = {}
         for msg in reversed(state["messages"][-10:]):
             if isinstance(msg, SystemMessage) and "CONVERSATION CONTEXT" in msg.content:
-                match = re.search(r'PROJECT: (.+?)$', msg.content, re.MULTILINE)
+                match = re.search(r'Active Project:\s*(.+?)(?:\n|$)', msg.content)
                 if match:
                     context["project_path"] = match.group(1).strip()
                     logger.info(f"🔧 Context found: {context['project_path']}")
