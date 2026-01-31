@@ -1519,7 +1519,7 @@ def analyze_project_impl(
             analysis['frameworks'].extend(_detect_node_frameworks(node_deps))
 
     # ========================================================================
-    # NEW: ARCHITECTURE ANALYSIS
+    # ARCHITECTURE ANALYSIS
     # ========================================================================
 
     dir_names = {Path(d).name.lower() for d in all_dirs if d != '.'}

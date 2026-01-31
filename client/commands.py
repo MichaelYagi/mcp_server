@@ -397,7 +397,7 @@ async def handle_command(
     """
     command = command.strip()
 
-    # GGUF commands (NEW)
+    # GGUF commands
     if command.startswith(":gguf"):
         result = await handle_gguf_commands(command)
         if result:

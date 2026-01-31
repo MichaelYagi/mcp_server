@@ -16,16 +16,15 @@ class ContextTracker:
         self.context_patterns = {
             "project": {
                 "trigger_phrases": [
-                    r"tech stack", r"project at", r"analyze.*project",
-                    r"/mnt/c/", r"code", r"dependencies", r"node", r"packages"
+                    r"."  # Match everything - we'll extract paths from ANY message
                 ],
-                "extract_pattern": r"(/mnt/c/[^\s\"']+|/[a-z/]+/[^\s\"']+)",
+                "extract_pattern": r"(/mnt/c/[^\s\"'`]+|/[a-zA-Z0-9/_-]+/[^\s\"'`]+)",
                 "key": "project_path"
             }
         }
 
     def extract_context_from_session(self, session_id: int, current_prompt: str) -> Dict[str, Any]:
-        """Extract relevant context from session history"""
+        """Extract context from the last few tool calls in the session"""
         if not session_id or not self.session_manager:
             return {}
 
@@ -33,69 +32,101 @@ class ContextTracker:
         if not messages:
             return {}
 
-        recent_messages = messages[-20:]
         context = {}
+        recent_messages = messages[-10:]
 
-        for context_type, config in self.context_patterns.items():
-            is_relevant = any(
-                re.search(pattern, current_prompt.lower())
-                for pattern in config["trigger_phrases"]
-            )
+        # Find the most recent assistant message with substantial content
+        last_response = None
+        for msg in reversed(recent_messages):
+            if msg["role"] == "assistant" and len(msg["text"]) > 50:
+                last_response = msg["text"]
+                break
 
-            if not is_relevant:
-                continue
+        if last_response:
+            # Extract entities from the last response
 
-            for msg in reversed(recent_messages):
-                text = msg.get("text", "")
+            # Project paths
+            project_match = re.search(r'(/mnt/c/[^\s"\'`]+|/[a-zA-Z0-9/_-]+/[^\s"\'`]+)', last_response)
+            if project_match:
+                context["project_path"] = project_match.group(1).rstrip('`"\' ')
 
-                if any(re.search(p, text.lower()) for p in config["trigger_phrases"]):
-                    match = re.search(config["extract_pattern"], text)
-                    if match:
-                        extracted_value = match.group(1)
-                        # Remove trailing backticks, quotes, etc.
-                        extracted_value = extracted_value.rstrip('`"\' ')
-                        context[config["key"]] = extracted_value
-                        context[f"{config['key']}_source"] = text
-                        break
+            # Movie/media titles
+            media_match = re.search(r'(?:movie|film|show|series).*?["\']([^"\']+)["\']', last_response, re.IGNORECASE)
+            if media_match:
+                context["media_title"] = media_match.group(1)
+
+            # Locations
+            location_match = re.search(r'\b([A-Z][a-z]+(?:,\s*[A-Z]{2})?)\b.*?(?:weather|temperature|forecast)',
+                                       last_response)
+            if location_match:
+                context["location"] = location_match.group(1)
+
+            # Store the full last response as fallback
+            context["last_response_preview"] = last_response[:200]
 
         return context
 
-    def should_inject_context(self, prompt: str, context: Dict) -> bool:
-        """Determine if context should be injected"""
-        followup_patterns = [
-            r'\b(those|that|them|it)\b',
-            r'\bthe (project|code|packages?|dependencies)\b',
-            r'\bwhat about\b',
-            r'\btell me (more )?about\b',
-            r'\bgo into (depth|detail)\b',
-            r'\bwhat (do|are|is|does) (they|it|that|those)\b',
-        ]
-
-        has_followup = any(re.search(p, prompt.lower()) for p in followup_patterns)
-        is_short_question = len(prompt.split()) <= 15 and '?' in prompt
-
-        return (has_followup or is_short_question) and len(context) > 0
-
     def create_context_message(self, context: Dict) -> Optional[SystemMessage]:
-        """Create system message with context"""
+        """Create system message with extracted context"""
         if not context:
             return None
 
+        parts = ["CONVERSATION CONTEXT:\n"]
+
         if "project_path" in context:
-            content = f"""⚠️ CONVERSATION CONTEXT ⚠️
+            parts.append(f"Active Project: {context['project_path']}")
+            parts.append(f"All follow-up questions refer to this project unless user specifies a different path.")
+            parts.append(f"Use project_path=\"{context['project_path']}\" for code analysis tools.\n")
 
-📂 PROJECT: {context['project_path']}
+        if "media_title" in context:
+            parts.append(f"Discussing Media: {context['media_title']}\n")
 
-When calling code analysis tools, use THIS EXACT PATH:
-- get_project_dependencies(project_root="{context['project_path']}", ecosystem="node")
+        if "location" in context:
+            parts.append(f"Location: {context['location']}\n")
 
-❌ WRONG: project_root="."
-✅ CORRECT: project_root="{context['project_path']}"
-"""
-            return SystemMessage(content=content)
+        if "last_response_preview" in context and len(parts) == 1:
+            parts.append(f"Recent topic: {context['last_response_preview']}...\n")
 
-        return None
+        return SystemMessage(content="\n".join(parts))
 
+    def should_inject_context(self, prompt: str, context: Dict) -> bool:
+        """
+        Simple rule: If we have context from this session, always inject it.
+        Let the LLM decide if it's relevant.
+        """
+        return len(context) > 0
+
+    def extract_context_from_session(self, session_id: int, current_prompt: str) -> Dict[str, Any]:
+        """Extract context from recent conversation, prioritizing most recent mentions"""
+        if not session_id or not self.session_manager:
+            return {}
+
+        messages = self.session_manager.get_session_messages(session_id)
+        if not messages:
+            return {}
+
+        context = {}
+
+        # Search from most recent to oldest
+        for msg in reversed(messages[-20:]):
+            text = msg["text"]
+            role = msg["role"]
+
+            # Only extract project paths from USER messages, not assistant responses
+            if "project_path" not in context and role == "user":
+                # More strict regex - must start with /mnt/c/ and have reasonable length
+                project_match = re.search(r'(/mnt/c/[A-Za-z0-9/_-]{10,200})', text)
+                if project_match:
+                    path = project_match.group(1).rstrip('`"\' ')
+                    # Validate it's a real path, not garbage
+                    if not any(x in path for x in ['*', ':', '**']):
+                        context["project_path"] = path
+
+            # Stop if we have what we need
+            if "project_path" in context:
+                break
+
+        return context
 
 def integrate_context_tracking(session_manager, session_id, prompt, conversation_state, logger):
     """Main integration - call before running agent"""

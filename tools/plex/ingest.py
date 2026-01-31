@@ -216,7 +216,7 @@ def extract_subtitles_for_item(media_item: Dict[str, Any]) -> Tuple[str, str, Li
 
 
 # ============================================================================
-# OPTIMIZED: NEW BATCHED INGESTION FUNCTION
+# BATCHED INGESTION FUNCTION
 # ============================================================================
 
 async def ingest_item_to_rag(

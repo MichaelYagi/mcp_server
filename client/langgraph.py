@@ -725,35 +725,58 @@ def create_langgraph_agent(llm_with_tools, tools):
         # ═══════════════════════════════════════════════════════════
         # CENTRALIZED PATTERN MATCHING
         # ═══════════════════════════════════════════════════════════
-        def match_intent(user_message: str, all_tools: list, base_llm, logger):
+        def match_intent(user_message: str, all_tools: list, base_llm, logger, conversation_state):
             """
             Match user intent using centralized pattern configuration.
-            Tools are filtered automatically based on INTENT_PATTERNS.
+            NOW: Check for conversation context FIRST before pattern matching.
             """
-            # Sort patterns by priority (lower number = higher priority)
+
+            # Check if we have project context from a system message
+            has_project_context = False
+            for msg in reversed(conversation_state.get("messages", [])[-5:]):
+                if isinstance(msg, SystemMessage) and "CONVERSATION CONTEXT" in msg.content:
+                    has_project_context = True
+                    logger.info("🎯 Found project context in conversation - using code_assistant")
+                    break
+
+            # If we have project context, use code_assistant regardless of query
+            if has_project_context:
+                config = INTENT_PATTERNS["code_assistant"]
+                filtered_tools = []
+                for tool in all_tools:
+                    for tool_pattern in config["tools"]:
+                        if "*" in tool_pattern:
+                            prefix = tool_pattern.replace("*", "")
+                            if tool.name.startswith(prefix):
+                                filtered_tools.append(tool)
+                                break
+                        elif tool.name == tool_pattern:
+                            filtered_tools.append(tool)
+                            break
+
+                if filtered_tools:
+                    logger.info(f"   → {len(filtered_tools)} code tools (context-based routing)")
+                    return base_llm.bind_tools(filtered_tools), "code_assistant"
+
+            # Otherwise, do normal pattern matching
             sorted_patterns = sorted(INTENT_PATTERNS.items(), key=lambda x: x[1]["priority"])
 
             for intent_name, config in sorted_patterns:
-                # Check if pattern matches
                 if re.search(config["pattern"], user_message, re.IGNORECASE):
-                    # Check exclude pattern if present
                     if "exclude_pattern" in config:
                         if re.search(config["exclude_pattern"], user_message, re.IGNORECASE):
-                            continue  # Skip this intent
+                            continue
 
                     logger.info(f"🎯 {intent_name} → filtering tools")
 
-                    # Filter tools based on tool patterns
                     filtered_tools = []
                     for tool in all_tools:
                         for tool_pattern in config["tools"]:
-                            # Handle wildcard matching (e.g., "plex_ingest_*")
                             if "*" in tool_pattern:
                                 prefix = tool_pattern.replace("*", "")
                                 if tool.name.startswith(prefix):
                                     filtered_tools.append(tool)
                                     break
-                            # Exact match
                             elif tool.name == tool_pattern:
                                 filtered_tools.append(tool)
                                 break
@@ -762,7 +785,6 @@ def create_langgraph_agent(llm_with_tools, tools):
                         logger.info(f"   → {len(filtered_tools)} tools: {[t.name for t in filtered_tools[:5]]}")
                         return base_llm.bind_tools(filtered_tools), intent_name
 
-            # No pattern matched - give all tools
             logger.info(f"🎯 General query → all {len(all_tools)} tools")
             return base_llm.bind_tools(all_tools), "general"
 
@@ -771,7 +793,13 @@ def create_langgraph_agent(llm_with_tools, tools):
         # ═══════════════════════════════════════════════════════════
         if user_message:
             all_tools = list(state.get("tools", {}).values())
-            llm_to_use, pattern_name = match_intent(user_message, all_tools, base_llm, logger)
+            llm_to_use, pattern_name = match_intent(
+                user_message,
+                all_tools,
+                base_llm,
+                logger,
+                state
+            )
         else:
             llm_to_use = llm_with_tools
 
@@ -1015,7 +1043,7 @@ Please provide an updated answer using these search results."""
             tool_id = tool_call.get("id")
 
             # AUTO-FIX tool arguments
-            if context.get("project_path") and tool_name in ["get_project_dependencies", "analyze_code_file"]:
+            if context.get("project_path") and tool_name in ["get_project_dependencies", "analyze_code_file", "analyze_project", "scan_project_structure"]:
                 if "project_path" not in tool_args:
                     logger.warning(f"🔧 AUTO-FIX: Adding missing project_path → '{context['project_path']}'")
                     tool_args["project_path"] = context["project_path"]
