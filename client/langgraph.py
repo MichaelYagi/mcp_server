@@ -118,7 +118,7 @@ INTENT_PATTERNS = {
     },
     "code_assistant": {
         "pattern": (
-            # Tech stack queries (CRITICAL!)
+            # Tech stack queries
             r'\btech\s+stack\b'
             r'|\btechnology\s+stack\b'
             r'|\bwhat.*tech\b'
@@ -132,6 +132,29 @@ INTENT_PATTERNS = {
             r'|\bscan.*project\b'
             r'|\bshow.*structure\b'
             r'|\blist.*dependencies\b'
+            
+            # Node.js/Package queries - UPDATED TO CATCH MORE
+            r'|\bnode\.?js\s+(packages?|dependencies|modules)\b'
+            r'|\bnpm\s+(packages?|dependencies|modules)\b'
+            r'|\bpackage\.json\b'
+            r'|\bnode\s+(packages?|dependencies|modules)\b'
+            r'|\b(about|more|explain).*node\.?js\s+(packages?|dependencies)\b'  # ← ADD THIS
+            r'|\btell.*about.*(node|packages?|dependencies)\b'  # ← ADD THIS
+            r'|\bmore.*about.*(node|packages?|dependencies)\b'  # ← ADD THIS
+            
+            # "go into depth" style questions
+            r'|\bgo\s+into\s+(depth|detail)\b'
+            r'|\bmore\s+detail.*about.*(packages?|dependencies|modules)\b'
+            r'|\bin[\s-]?depth.*about.*(packages?|dependencies|modules)\b'
+            r'|\belaborate.*on.*(packages?|dependencies|modules)\b'
+            r'|\bexpand.*on.*(packages?|dependencies|modules)\b'
+            
+            # Generic package questions
+            r'|\bwhat.*(do|are).*(packages?|dependencies|modules)\b'
+            r'|\bexplain.*(packages?|dependencies|modules)\b'
+            r'|\bwhat.*do\s+they\s+do\b'
+            r'|\bwhat.*are\s+(they|those)\s+(for|used\s+for)\b'
+            r'|\bwhat.*they.*used\s+for\b'  # ← ADD THIS
             
             # Code analysis
             r'|\banalyze.*code\b'
@@ -155,12 +178,9 @@ INTENT_PATTERNS = {
             r'|\bwrite.*(function|class)\b'
         ),
         "tools": [
-            # PROJECT ANALYSIS (ADD THESE!)
             "analyze_project",
             "get_project_dependencies",
             "scan_project_structure",
-
-            # CODE ANALYSIS
             "analyze_code_file",
             "fix_code_file",
             "suggest_improvements",
@@ -974,6 +994,16 @@ Please provide an updated answer using these search results."""
             logger.warning("⚠️ No tool calls found")
             return state
 
+        # Extract context from system messages for auto-fix
+        context = {}
+        for msg in reversed(state["messages"][-10:]):
+            if isinstance(msg, SystemMessage) and "CONVERSATION CONTEXT" in msg.content:
+                match = re.search(r'PROJECT: (.+?)$', msg.content, re.MULTILINE)
+                if match:
+                    context["project_path"] = match.group(1).strip()
+                    logger.info(f"🔧 Context found: {context['project_path']}")
+                break
+
         tool_messages = []
         for tool_call in tool_calls:
             if is_stop_requested():
@@ -983,6 +1013,19 @@ Please provide an updated answer using these search results."""
             tool_name = tool_call.get("name")
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id")
+
+            # AUTO-FIX tool arguments
+            if context.get("project_path") and tool_name in ["get_project_dependencies", "analyze_code_file"]:
+                if "project_path" not in tool_args:
+                    logger.warning(f"🔧 AUTO-FIX: Adding missing project_path → '{context['project_path']}'")
+                    tool_args["project_path"] = context["project_path"]
+                    tool_call["args"]["project_path"] = context["project_path"]
+                elif tool_args.get("project_path") in [".", "./"]:
+                    logger.warning(f"🔧 AUTO-FIX: Replacing '.' → '{context['project_path']}'")
+                    tool_args["project_path"] = context["project_path"]
+                    tool_call["args"]["project_path"] = context["project_path"]
+
+                logger.info(f"🔍 Final tool_args: {tool_args}")
 
             logger.info(f"🔧 Executing tool: {tool_name}")
 

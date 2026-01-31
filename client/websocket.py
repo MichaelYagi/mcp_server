@@ -37,29 +37,33 @@ async def broadcast_message(message_type, data):
 
 
 async def process_query(websocket, prompt, original_prompt, agent_ref, conversation_state, run_agent_fn, logger, tools, session_manager=None, session_id=None):
-    """
-    Process a query in the background (as a task)
-    This allows the WebSocket to continue receiving messages (like :stop)
-
-    Args:
-        prompt: Sanitized prompt for LLM processing
-        original_prompt: Original unsanitized prompt for display
-        session_manager: Optional session manager for saving messages
-        session_id: Optional current session ID
-    """
+    """Process a query in the background"""
     try:
-        print(f"\n> {original_prompt}")  # Show original in CLI
-        await broadcast_message("user_message", {"text": original_prompt})  # Show original in web UI
+        print(f"\n> {original_prompt}")
+        await broadcast_message("user_message", {"text": original_prompt})
+
+        # SESSION-BASED CONTEXT INJECTION
+        if session_manager and session_id:
+            try:
+                from client.context_tracker import integrate_context_tracking
+                integrate_context_tracking(
+                    session_manager=session_manager,
+                    session_id=session_id,
+                    prompt=prompt,
+                    conversation_state=conversation_state,
+                    logger=logger
+                )
+            except Exception as e:
+                logger.error(f"Context extraction failed: {e}")
 
         agent = agent_ref[0]
-        result = await run_agent_fn(agent, conversation_state, prompt, logger, tools)  # Use sanitized for LLM
+        result = await run_agent_fn(agent, conversation_state, prompt, logger, tools)
 
         final_message = result["messages"][-1]
         assistant_text = final_message.content
 
         print("\n" + assistant_text + "\n")
 
-        # Save assistant message to session with model name
         if session_manager and session_id:
             MAX_MESSAGE_HISTORY = int(os.getenv('MAX_MESSAGE_HISTORY', 30))
             model_name = result.get("current_model", "unknown")
@@ -79,6 +83,8 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
 
     except Exception as e:
         logger.error(f"❌ Error processing query: {e}")
+        import traceback
+        traceback.print_exc()
         await websocket.send(json.dumps({
             "type": "error",
             "text": str(e)
@@ -87,7 +93,6 @@ async def process_query(websocket, prompt, original_prompt, agent_ref, conversat
             "type": "complete",
             "stopped": False
         }))
-
 
 async def websocket_handler(websocket, agent_ref, tools, logger, conversation_state, run_agent_fn,
                             models_module, model_name, system_prompt, orchestrator=None,
