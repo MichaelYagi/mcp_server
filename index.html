@@ -2001,7 +2001,9 @@
                         ? ` ${(modelData.size_mb / 1024).toFixed(1)} GB`
                         : '';
 
-                    opt.textContent = modelData.name + " [" + modelSource + sizeInfo + "]";
+                    opt.textContent = modelData.name + (modelData.backend === 'gguf'
+                        ? " [" + modelSource + sizeInfo + "]"
+                        : '');
 
                     select.appendChild(opt);
                 });
