@@ -16,7 +16,13 @@ MODEL_STATE_FILE = "last_model.txt"
 def get_ollama_models():
     """Get list of Ollama models"""
     try:
-        out = subprocess.check_output(["ollama", "list"], text=True)
+        import subprocess
+        # Suppress stderr to hide "ollama server not responding" message
+        out = subprocess.check_output(
+            ["ollama", "list"],
+            text=True,
+            stderr=subprocess.DEVNULL  # Suppress error messages
+        )
         lines = out.strip().split("\n")
         models = []
         for line in lines[1:]:
@@ -25,6 +31,7 @@ def get_ollama_models():
                 models.append(parts[0])
         return models
     except:
+        # Silent failure - caller will handle
         return []
 
 
@@ -41,19 +48,18 @@ def list_models_formatted():
 def get_all_models():
     """
     Get ALL available models from both backends
-
-    Returns list of dicts with keys: name, backend, size_mb (for GGUF)
     """
     all_models = []
 
-    # Ollama models
-    for model in get_ollama_models():
+    # Always check Ollama (not just when it's the active backend)
+    ollama_models = get_ollama_models()
+    for model in ollama_models:
         all_models.append({
             "name": model,
             "backend": "ollama"
         })
 
-    # GGUF models
+    # Always check GGUF
     for model in GGUFModelRegistry.list_models():
         info = GGUFModelRegistry.get_model_info(model)
         all_models.append({
@@ -64,7 +70,6 @@ def get_all_models():
         })
 
     return all_models
-
 
 def detect_backend(model_name: str) -> str:
     """

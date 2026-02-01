@@ -1991,20 +1991,28 @@
                 const select = document.getElementById("modelSelect");
                 select.innerHTML = "";
 
-                data.models.forEach(m => {
+                data.all_models.forEach(modelData => {
                     const opt = document.createElement("option");
-                    opt.value = m;
-                    opt.textContent = m;
+                    opt.value = modelData.name;
+
+                    // Add backend prefix and size for GGUF
+                    const modelSource = modelData.backend === 'gguf' ? 'GGUF ' : 'Ollama ';
+                    const sizeInfo = modelData.backend === 'gguf'
+                        ? ` ${(modelData.size_mb / 1024).toFixed(1)} GB`
+                        : '';
+
+                    opt.textContent = modelData.name + " [" + modelSource + sizeInfo + "]";
+
                     select.appendChild(opt);
                 });
 
-                if (data.last_used && data.models.includes(data.last_used)) {
+                if (data.last_used && data.all_models.some(m => m.name === data.last_used)) {
                     select.value = data.last_used;
                     if (!isProcessing) {
                         updateStatusWithMode();
                     }
                 }
-                return;
+
             }
         };
 

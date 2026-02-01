@@ -292,43 +292,46 @@ async def main():
         print("   GGUF: :gguf add <path>")
         sys.exit(1)
 
-    # Start with Ollama by default
+    # Start with configured backend
     backend = models.get_initial_backend()
     os.environ["LLM_BACKEND"] = backend
     logger.info(f"🔧 Backend: {backend}")
+
+    # Initialize available_models variable
+    available_models = []
 
     # Check backend-specific requirements
     if backend == "ollama":
         try:
             await utils.ensure_ollama_running()
+            available_models = [m["name"] for m in all_models if m["backend"] == "ollama"]
+            if not available_models:
+                raise RuntimeError("No Ollama models installed")
         except RuntimeError as e:
-            print(f"❌ {e}")
-            print("💡 Start Ollama: ollama serve")
-            print("   Or use GGUF: LLM_BACKEND=gguf python client.py")
-            sys.exit(1)
-
-        # Get Ollama models
-        ollama_models = [m["name"] for m in all_models if m["backend"] == "ollama"]
-        if not ollama_models:
-            print("❌ No Ollama models. Install with: ollama pull <model>")
-            sys.exit(1)
-
-        model_name = ollama_models[0]
-        last = models.load_last_model()
-        if last and last in ollama_models:
-            model_name = last
+            # Ollama not available - try GGUF fallback
+            gguf_models = [m["name"] for m in all_models if m["backend"] == "gguf"]
+            if gguf_models:
+                logger.warning(f"⚠️ Ollama unavailable, switching to GGUF")
+                backend = "gguf"
+                os.environ["LLM_BACKEND"] = "gguf"
+                available_models = gguf_models
+            else:
+                print(f"❌ {e}")
+                print("💡 Start Ollama: ollama serve")
+                print("   Or add GGUF models: :gguf add <path>")
+                sys.exit(1)
 
     elif backend == "gguf":
-        # Get GGUF models
-        gguf_models = [m["name"] for m in all_models if m["backend"] == "gguf"]
-        if not gguf_models:
+        available_models = [m["name"] for m in all_models if m["backend"] == "gguf"]
+        if not available_models:
             print("❌ No GGUF models. Add with: :gguf add <path>")
             sys.exit(1)
 
-        model_name = gguf_models[0]
-        last = models.load_last_model()
-        if last and last in gguf_models:
-            model_name = last
+    # Select model from available_models
+    model_name = available_models[0]
+    last = models.load_last_model()
+    if last and last in available_models:
+        model_name = last
 
     models.save_last_model(model_name)
     logger.info(f"🤖 Using {backend}/{model_name}")
