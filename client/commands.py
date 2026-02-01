@@ -676,7 +676,7 @@ async def handle_command(
         )
 
         if new_agent is None:
-            return (True, f"❌ Model '{new_model}' not found", None, None)
+            return (True, f"❌ Model '{new_model}' not loaded", None, None)
 
         # Clear conversation history when switching models
         # conversation_state["messages"] = []

@@ -301,7 +301,7 @@ async def websocket_handler(websocket, agent_ref, tools, logger, conversation_st
                 if new_agent is None:
                     await websocket.send(json.dumps({
                         "type": "model_error",
-                        "message": f"Model '{model_name}' not found"
+                        "message": f"Model '{model_name}' not loaded"
                     }))
                     continue
 
